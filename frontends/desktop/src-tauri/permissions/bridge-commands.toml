@@ -27,3 +27,8 @@ commands.allow = ["shortcut_should_ask"]
 identifier = "allow-shortcut-decide"
 description = "Persist the user's desktop-shortcut choice and create it if enabled."
 commands.allow = ["shortcut_decide"]
+
+[[permission]]
+identifier = "allow-pick-folder"
+description = "Open a native folder picker dialog for workspace selection."
+commands.allow = ["pick_folder"]

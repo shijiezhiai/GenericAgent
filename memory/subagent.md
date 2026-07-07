@@ -7,6 +7,7 @@
 - 读prompt文件→执行→结果写`prompt.out.txt`→退出，主agent读完可删
 - 后台启动(print PID)，加`--nobg`前台同步等结果
 - 适用：单次任务、并行map、不需要追问的场景
+- **轮数耗尽/退出判断(高复用坑)**:--func模式subagent轮数耗尽退出时常**未写指定的产物文件(如result.md),但`prompt.out.txt`必有完整轨迹**。判断实质进展:读out.txt的①工具调用序列(看干了啥)②末尾是否有`[ROUND END]`+总结文字③是否自述已写产物/VERDICT。**勿因"无result.md"判失败**——多次实测subagent退出时实际已完成90%+工作(主agent据此代写result或补launch增量任务)。另:轮询时sleep间隔看到的Turn数非最终值(subagent可能继续多跑数轮才写产物);alive=False=已退出(看out.txt判成败),alive=True=还在跑(继续等)。
 
 ### --task 持续协作模式
 - `python agentmain.py --task {name} [--input "短文本"] [--llm_no N]`（cwd=代码根）

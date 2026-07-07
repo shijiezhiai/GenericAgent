@@ -30,6 +30,7 @@ from PySide6.QtGui import (
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agentmain import GeneraticAgent
 from chatapp_common import FILE_HINT, HELP_TEXT, clean_reply, build_done_text, format_restore
+from remote_channels import CHANNEL_REGISTRY, ChannelManager, get_channel
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -337,6 +338,7 @@ _SVG_SAVE = '<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2" 
 _SVG_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>'
 _SVG_BOLT = '<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>'
 _SVG_PLAY = '<svg viewBox="0 0 24 24" fill="{c}" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></svg>'
+_SVG_LINK = '<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>'
 _SVG_FILE = '<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>'
 _SVG_USER = '<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
 _SVG_BOT = '<svg viewBox="0 0 24 24" fill="none" stroke="{c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M7 5H3"/></svg>'
@@ -1049,6 +1051,10 @@ class ChatPanel(QWidget):
         self._history: list[dict] = _load_history()
         self._pending_files: list[dict] = []  # {'name','type','raw'}
         self._settings_health_checked = False
+        self._channel_mgr = ChannelManager()
+
+        # 重启后自动恢复上次启用的消息通道（凭证已持久化，可无缝重连）
+        QTimer.singleShot(2000, self._channel_mgr.auto_start_all)
 
         # streaming state
         self._display_queue: Optional[_queue.Queue] = None
@@ -1106,6 +1112,7 @@ class ChatPanel(QWidget):
         self._stack.addWidget(self._build_history_page()) # 1
         self._stack.addWidget(self._build_sop_page())     # 2
         self._stack.addWidget(self._build_settings_page())# 3
+        self._stack.addWidget(self._build_channels_page()) # 4
         root.addWidget(self._stack)
         root.addWidget(self._build_statusbar())
 
@@ -1761,6 +1768,15 @@ class ChatPanel(QWidget):
         trigger_btn.clicked.connect(self._do_trigger_auto)
         ly.addWidget(trigger_btn)
 
+        ly.addSpacing(10)
+        ch_sep = QLabel("远控通道")
+        ch_sep.setStyleSheet("color: #f4f4f5; font-weight: 600; font-size: 13px;")
+        ly.addWidget(ch_sep)
+
+        channel_btn = _action_btn("管理远控通道", "#8b5cf6", _svg_icon("link", _SVG_LINK))
+        channel_btn.clicked.connect(lambda: self._switch_to_channels())
+        ly.addWidget(channel_btn)
+
         ly.addStretch()
         return page
 
@@ -2389,6 +2405,265 @@ class ChatPanel(QWidget):
         self.inject_message(
             "[AUTO]🤖 用户触发了自主行动，请阅读自动化sop，选择并执行一项有价值的任务。"
         )
+
+    # ── 远控通道 ──────────────────────────────────────────────────────────────
+
+    def _switch_to_channels(self):
+        self._stack.setCurrentIndex(4)
+        # deselect all tabs (channels is not a main tab)
+        for btn in self._tabs:
+            btn.setChecked(False)
+
+    def _build_channels_page(self) -> QWidget:
+        if not hasattr(self, '_channel_mgr'):
+            self._channel_mgr = ChannelManager()
+
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # header with back button
+        hdr = QWidget()
+        hdr.setFixedHeight(40)
+        hdr.setStyleSheet("background: rgba(10,10,14,0.6);")
+        hdr_ly = QHBoxLayout(hdr)
+        hdr_ly.setContentsMargins(12, 0, 12, 0)
+
+        back_btn = QPushButton("← 返回设置")
+        back_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        back_btn.setStyleSheet(
+            "QPushButton { background: transparent; color: #a78bfa; border: none;"
+            " font-size: 13px; font-weight: 600; }"
+            " QPushButton:hover { color: #c4b5fd; }"
+        )
+        back_btn.clicked.connect(lambda: self._switch_tab(3))
+        hdr_ly.addWidget(back_btn)
+
+        title = QLabel("远控通道")
+        title.setStyleSheet("color: #f4f4f5; font-weight: 700; font-size: 15px;")
+        hdr_ly.addWidget(title)
+        hdr_ly.addStretch()
+        outer.addWidget(hdr)
+
+        # scrollable card grid
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }"
+                             " QScrollBar:vertical { width: 6px; background: transparent; }"
+                             " QScrollBar::handle:vertical { background: #3f3f46; border-radius: 3px; }")
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        self._channels_grid = QVBoxLayout(container)
+        self._channels_grid.setContentsMargins(16, 12, 16, 12)
+        self._channels_grid.setSpacing(10)
+
+        self._build_channel_cards()
+        self._channels_grid.addStretch()
+
+        scroll.setWidget(container)
+        outer.addWidget(scroll)
+        return page
+
+    def _build_channel_cards(self):
+        # 两列网格用 QHBoxLayout rows
+        row_ly = None
+        for i, ch in enumerate(CHANNEL_REGISTRY):
+            if i % 2 == 0:
+                row_ly = QHBoxLayout()
+                row_ly.setSpacing(10)
+                self._channels_grid.addLayout(row_ly)
+            card = self._make_channel_card(ch)
+            row_ly.addWidget(card)
+        # 奇数项补空
+        if len(CHANNEL_REGISTRY) % 2 == 1:
+            row_ly.addStretch()
+
+    def _make_channel_card(self, ch) -> QWidget:
+        card = QWidget()
+        card.setFixedHeight(140)
+        card.setStyleSheet(
+            "QWidget { background: rgba(30,30,36,0.9); border: 1px solid #3f3f46;"
+            " border-radius: 12px; }"
+        )
+        ly = QVBoxLayout(card)
+        ly.setContentsMargins(12, 10, 12, 10)
+        ly.setSpacing(4)
+
+        # top row: icon + name + badge + action button
+        top = QHBoxLayout()
+        top.setSpacing(8)
+
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(28, 28)
+        pm = QPixmap(28, 28)
+        pm.fill(QColor(0, 0, 0, 0))
+        svg_str = ch.svg.replace("{c}", ch.icon_color)
+        svg_bytes = QByteArray(svg_str.encode())
+        from PySide6.QtSvg import QSvgRenderer
+        renderer = QSvgRenderer(svg_bytes)
+        painter = QPainter(pm)
+        renderer.render(painter)
+        painter.end()
+        icon_lbl.setPixmap(pm)
+        top.addWidget(icon_lbl)
+
+        name_lbl = QLabel(ch.label)
+        name_lbl.setStyleSheet("color: #f4f4f5; font-weight: 700; font-size: 14px; border: none;")
+        top.addWidget(name_lbl)
+
+        if ch.recommended:
+            badge = QLabel("推荐")
+            badge.setStyleSheet(
+                "background: rgba(16,185,129,0.15); color: #34d399; font-size: 11px;"
+                " font-weight: 600; border-radius: 4px; padding: 1px 6px; border: none;"
+            )
+            badge.setFixedHeight(18)
+            top.addWidget(badge)
+
+        top.addStretch()
+
+        status = self._channel_mgr.get_status(ch.key)
+        if status == "running":
+            action_btn = QPushButton("管理")
+            action_btn.setStyleSheet(self._small_btn_style("#6366f1"))
+            action_btn.clicked.connect(lambda _=False, k=ch.key: self._on_channel_manage(k))
+        elif status == "stopped":
+            action_btn = QPushButton("启动")
+            action_btn.setStyleSheet(self._small_btn_style("#059669"))
+            action_btn.clicked.connect(lambda _=False, k=ch.key: self._on_channel_start(k))
+        else:
+            action_btn = QPushButton("添加")
+            action_btn.setStyleSheet(self._small_btn_style("#18181b"))
+            action_btn.clicked.connect(lambda _=False, k=ch.key: self._on_channel_add(k))
+
+        action_btn.setFixedSize(52, 26)
+        action_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        top.addWidget(action_btn)
+
+        ly.addLayout(top)
+
+        # description
+        desc = QLabel(ch.description)
+        desc.setWordWrap(True)
+        desc.setStyleSheet("color: #a1a1aa; font-size: 12px; border: none;")
+        ly.addWidget(desc)
+        ly.addStretch()
+
+        # status line
+        status_text = {"running": "🟢 运行中", "stopped": "🔴 已停止", "unconfigured": "暂未配置 Agent"}.get(status, "")
+        st_lbl = QLabel(status_text)
+        st_lbl.setStyleSheet("color: #71717a; font-size: 11px; border: none; border-top: 1px solid #27272a; padding-top: 6px;")
+        ly.addWidget(st_lbl)
+
+        return card
+
+    def _on_channel_add(self, key: str):
+        ch = get_channel(key)
+        if not ch:
+            return
+        if not ch.config_keys:
+            # 扫码类 (微信) — 直接启动并提示
+            self._channel_mgr.configure(key, {})
+            ok, msg = self._channel_mgr.start(key)
+            self._refresh_channels_page()
+            return
+
+        # 弹出配置对话框
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"配置 {ch.label}")
+        dlg.setFixedWidth(360)
+        dlg.setStyleSheet(
+            "QDialog { background: #1a1a1e; }"
+            " QLabel { color: #e4e4e7; font-size: 13px; }"
+            " QLineEdit { background: #27272a; color: #f4f4f5; border: 1px solid #3f3f46;"
+            "   border-radius: 6px; padding: 6px 10px; font-size: 13px; }"
+        )
+        form = QFormLayout(dlg)
+        form.setSpacing(10)
+        form.setContentsMargins(20, 20, 20, 20)
+
+        inputs = {}
+        for cfg_key in ch.config_keys:
+            inp = QLineEdit()
+            inp.setPlaceholderText(cfg_key)
+            form.addRow(QLabel(cfg_key + ":"), inp)
+            inputs[cfg_key] = inp
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.setStyleSheet(
+            "QPushButton { background: #8b5cf6; color: white; border: none;"
+            " border-radius: 6px; padding: 6px 16px; font-weight: 600; }"
+            " QPushButton:hover { background: #7c3aed; }"
+        )
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+        form.addRow(btns)
+
+        if dlg.exec() == QDialog.Accepted:
+            config = {k: inp.text().strip() for k, inp in inputs.items()}
+            if all(config.values()):
+                self._channel_mgr.configure(key, config)
+                # 将配置写入 mykeys 供 frontend 使用
+                try:
+                    from llmcore import mykeys
+                    for k, v in config.items():
+                        mykeys[k] = v
+                except Exception:
+                    pass
+                ok, msg = self._channel_mgr.start(key)
+                self._refresh_channels_page()
+
+    def _on_channel_start(self, key: str):
+        ok, msg = self._channel_mgr.start(key)
+        self._refresh_channels_page()
+
+    def _on_channel_manage(self, key: str):
+        ch = get_channel(key)
+        if not ch:
+            return
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"管理 {ch.label}")
+        dlg.setFixedWidth(300)
+        dlg.setStyleSheet("QDialog { background: #1a1a1e; } QLabel { color: #e4e4e7; }")
+        ly = QVBoxLayout(dlg)
+        ly.setContentsMargins(20, 20, 20, 20)
+        ly.setSpacing(12)
+
+        ly.addWidget(QLabel(f"🟢 {ch.label} 运行中"))
+
+        stop_btn = QPushButton("停止通道")
+        stop_btn.setStyleSheet(self._small_btn_style("#dc2626"))
+        stop_btn.clicked.connect(lambda: (self._channel_mgr.stop(key), dlg.close(), self._refresh_channels_page()))
+        ly.addWidget(stop_btn)
+
+        remove_btn = QPushButton("移除配置")
+        remove_btn.setStyleSheet(self._small_btn_style("#78716c"))
+        remove_btn.clicked.connect(lambda: (self._channel_mgr.remove(key), dlg.close(), self._refresh_channels_page()))
+        ly.addWidget(remove_btn)
+
+        close_btn = QPushButton("关闭")
+        close_btn.setStyleSheet(self._small_btn_style("#3f3f46"))
+        close_btn.clicked.connect(dlg.close)
+        ly.addWidget(close_btn)
+        dlg.exec()
+
+    def _refresh_channels_page(self):
+        # 清空并重建卡片
+        while self._channels_grid.count():
+            item = self._channels_grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                while item.layout().count():
+                    sub = item.layout().takeAt(0)
+                    if sub.widget():
+                        sub.widget().deleteLater()
+        self._build_channel_cards()
+        self._channels_grid.addStretch()
 
     # ── helpers ────────────────────────────────────────────────────────────────
     @staticmethod

@@ -64,6 +64,14 @@ class GenericAgent:
         self.load_llm_sessions()
         self.extra_sys_prompts = []
         self.intervene = self.extrakeyinfo = None
+        # MCP servers：启动并收集 MCP tools（fail-open，无 plugin/.mcp 时静默跳过）
+        self.mcp_tools = []; self.mcp_tool_map = {}; self.mcp_clients = {}
+        try:
+            from plugins.plugin_loader import collect_mcp_tools
+            _tools, _tmap, _clients = collect_mcp_tools()
+            self.mcp_tools, self.mcp_tool_map, self.mcp_clients = _tools, _tmap, _clients
+        except Exception as _e:
+            import sys; print(f"[MCP] init failed: {_e}", file=sys.stderr)
 
     def load_llm_sessions(self):
         mykeys, changed = reload_mykeys()
@@ -85,6 +93,8 @@ class GenericAgent:
                     else: llm_sessions[i] = ToolClient(mixin)
                 except Exception as e: print(f'\n\n\n[ERROR] Failed to init MixinSession with cfg {s["mixin_cfg"]}: {e}!!!\n\n')
         self.llmclients = llm_sessions
+        if not self.llmclients:
+            raise ValueError('[ERROR] No LLM sessions configured! Please check your mykey.py configuration.')
         self.llmclient = self.llmclients[self.llm_no%len(self.llmclients)]
         if oldhistory: self.llmclient.backend.history = oldhistory
     
@@ -164,20 +174,24 @@ class GenericAgent:
             if self.force_non_stream:
                 self.llmclient.backend.stream = False
                 self.llmclient.backend.read_timeout = max(self.llmclient.backend.read_timeout, 1200)
-            gen = agent_runner_loop(self.llmclient, sys_prompt, raw_query, handler, TOOLS_SCHEMA, 
+            gen = agent_runner_loop(self.llmclient, sys_prompt, raw_query, handler, TOOLS_SCHEMA + self.mcp_tools, 
                                     max_turns=180, verbose=self.verbose, yield_info=True)
             try:
-                full_resp = ""; last_pos = 0; curr_turn = 0; turn_resps = []
+                full_resp = ""; last_pos = 0; curr_turn = 0; turn_resps = []; _last_push_ts = 0
                 for chunk in gen:
                     if consume_file(self.task_dir, '_stop'): self.abort() 
                     if self.stop_sig: break
                     if isinstance(chunk, dict) and 'turn' in chunk: 
                         curr_turn = chunk['turn']; turn_resps.append(''); continue
                     full_resp += chunk;  turn_resps[-1] += chunk
-                    if len(full_resp) - last_pos > 30 or 'LLM Running' in chunk:
+                    new_bytes = len(full_resp) - last_pos
+                    now = time.time()
+                    # push if: accumulated 30+ chars, or 300ms+ since last push with any new content
+                    if new_bytes > 30 or 'LLM Running' in chunk or (new_bytes > 0 and now - _last_push_ts > 0.3):
                         display_queue.put({'next': full_resp[last_pos:] if self.inc_out else full_resp, 
                                            'source': source, 'turn': curr_turn, 'outputs': turn_resps[-2:]})
                         last_pos = len(full_resp)
+                        _last_push_ts = now
                 if self.inc_out and last_pos < len(full_resp):
                     display_queue.put({'next': full_resp[last_pos:], 'source': source,
                                     'turn': curr_turn, 'outputs': turn_resps[-2:]})
@@ -191,6 +205,10 @@ class GenericAgent:
                 self.is_running = self.stop_sig = False
                 self.task_queue.task_done()
                 if self.handler is not None: self.handler.code_stop_signal.append(1)
+                # 关闭所有 MCP client 进程/连接（fail-open）
+                for _c in list(getattr(self, 'mcp_clients', {}).values()):
+                    try: _c.stop()
+                    except Exception as _e: print(f"[MCP] stop failed: {_e}")
 
 GeneraticAgent = GenericAgent
 

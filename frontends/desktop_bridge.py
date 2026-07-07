@@ -37,12 +37,14 @@ WS API (state sync):
 from __future__ import annotations
 
 import asyncio, atexit, contextlib, importlib, json, os, re, subprocess, sys
+from datetime import datetime
 from collections import Counter, deque
 import threading, time, traceback, uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 from aiohttp import web, WSMsgType
+import workspace_cmd
 
 APP_DIR = Path(__file__).resolve().parent
 
@@ -98,6 +100,7 @@ class Session:
     untitled: bool = True
     plan_scan_baseline: int = 0
     plan_path: str = ""
+    workspace: str = ""
     llm_history: Optional[List[dict]] = None
 
 
@@ -152,6 +155,7 @@ class AgentManager:
                                 "pinned": s.pinned, "untitled": s.untitled,
                                 "plan_scan_baseline": s.plan_scan_baseline,
                                 "plan_path": s.plan_path or "",
+                                "workspace": s.workspace or "",
                                 "llm_history": llm_hist})
             self._sessions_file.write_text(json.dumps(arr, ensure_ascii=False, default=str), encoding="utf-8")
         except Exception as e:
@@ -175,6 +179,7 @@ class AgentManager:
                                plan_scan_baseline=_load_plan_baseline(item, msgs),
                                plan_path=_sanitize_desktop_plan_path(
                                    item["id"], item.get("plan_path") or ""),
+                               workspace=item.get("workspace", ""),
                                status="idle", agent=None,
                                llm_history=item.get("llm_history"))
                 self.sessions[sess.id] = sess
@@ -516,6 +521,27 @@ class AgentManager:
         except Exception:
             return None
 
+    def _workspace_branch(self, ws_name: str) -> str:
+        """Current git branch of a workspace (by registry name), or '' if not a git repo."""
+        try:
+            if not ws_name:
+                return ""
+            entry = workspace_cmd.registry_load().get(ws_name)
+            path = entry.get("path") if entry else None
+            if not path:
+                return ""
+            r = subprocess.run(
+                ["git", "-C", path, "symbolic-ref", "--short", "HEAD"],
+                capture_output=True, text=True, timeout=2)
+            if r.returncode == 0:
+                return r.stdout.strip()
+            r2 = subprocess.run(
+                ["git", "-C", path, "rev-parse", "--abbrev-ref", "HEAD"],
+                capture_output=True, text=True, timeout=2)
+            return r2.stdout.strip() if r2.returncode == 0 else ""
+        except Exception:
+            return ""
+
     def snapshot(self, sess: Session, include_messages: bool = True) -> dict:
         out = {
             "sessionId": sess.id,
@@ -530,6 +556,8 @@ class AgentManager:
             "pinned": sess.pinned,
             "untitled": sess.untitled,
             "model": self._live_model(sess),
+            "workspace": sess.workspace or "",
+            "branch": self._workspace_branch(sess.workspace) if sess.workspace else "",
         }
         if include_messages:
             out["messages"] = list(sess.messages)
@@ -549,6 +577,8 @@ class AgentManager:
 
     def create_session(self, cwd: Optional[str] = None) -> Session:
         sid = "sess-" + uuid.uuid4().hex[:12]
+        if not cwd:
+            cwd = str(resolve_chat_files_dir(self.ga_root))
         sess = Session(id=sid, cwd=str(cwd or self.ga_root))
         with self.lock:
             self.sessions[sid] = sess
@@ -636,6 +666,11 @@ class AgentManager:
                     try:
                         item = display_q.get(timeout=1.0)
                     except _queue.Empty:
+                        # heartbeat: update ts so frontend knows agent is still alive
+                        with self.lock:
+                            if sess.partial is not None:
+                                sess.partial["ts"] = time.time()
+                                sess.updated_at = time.time()
                         continue
                     if isinstance(item, dict):
                         if item.get("next"):
@@ -872,6 +907,16 @@ _SERVICE_KEYS: Dict[str, tuple] = {
     "frontends/wecomapp.py": ("wecom_bot_id", "wecom_secret"),
 }
 
+# 服务 -> 单例/监听端口映射。bridge 重启后, 上次启动的子进程会变成孤儿
+# (PPID=1) 仍占着 bind 端口, 导致新实例 bind 失败 (Errno 48 / 单例锁冲突),
+# watchdog 重试 5 次耗尽后放弃。start_service 前用此映射清理孤儿。
+_SERVICE_PORTS: Dict[str, int] = {
+    "frontends/wechatapp.py": 19531,    # socket 单例锁
+    "frontends/wecomapp.py": 19531,     # socket 单例锁 (与微信共用)
+    "frontends/conductor.py": 8900,     # uvicorn 监听
+    "reflect/scheduler.py": 45762,      # socket 单例锁 (agentmain --reflect)
+}
+
 
 def _load_mykeys(ga_root: Path) -> dict:
     if not (ga_root / "mykey.py").exists():
@@ -970,6 +1015,31 @@ class ServiceManager:
         self._im_catalog = {s["id"]: s for s in im}
         self._catalog = {**self._im_catalog, **{s["id"]: s for s in extra}}
         self._stopping: Set[str] = set()
+        # watchdog: 进程异常退出后自动重启
+        self._restart_counts: Dict[str, int] = {}
+        self._watchdog_max: int = 5          # 最多重试次数
+        self._watchdog_base: float = 5.0     # 初始退避秒数
+        self._watchdog_cap: float = 60.0     # 最大退避秒数
+        # 持久化用户启用的IM通道, 重启后自动恢复
+        self._autostart_path: Path = Path.home() / ".ga_services_autostart.json"
+        self._autostart_set: Set[str] = self._load_autostart()
+
+    def _load_autostart(self) -> Set[str]:
+        try:
+            import json as _json
+            data = _json.loads(self._autostart_path.read_text("utf-8"))
+            return {s for s in data.get("im_services", []) if s in self._im_catalog}
+        except Exception:
+            return set()
+
+    def _save_autostart(self) -> None:
+        try:
+            import json as _json
+            self._autostart_path.write_text(
+                _json.dumps({"im_services": sorted(self._autostart_set)}, ensure_ascii=False, indent=2),
+                "utf-8")
+        except Exception:
+            pass
 
     def _is_configured(self, sid: str) -> bool:
         keys = _SERVICE_KEYS.get(sid)
@@ -1051,9 +1121,99 @@ class ServiceManager:
             buf = self.buffers.get(sid)
             if buf is not None:
                 buf.append(line)
-        self._notify(sid)
+        # 进程已退出: 主动stop不重启, 异常退出则触发watchdog
+        if sid in self._stopping:
+            self._notify(sid)
+        elif proc.returncode == 0:
+            self._notify(sid)           # 正常退出, 不重启
+        else:
+            self._notify(sid)
+            threading.Thread(target=self._watchdog, args=(sid,), daemon=True).start()
 
-    def start_service(self, sid: str) -> dict:
+    def _watchdog(self, sid: str) -> None:
+        """进程异常退出后自动重启, 指数退避, 最多 _watchdog_max 次。"""
+        count = self._restart_counts.get(sid, 0)
+        if count >= self._watchdog_max:
+            err = f"watchdog: 已达最大重试次数({self._watchdog_max}), 放弃自动重启"
+            buf = self.buffers.get(sid)
+            if buf is not None:
+                buf.append(err + "\n")
+            self._notify(sid, err=err)
+            return
+        delay = min(self._watchdog_base * (2 ** count), self._watchdog_cap)
+        count += 1
+        self._restart_counts[sid] = count
+        msg = f"[watchdog] {sid} 异常退出(returncode见上), {delay:.0f}s 后第 {count}/{self._watchdog_max} 次自动重启..."
+        buf = self.buffers.get(sid)
+        if buf is not None:
+            buf.append(msg + "\n")
+        self._notify(sid)
+        time.sleep(delay)
+        # 再次检查: 用户可能在退避期间手动stop了
+        if sid in self._stopping:
+            return
+        # 清理旧进程引用, 再启动 (reset_count=False: watchdog重启保留计数)
+        self.procs.pop(sid, None)
+        try:
+            res = self.start_service(sid, reset_count=False)
+            if res.get("ok"):
+                # 启动成功, 但不立即重置计数 — 若稳定运行足够久由外部重置
+                ok_msg = f"[watchdog] {sid} 第 {count} 次重启成功 (pid={res.get('service', {}).get('pid')})"
+                buf = self.buffers.get(sid)
+                if buf is not None:
+                    buf.append(ok_msg + "\n")
+            else:
+                # 启动失败, 递归继续watchdog (count已+1)
+                threading.Thread(target=self._watchdog, args=(sid,), daemon=True).start()
+        except Exception as e:
+            err = f"[watchdog] {sid} 重启异常: {e}"
+            buf = self.buffers.get(sid)
+            if buf is not None:
+                buf.append(err + "\n")
+            self._notify(sid, err=err)
+
+    def _reap_orphan(self, sid: str) -> None:
+        """启动新实例前, 清理占用该服务端口但不属于本 bridge 追踪的孤儿进程。
+
+        场景: bridge 重启后, 上次启动的子进程变成孤儿 (PPID=1) 仍占着 bind 端口,
+        导致新实例 bind 失败。lsof 查端口占用者, 若 PID 不在本 bridge 追踪的
+        self.procs 存活进程里 (即孤儿), 则 kill 掉。无端口映射的服务直接跳过。
+        """
+        port = _SERVICE_PORTS.get(sid)
+        if not port:
+            return
+        try:
+            out = subprocess.run(
+                ["lsof", "-ti", f":{port}"],
+                capture_output=True, text=True, timeout=3,
+            )
+        except Exception:
+            return  # lsof 不可用则跳过, 不阻塞启动
+        # 本 bridge 当前追踪的存活 PID 集合 (新实例尚未启动, 通常为空或已退出的旧引用)
+        tracked = {p.pid for p in self.procs.values() if p.poll() is None}
+        own_pid = os.getpid()
+        for line in out.stdout.split():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                pid = int(line)
+            except ValueError:
+                continue
+            if pid == own_pid or pid in tracked:
+                continue  # 本 bridge 自己 / 本 bridge 追踪的进程, 不动
+            # 孤儿进程, kill 掉
+            try:
+                os.kill(pid, 9)
+                buf = self.buffers.get(sid)
+                if buf is not None:
+                    buf.append(f"[bridge] 清理占用端口 {port} 的孤儿进程 pid={pid}\n")
+            except (ProcessLookupError, PermissionError):
+                pass
+        # 给内核一点时间回收端口
+        time.sleep(0.3)
+
+    def start_service(self, sid: str, reset_count: bool = True) -> dict:
         svc = self._catalog.get(sid)
         if not svc:
             raise KeyError(sid)
@@ -1065,6 +1225,9 @@ class ServiceManager:
             err = f"not configured in mykey.py ({keys})"
             self._notify(sid, err=err)
             return {"ok": False, "error": "not_configured", "service": self._state(sid, err=err)}
+        # 手动启动时重置watchdog计数; watchdog内部调用(reset_count=False)保留计数
+        if reset_count:
+            self._restart_counts[sid] = 0
         self.buffers[sid] = deque(maxlen=500)
         env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
         kw: Dict[str, Any] = dict(
@@ -1073,6 +1236,8 @@ class ServiceManager:
         )
         if sys.platform == "win32":
             kw["creationflags"] = subprocess.CREATE_NO_WINDOW
+        # 启动新实例前清理占用端口的孤儿进程 (bridge 重启后遗留的子进程)
+        self._reap_orphan(sid)
         proc = subprocess.Popen(svc["cmd"], **kw)
         self.procs[sid] = proc
         threading.Thread(target=self._reader, args=(sid, proc), daemon=True).start()
@@ -1081,12 +1246,17 @@ class ServiceManager:
         self._notify(sid)
         if item["status"] == "error":
             return {"ok": False, "error": item["lastError"] or "start_failed", "service": item}
+        # 持久化: 用户手动启用的IM通道记录下来, 重启后自动恢复
+        if sid in self._im_catalog and sid not in self._autostart_set:
+            self._autostart_set.add(sid)
+            self._save_autostart()
         return {"ok": True, "service": item}
 
     def autostart_extras(self) -> None:
         """Auto-start non-IM services on bridge boot. Currently:
           - reflect/scheduler.py (drives L4 archive cron every 12h).
-        IM services stay manual (need explicit mykey.py config + user opt-in)."""
+        IM services stay manual (need explicit mykey.py config + user opt-in),
+        but user-enabled IM services are persisted and auto-restored here."""
         for sid in sorted(set(self._catalog) - set(self._im_catalog)):
             try:
                 res = self.start_service(sid)
@@ -1094,6 +1264,14 @@ class ServiceManager:
             except Exception as e:
                 tag = f"exception {type(e).__name__}: {e}"
             print(f"[autostart] {sid}: {tag}", file=sys.stderr)
+        # 恢复用户重启前启用的IM通道
+        for sid in sorted(self._autostart_set):
+            try:
+                res = self.start_service(sid)
+                tag = "ok" if res.get("ok") else f"fail: {res.get('error')}"
+            except Exception as e:
+                tag = f"exception {type(e).__name__}: {e}"
+            print(f"[autostart-im] {sid}: {tag}", file=sys.stderr)
 
     def stop_all_extras(self) -> None:
         for sid in sorted(set(self._catalog) - set(self._im_catalog)):
@@ -1110,6 +1288,11 @@ class ServiceManager:
             proc.wait()
         self.procs.pop(sid, None)
         self._stopping.discard(sid)
+        self._restart_counts.pop(sid, None)  # 主动stop清零watchdog计数
+        # 用户主动停止 → 从持久化中移除, 重启后不再自动启动
+        if sid in self._autostart_set:
+            self._autostart_set.discard(sid)
+            self._save_autostart()
         item = self._state(sid)
         self._notify(sid)
         return {"ok": True, "service": item}
@@ -1225,15 +1408,27 @@ async def status_handler(request):
 
 
 _SETTINGS = Path.home() / ".ga_desktop_settings.json"
-_UI_KEYS = ("lang", "theme", "appearance", "plain", "llmNo", "fontSize")
+_UI_KEYS = ("lang", "theme", "appearance", "plain", "llmNo", "fontSize", "chatFilesDir")
 
 
 def _desktop_ui() -> dict:
     try:
         ui = json.loads(_SETTINGS.read_text(encoding="utf-8")).get("ui")
-        return dict(ui) if isinstance(ui, dict) else {}
+        ui = dict(ui) if isinstance(ui, dict) else {}
     except Exception:
-        return {}
+        ui = {}
+    if "chatFilesDir" not in ui:
+        ui["chatFilesDir"] = "temp"
+    return ui
+
+
+def resolve_chat_files_dir(ga_root) -> Path:
+    """对话生成文件存放目录(配置项 chatFilesDir, 默认 temp); 相对 ga_root 解析为绝对路径."""
+    rel = _desktop_ui().get("chatFilesDir") or "temp"
+    p = Path(rel)
+    if not p.is_absolute():
+        p = Path(ga_root) / rel
+    return p
 
 
 async def get_config_handler(request):
@@ -1419,13 +1614,402 @@ async def path_open_handler(request):
     try:
         if mode == "reveal":
             _reveal_path_in_file_manager(target)
-        elif kind == "upload":
-            _open_path_default(target)  # 用户文件用系统默认程序(open 动词),避免 edit 动词 fallback 记事本
+        elif kind in ("mykey", "mykeyTemplate"):
+            _open_path_in_editor(target)  # mykey 配置文件仍用编辑器(edit 动词)
         else:
-            _open_path_in_editor(target)  # mykey 等配置文件仍用编辑器(edit 动词)
+            _open_path_default(target)  # upload/task/config 等普通文件用系统默认程序(open 动词)
     except OSError as e:
         return json_ok({"ok": False, "error": str(e), "path": str(target)}, status=500)
     return json_ok({"ok": True, "path": str(target)})
+
+
+# ── @ file mention: list files ────────────────────────────────────────
+
+_IGNORED_DIRS = {'.git', 'node_modules', '__pycache__', 'venv', '.venv',
+                 '.DS_Store', '.idea', '.vscode', 'dist', 'build', '.next',
+                 '.nuxt', 'target', 'egg-info', '.eggs', 'temp'}
+
+
+async def files_list_handler(request):
+    """GET /api/files/list?path={dir}&filter={optional}
+    
+    Recursively searches the directory tree, matching filter against
+    the path relative to dir (e.g. "src/util" matches "src/utils.py").
+    """
+    dir_path = request.query.get("path", "")
+    filter_str = (request.query.get("filter") or "").lower()
+    if not dir_path:
+        return json_ok({"error": "path is required"}, status=400)
+    root = Path(dir_path)
+    if not root.is_dir():
+        return json_ok({"error": f"not a directory: {dir_path}"}, status=400)
+    
+    MAX_RESULTS = 100
+    entries: list[dict] = []
+    filter_parts = filter_str.split('/') if filter_str else []
+    
+    try:
+        stack: list[tuple[Path, str]] = [(root, "")]
+        while stack and len(entries) < MAX_RESULTS:
+            cur_dir, rel_prefix = stack.pop()
+            try:
+                children = sorted(cur_dir.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
+            except (PermissionError, OSError):
+                continue
+            for child in children:
+                if len(entries) >= MAX_RESULTS:
+                    break
+                name = child.name
+                if name.startswith('.') and name not in ('.env', '.env.local', '.gitignore'):
+                    continue
+                if child.is_dir() and name in _IGNORED_DIRS:
+                    continue
+                rel = f"{rel_prefix}/{name}" if rel_prefix else name
+                # Always push dirs to stack so children can be searched
+                if child.is_dir() and name not in _IGNORED_DIRS:
+                    stack.append((child, rel))
+                # Apply filter: only add matching items to results
+                if filter_parts:
+                    rel_lower = rel.lower()
+                    if not all(part in rel_lower for part in filter_parts):
+                        continue
+                entries.append({
+                    "name": name,
+                    "type": "dir" if child.is_dir() else "file",
+                    "path": str(child),
+                    "rel": rel,
+                })
+    except Exception as e:
+        return json_ok({"error": str(e)}, status=500)
+    
+    entries.sort(key=lambda x: (0 if x["type"] == "dir" else 1, x.get("rel", x["name"]).lower()))
+    return json_ok({"path": dir_path, "entries": entries})
+
+
+async def files_browse_handler(request):
+    """GET /api/files/browse - aggregate files from chat uploads, task reports, and config."""
+    ga_root = Path(DEFAULT_GA_ROOT)
+    sche_tasks_dir = ga_root / "sche_tasks"
+    uploads_dir = ga_root / "temp" / "desktop_uploads"
+
+    files: list[dict] = []
+
+    # a. Chat uploads: temp/desktop_uploads/sess-{id}/
+    if uploads_dir.exists():
+        for sess_dir in sorted(uploads_dir.iterdir()):
+            if not sess_dir.is_dir() or not sess_dir.name.startswith("sess-"):
+                continue
+            sid = sess_dir.name
+            for f in sess_dir.iterdir():
+                if not f.is_file():
+                    continue
+                try:
+                    stat = f.stat()
+                except OSError:
+                    continue
+                files.append({
+                    "name": f.name,
+                    "path": str(f.relative_to(ga_root)),
+                    "size": stat.st_size,
+                    "mtime": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "created": datetime.fromtimestamp(getattr(stat, "st_birthtime", stat.st_ctime)).isoformat(),
+                    "source": "chat",
+                    "type": f.suffix.lower().lstrip(".") or "file",
+                    "session": sid,
+                    "referencedBy": {"type": "session", "id": sid, "alive": sess_dir.exists()},
+                })
+
+    # b. Task reports: sche_tasks/done/*.md  (format: {ts}_{tid}.md)
+    done_dir = sche_tasks_dir / "done"
+    if done_dir.exists():
+        # Build a set of known task ids from config .json files
+        known_tids: set[str] = set()
+        if sche_tasks_dir.exists():
+            for fj in sche_tasks_dir.iterdir():
+                if fj.suffix == ".json":
+                    known_tids.add(fj.stem)
+
+        for f in sorted(done_dir.iterdir()):
+            if not f.is_file() or f.suffix != ".md":
+                continue
+            try:
+                stat = f.stat()
+            except OSError:
+                continue
+            stem = f.stem
+            parts = stem.split("_")
+            # Try to match a known task id suffix
+            tid = None
+            for k in range(1, min(len(parts), 5)):
+                candidate = "_".join(parts[k:])
+                if candidate in known_tids:
+                    tid = candidate
+                    break
+            if tid is None and len(parts) >= 2:
+                tid = "_".join(parts[1:])
+
+            alive = False
+            if tid:
+                task_json = sche_tasks_dir / f"{tid}.json"
+                if task_json.exists():
+                    try:
+                        task_data = json.loads(task_json.read_text(encoding="utf-8"))
+                        alive = task_data.get("enabled", False)
+                    except Exception:
+                        pass
+
+            files.append({
+                "name": f.name,
+                "path": str(f.relative_to(ga_root)),
+                "size": stat.st_size,
+                "mtime": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "created": datetime.fromtimestamp(getattr(stat, "st_birthtime", stat.st_ctime)).isoformat(),
+                "source": "task",
+                "type": "md",
+                "taskId": tid,
+                "referencedBy": {"type": "task", "id": tid, "alive": alive} if tid else None,
+            })
+
+    # c. Config/scripts: sche_tasks/*.json, *.py
+    if sche_tasks_dir.exists():
+        for f in sorted(sche_tasks_dir.iterdir()):
+            if not f.is_file() or f.suffix not in (".json", ".py"):
+                continue
+            try:
+                stat = f.stat()
+            except OSError:
+                continue
+            files.append({
+                "name": f.name,
+                "path": str(f.relative_to(ga_root)),
+                "size": stat.st_size,
+                "mtime": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "created": datetime.fromtimestamp(getattr(stat, "st_birthtime", stat.st_ctime)).isoformat(),
+                "source": "config",
+                "type": f.suffix.lower().lstrip(".") or "file",
+                "taskId": f.stem,
+                "referencedBy": {"type": "task", "id": f.stem, "alive": True},
+            })
+
+    # d. Generated files: 对话生成文件存放目录(配置项 chatFilesDir, 默认 temp/)
+    gen_dir = resolve_chat_files_dir(ga_root)
+    if gen_dir.exists():
+        for f in sorted(gen_dir.iterdir()):
+            if not f.is_file():
+                continue
+            try:
+                stat = f.stat()
+            except OSError:
+                continue
+            try:
+                rel_path = str(f.relative_to(ga_root))
+            except ValueError:
+                rel_path = str(f)
+            files.append({
+                "name": f.name,
+                "path": rel_path,
+                "size": stat.st_size,
+                "mtime": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "created": datetime.fromtimestamp(getattr(stat, "st_birthtime", stat.st_ctime)).isoformat(),
+                "source": "generated",
+                "type": f.suffix.lower().lstrip(".") or "file",
+                "referencedBy": None,
+            })
+
+    counts = {
+        "total": len(files),
+        "chat": sum(1 for x in files if x["source"] == "chat"),
+        "task": sum(1 for x in files if x["source"] == "task"),
+        "config": sum(1 for x in files if x["source"] == "config"),
+        "generated": sum(1 for x in files if x["source"] == "generated"),
+        "session": len({x.get("session") for x in files if x.get("session")}),
+    }
+    return json_ok({"ok": True, "files": files, "counts": counts})
+
+
+async def files_delete_handler(request):
+    """DELETE /api/files/delete - delete a file within allowed directories."""
+    data = await read_json(request)
+    raw = data.get("path") or ""
+    try:
+        ga_root = Path(DEFAULT_GA_ROOT)
+        p = Path(raw)
+        if not p.is_absolute():
+            p = ga_root / p
+        target = p.resolve()
+        upload_root = (ga_root / "temp" / "desktop_uploads").resolve()
+        sche_root = (ga_root / "sche_tasks").resolve()
+
+        in_upload = upload_root in target.parents or target == upload_root
+        in_sche = sche_root in target.parents or target == sche_root
+        if not (in_upload or in_sche):
+            return json_ok({"ok": False, "error": "path outside allowed directories"}, status=403)
+
+        if not target.exists():
+            return json_ok({"ok": False, "error": "file not found"}, status=404)
+        if not target.is_file():
+            return json_ok({"ok": False, "error": "not a file"}, status=400)
+        target.unlink()
+        return json_ok({"ok": True, "deleted": str(target)})
+    except Exception as e:
+        return json_ok({"ok": False, "error": str(e)})
+
+
+async def files_copy_handler(request):
+    """POST /api/files/copy - duplicate a file within allowed directories."""
+    data = await read_json(request)
+    raw = data.get("path") or ""
+    try:
+        ga_root = Path(DEFAULT_GA_ROOT)
+        p = Path(raw)
+        if not p.is_absolute():
+            p = ga_root / p
+        target = p.resolve()
+        upload_root = (ga_root / "temp" / "desktop_uploads").resolve()
+        sche_root = (ga_root / "sche_tasks").resolve()
+        in_upload = upload_root in target.parents or target == upload_root
+        in_sche = sche_root in target.parents or target == sche_root
+        if not (in_upload or in_sche):
+            return json_ok({"ok": False, "error": "path outside allowed directories"}, status=403)
+        if not target.exists() or not target.is_file():
+            return json_ok({"ok": False, "error": "file not found"}, status=404)
+        import shutil
+        stem = target.stem
+        suffix = target.suffix
+        parent = target.parent
+        new_path = parent / f"{stem} copy{suffix}"
+        i = 1
+        while new_path.exists():
+            new_path = parent / f"{stem} copy{i}{suffix}"
+            i += 1
+        shutil.copy2(target, new_path)
+        return json_ok({"ok": True, "copied": str(new_path), "name": new_path.name})
+    except Exception as e:
+        return json_ok({"ok": False, "error": str(e)})
+
+
+async def files_read_handler(request):
+    """GET /api/files/read?path=... - read a text file for preview within allowed directories."""
+    from urllib.parse import unquote
+    raw = unquote(request.query.get("path") or "")
+    try:
+        ga_root = Path(DEFAULT_GA_ROOT)
+        p = Path(raw)
+        # 相对路径基于 ga_root 解析（browse 返回相对 GA 根的路径）
+        if not p.is_absolute():
+            p = ga_root / p
+        target = p.resolve()
+        upload_root = (ga_root / "temp" / "desktop_uploads").resolve()
+        sche_root = (ga_root / "sche_tasks").resolve()
+        in_upload = upload_root in target.parents or target == upload_root
+        in_sche = sche_root in target.parents or target == sche_root
+        if not (in_upload or in_sche):
+            return json_ok({"ok": False, "error": "path outside allowed directories"}, status=403)
+        if not target.exists() or not target.is_file():
+            return json_ok({"ok": False, "error": "file not found"}, status=404)
+        size = target.stat().st_size
+        if size > 2 * 1024 * 1024:
+            return json_ok({"ok": False, "error": "file too large to preview"})
+        content = target.read_text(encoding="utf-8", errors="replace")
+        return json_ok({"ok": True, "content": content, "name": target.name, "size": size})
+    except Exception as e:
+        return json_ok({"ok": False, "error": str(e)})
+
+
+async def commands_list_handler(request):
+    """GET /api/commands → list available slash commands."""
+    try:
+        import slash_cmds
+        cmds = slash_cmds.list_all_commands(str(manager.ga_root))
+    except Exception as e:
+        return json_ok({"error": str(e)}, status=500)
+    return json_ok({"commands": cmds})
+
+
+async def slash_handler(request):
+    """POST /session/{sid}/slash → execute a skill command via prompt injection."""
+    sid = request.match_info["sid"]
+    data = await read_json(request)
+    cmd = (data or {}).get("cmd", "").strip()
+    args = (data or {}).get("args", "")
+    if not cmd:
+        return json_ok({"error": "cmd is required"}, status=400)
+    # --- /scheduler: special-cased (not prompt injection; launches services) ---
+    if cmd == "/scheduler":
+        try:
+            import slash_cmds
+            # If args contains "start a,b,c", apply the diff (stop removed / start added).
+            parts = args.split()
+            if parts and parts[0] == "start":
+                names_raw = " ".join(parts[1:])
+                selected = [n.strip() for n in names_raw.split(",") if n.strip()]
+                wanted = set(selected)
+                try:
+                    running = slash_cmds.running_services(use_cache=False)
+                except Exception:
+                    running = {}
+                results = []
+                # stop first (services running but not in wanted set)
+                for nm in list(running.keys()):
+                    if nm not in wanted:
+                        ok, msg = slash_cmds.stop_service(nm)
+                        results.append({"name": nm, "action": "stop", "ok": ok, "msg": msg})
+                # then start (wanted but not running)
+                for nm in selected:
+                    if nm not in running:
+                        ok, msg = slash_cmds.start_service(nm)
+                        results.append({"name": nm, "action": "start", "ok": ok, "msg": msg})
+                return json_ok({"schedulerResults": results})
+            # No "start" args → return service list + running state for the picker UI
+            services = slash_cmds.list_launchable_services()
+            running = slash_cmds.running_services(use_cache=False)
+            return json_ok({"schedulerPicker": True, "services": services, "running": running})
+        except Exception as e:
+            return json_ok({"error": str(e)}, status=500)
+    try:
+        import slash_cmds
+        injected = slash_cmds.prompt_for(cmd, args)
+    except Exception as e:
+        return json_ok({"error": str(e)}, status=500)
+    if injected is None:
+        return json_ok({"error": f"unknown command: {cmd}"}, status=400)
+    display = cmd + (" " + args if args else "")
+    files_meta = (data or {}).get("files") or []
+    image_metas = (data or {}).get("imageMetas") or []
+    llm_no = (data or {}).get("llmNo")
+    if llm_no is not None:
+        llm_no = int(llm_no)
+    return json_ok(manager.submit_prompt(sid, injected, [], llm_no=llm_no,
+                                          display=display, files_meta=files_meta,
+                                          image_metas=image_metas))
+
+
+async def exec_handler(request):
+    """POST /session/{sid}/exec → execute a shell command and return output."""
+    sid = request.match_info["sid"]
+    data = await read_json(request)
+    cmd = (data or {}).get("cmd", "").strip()
+    if not cmd:
+        return json_ok({"error": "cmd is required"}, status=400)
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        stdout = stdout.decode("utf-8", errors="replace").rstrip("\n")
+        stderr = stderr.decode("utf-8", errors="replace").rstrip("\n")
+        return json_ok({
+            "ok": proc.returncode == 0,
+            "code": proc.returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+        })
+    except asyncio.TimeoutError:
+        return json_ok({"error": "command timed out (30s)"}, status=504)
+    except Exception as e:
+        return json_ok({"error": str(e)}, status=500)
 
 
 # File attachments live under GA's own temp dir (gitignored), NOT the OS temp
@@ -1757,6 +2341,87 @@ async def post_token_history_handler(request):
     return json_ok({"ok": True})
 
 
+# ---------------------------------------------------------------------------
+# Workspace handlers
+# ---------------------------------------------------------------------------
+async def list_workspaces_handler(request):
+    """GET /workspaces → list of registered workspaces."""
+    try:
+        items = workspace_cmd.registry_list()
+    except Exception as e:
+        return json_ok({"error": str(e)}, status=500)
+    return json_ok({"workspaces": items})
+
+
+async def prepare_workspace_handler(request):
+    """POST /workspace/prepare → add/activate a workspace. Body: {path}."""
+    data = await read_json(request)
+    path = (data or {}).get("path", "")
+    if not path:
+        return json_ok({"error": "path is required"}, status=400)
+    try:
+        r = workspace_cmd.prepare(path)
+    except Exception as e:
+        return json_ok({"error": str(e)}, status=500)
+    return json_ok(r)
+
+
+async def remove_workspace_handler(request):
+    """DELETE /workspace/{name} → remove a workspace registration."""
+    name = request.match_info["name"]
+    if not name:
+        return json_ok({"error": "name is required"}, status=400)
+    try:
+        workspace_cmd.remove(name)
+    except Exception as e:
+        return json_ok({"error": str(e)}, status=500)
+    return json_ok({"ok": True})
+
+
+async def session_workspace_get_handler(request):
+    """GET /session/{sid}/workspace → get workspace bound to session."""
+    sid = request.match_info["sid"]
+    sess = manager.get_session(sid)
+    ws_name = sess.workspace
+    if not ws_name:
+        return json_ok({"workspace": None})
+    ent = workspace_cmd.registry_load().get(ws_name) or {}
+    return json_ok({"workspace": {"name": ws_name, "path": ent.get("path", "")}})
+
+
+async def session_workspace_set_handler(request):
+    """POST /session/{sid}/workspace → bind workspace to session. Body: {name}."""
+    sid = request.match_info["sid"]
+    sess = manager.get_session(sid)
+    data = await read_json(request)
+    name = (data or {}).get("name", "")
+    if not name:
+        return json_ok({"error": "name is required"}, status=400)
+    ent = workspace_cmd.registry_load().get(name)
+    if not ent:
+        return json_ok({"error": f"workspace not found: {name}"}, status=404)
+    path = ent.get("path", "")
+    try:
+        r = workspace_cmd.prepare(path)
+    except Exception as e:
+        return json_ok({"error": str(e)}, status=500)
+    sess.workspace = name
+    sess.updated_at = time.time()
+    workspace_cmd.registry_upsert(name, path)
+    manager._persist()
+    return json_ok({"ok": True, "workspace": {"name": name, "path": path}})
+
+
+async def session_workspace_off_handler(request):
+    """POST /session/{sid}/workspace/off → unbind workspace from session."""
+    sid = request.match_info["sid"]
+    sess = manager.get_session(sid)
+    sess.workspace = ""
+    sess.updated_at = time.time()
+    manager._persist()
+    return json_ok({"ok": True})
+
+
 def create_app():
     app = web.Application(middlewares=[cors_middleware], client_max_size=500 * 1024 * 1024)
     app.router.add_get("/ws", ws_handler)
@@ -1784,6 +2449,25 @@ def create_app():
     app.router.add_post("/path/open", path_open_handler)
     app.router.add_post("/upload", upload_handler)
     app.router.add_delete("/upload", upload_delete_handler)
+
+    # @ mention & slash command APIs
+    app.router.add_get("/api/files/list", files_list_handler)
+    app.router.add_get("/api/files/browse", files_browse_handler)
+    app.router.add_delete("/api/files/delete", files_delete_handler)
+    app.router.add_post("/api/files/copy", files_copy_handler)
+    app.router.add_get("/api/files/read", files_read_handler)
+    app.router.add_get("/api/commands", commands_list_handler)
+    app.router.add_post("/session/{sid}/slash", slash_handler)
+    app.router.add_post("/session/{sid}/exec", exec_handler)
+
+    # Workspace routes
+    app.router.add_get("/workspaces", list_workspaces_handler)
+    app.router.add_post("/workspace/prepare", prepare_workspace_handler)
+    app.router.add_delete("/workspace/{name}", remove_workspace_handler)
+    app.router.add_get("/session/{sid}/workspace", session_workspace_get_handler)
+    app.router.add_post("/session/{sid}/workspace", session_workspace_set_handler)
+    app.router.add_post("/session/{sid}/workspace/off", session_workspace_off_handler)
+
     app.router.add_get("/upload/raw", upload_raw_handler)
     app.router.add_get("/token-stats", token_stats_handler)
     app.router.add_get("/token-history", get_token_history_handler)
@@ -1798,6 +2482,83 @@ def create_app():
     app.router.add_post("/services/start-extras", start_extras_handler)
     app.router.add_get("/services/identity", identity_handler)
     app.router.add_post("/services/bridge/exit", bridge_exit_handler)
+
+    async def tasks_list_handler(request):
+        tasks_dir = APP_DIR.parent / "sche_tasks"
+        tasks = []
+        if tasks_dir.exists():
+            for f in sorted(tasks_dir.iterdir()):
+                if f.suffix == '.json':
+                    try:
+                        with open(f, 'r', encoding='utf-8') as fp:
+                            task = json.load(fp)
+                        tasks.append({
+                            'id': f.stem,
+                            'name': task.get('name', f.stem),
+                            'schedule': task.get('schedule', ''),
+                            'repeat': task.get('repeat', ''),
+                            'enabled': task.get('enabled', False),
+                            'status': 'healthy'
+                        })
+                    except Exception:
+                        tasks.append({
+                            'id': f.stem,
+                            'name': f.stem,
+                            'schedule': '',
+                            'repeat': '',
+                            'enabled': False,
+                            'status': 'error'
+                        })
+        return web.json_response({'tasks': tasks})
+
+    async def tasks_history_handler(request):
+        done_dir = APP_DIR.parent / "sche_tasks" / "done"
+        history = []
+        if done_dir.exists():
+            for f in sorted(done_dir.iterdir(), reverse=True):
+                if f.suffix == '.md':
+                    try:
+                        parts = f.stem.split('_')
+                        if len(parts) >= 2:
+                            time_str = parts[0]
+                            task_name = '_'.join(parts[1:])
+                            history.append({'name': task_name, 'time': time_str})
+                    except Exception:
+                        pass
+        return web.json_response({'history': history})
+
+    async def tasks_toggle_handler(request):
+        tid = request.match_info.get('tid')
+        tasks_dir = APP_DIR.parent / "sche_tasks"
+        task_file = tasks_dir / f"{tid}.json"
+        if not task_file.exists():
+            return web.json_response({'error': 'task not found'}, status=404)
+        try:
+            with open(task_file, 'r', encoding='utf-8') as fp:
+                task = json.load(fp)
+            task['enabled'] = not task.get('enabled', False)
+            with open(task_file, 'w', encoding='utf-8') as fp:
+                json.dump(task, fp, ensure_ascii=False, indent=2)
+            return web.json_response({'ok': True})
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def tasks_delete_handler(request):
+        tid = request.match_info.get('tid')
+        tasks_dir = APP_DIR.parent / "sche_tasks"
+        task_file = tasks_dir / f"{tid}.json"
+        if not task_file.exists():
+            return web.json_response({'error': 'task not found'}, status=404)
+        try:
+            task_file.unlink()
+            return web.json_response({'ok': True})
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=500)
+
+    app.router.add_get("/services/tasks/list", tasks_list_handler)
+    app.router.add_get("/services/tasks/history", tasks_history_handler)
+    app.router.add_post("/services/tasks/toggle/{tid}", tasks_toggle_handler)
+    app.router.add_delete("/services/tasks/delete/{tid}", tasks_delete_handler)
 
     # Serve static frontend (desktop/static/)
     static_dir = APP_DIR / "desktop" / "static"

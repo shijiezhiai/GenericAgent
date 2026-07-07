@@ -28,6 +28,20 @@ UA = f'openclaw-weixin/{VER}'
 ITEM_IMAGE, ITEM_FILE, ITEM_VIDEO = 2, 4, 5
 CDN_BASE = 'https://novac2c.cdn.weixin.qq.com/c2c'
 
+# Bridge API for routing messages to sessions
+_BRIDGE_API = 'http://127.0.0.1:14168'
+
+def _route_to_bridge(content, sender='微信用户'):
+    """Send message to bridge for session display."""
+    try:
+        requests.post(
+            f'{_BRIDGE_API}/services/channel/message',
+            json={'channel': 'wechat', 'content': content, 'sender': sender},
+            timeout=5
+        )
+    except Exception as e:
+        print(f'[WX->Bridge] 路由失败: {e}', file=sys.__stdout__)
+
 def _uin():
     return base64.b64encode(str(struct.unpack('>I', os.urandom(4))[0]).encode()).decode()
 
@@ -341,6 +355,12 @@ def on_message(bot, msg):
     if media_paths:
         text = (text + '\n' if text else '') + '\n'.join(f'[用户发送文件: {p}]' for p in media_paths)
     print(f'[WX] 收到: {text[:80]}', file=sys.__stdout__)
+
+    # Send to bridge for session display
+    try:
+        _route_to_bridge(text, sender=uid)
+    except Exception as e:
+        print(f'[WX] 路由到会话失败: {e}', file=sys.__stdout__)
 
     # Commands
     if text in ('/stop', '/abort'):

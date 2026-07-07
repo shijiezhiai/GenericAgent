@@ -19,6 +19,7 @@ import chatapp_common  # activate /continue command (monkey patches GeneraticAge
 from continue_cmd import handle_frontend_command, reset_conversation, list_sessions, extract_ui_messages
 from btw_cmd import handle_frontend_command as btw_handle_frontend
 from export_cmd import last_assistant_text, export_to_temp, wrap_for_clipboard
+from remote_channels import CHANNEL_REGISTRY, ChannelManager, get_channel
 
 st.set_page_config(page_title="Cowork", layout="wide", initial_sidebar_state="collapsed")
 
@@ -27,8 +28,125 @@ st.markdown("""
 [data-testid="stBottom"]{position:fixed!important;bottom:0!important;left:0!important;right:0!important;width:100vw!important;z-index:999;background:var(--background-color,#fff)}
 @media (min-width:768px){[data-testid="stSidebar"][aria-expanded="true"]~div [data-testid="stBottom"]{left:300px!important;width:calc(100vw - 300px)!important}}
 .stMainBlockContainer{padding-bottom:10rem!important}
+.ga-channel-btn{position:fixed!important;top:100px!important;right:20px!important;z-index:9999!important;width:48px!important;height:48px!important;border-radius:50%!important;border:none!important;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)!important;color:white!important;font-size:20px!important;cursor:pointer!important;box-shadow:0 4px 15px rgba(102,126,234,0.4)!important;transition:transform 0.2s,box-shadow 0.2s!important;display:flex!important;align-items:center!important;justify-content:center!important}
+.ga-channel-btn:hover{transform:scale(1.1)!important;box-shadow:0 6px 20px rgba(102,126,234,0.6)!important}
+.ga-channel-btn:active{transform:scale(0.95)!important}
 </style>
 """, unsafe_allow_html=True)
+
+# 注入 JS：在 Streamlit 三点菜单中添加"远控通道"菜单项
+# st.html 直接渲染在页面 DOM 中（无 iframe），可以直接操作父页面
+st.html("""
+<div style="display:none" id="ga-js-anchor"></div>
+<script>
+(function(){
+    const LABEL = '🔗 远控通道';
+
+    function addFloatingButton() {
+        if (document.querySelector('.ga-channel-btn')) return;
+        const btn = document.createElement('button');
+        btn.className = 'ga-channel-btn';
+        btn.innerHTML = '🔗';
+        btn.title = '远控通道';
+        btn.addEventListener('click', function(e){
+            e.preventDefault();
+            e.stopPropagation();
+            const loc = window.location;
+            window.location.href = loc.origin + loc.pathname + '?channels=open';
+        });
+        document.body.appendChild(btn);
+    }
+
+    function isSettingsMenu(pop) {
+        const hasSettings = pop.querySelector('[aria-label*="Settings"], [data-testid*="settings"], button[aria-label*="Settings"], button[data-testid*="settings"]');
+        const hasMenuItems = pop.querySelector('ul');
+        return hasSettings || hasMenuItems;
+    }
+
+    function inject() {
+        const popovers = document.querySelectorAll('[data-baseweb="popover"], [role="menu"], [aria-haspopup="menu"]');
+        for (const pop of popovers) {
+            if (pop.querySelector('.ga-ch-item')) continue;
+            if (!isSettingsMenu(pop)) continue;
+
+            let ul = pop.querySelector('ul');
+            if (!ul) {
+                ul = pop.querySelector('ol');
+            }
+            if (!ul) {
+                const list = pop.querySelector('[role="list"]');
+                if (list) ul = list;
+            }
+            if (!ul) continue;
+
+            const lis = ul.querySelectorAll(':scope > li, :scope > [role="menuitem"], :scope > [role="listitem"]');
+            if (lis.length === 0) continue;
+
+            const tpl = lis[lis.length - 1];
+
+            const sep = document.createElement('li');
+            sep.style.cssText = 'list-style:none;margin:0;padding:0;border-top:1px solid rgba(49,51,63,0.15);height:8px;';
+            sep.setAttribute('role','separator');
+            ul.appendChild(sep);
+
+            const li = tpl.cloneNode(true);
+            li.classList.add('ga-ch-item');
+
+            li.querySelectorAll('a').forEach(a => {
+                a.removeAttribute('href');
+                a.style.cursor = 'pointer';
+            });
+            li.querySelectorAll('button').forEach(btn => {
+                btn.removeAttribute('onclick');
+                btn.removeAttribute('onmouseup');
+            });
+
+            const textEls = li.querySelectorAll('span, p, a, button');
+            let done = false;
+            textEls.forEach(el => {
+                if (!done && el.childNodes.length <= 3 && el.textContent.trim()) {
+                    el.textContent = LABEL;
+                    done = true;
+                }
+            });
+            if (!done) li.textContent = LABEL;
+
+            li.style.cursor = 'pointer';
+            li.addEventListener('click', function(e){
+                e.preventDefault();
+                e.stopPropagation();
+                const loc = window.location;
+                window.location.href = loc.origin + loc.pathname + '?channels=open';
+            }, true);
+            ul.appendChild(li);
+        }
+    }
+
+    function scheduleInject() {
+        inject();
+        addFloatingButton();
+        setTimeout(scheduleInject, 1000);
+    }
+
+    const obs = new MutationObserver(() => {
+        requestAnimationFrame(inject);
+        addFloatingButton();
+    });
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            addFloatingButton();
+            scheduleInject();
+            obs.observe(document.body, {childList: true, subtree: true});
+        });
+    } else {
+        addFloatingButton();
+        scheduleInject();
+        obs.observe(document.body, {childList: true, subtree: true});
+    }
+})();
+</script>
+""", unsafe_allow_javascript=True)
 
 LANG = os.environ.get('GA_LANG', 'zh')
 if LANG not in ('zh', 'en'): LANG = 'zh'
@@ -93,6 +211,138 @@ def get_controller():
             ms = re.findall(r'<next_prompt>(.*?)</next_prompt>', it['done'], re.S)
             b['out'] = ms[-1].strip() if ms else None; b['ready'] = True
     threading.Thread(target=loop, daemon=True).start(); return b
+
+@st.cache_resource
+def _get_channel_mgr():
+    return ChannelManager()
+
+
+def _get_wechat_qr_url():
+    """调用微信接口获取二维码图片 URL，不阻塞主线程。"""
+    import requests as _req
+    _API = 'https://ilinkai.weixin.qq.com'
+    for attempt in range(3):
+        try:
+            r = _req.get(f'{_API}/ilink/bot/get_bot_qrcode', params={'bot_type': 3},
+                         headers={'User-Agent': 'openclaw-weixin/2.1.10'}, timeout=10)
+            r.raise_for_status()
+            d = r.json()
+            if d.get('qrcode') and d.get('qrcode_img_content'):
+                return d['qrcode_img_content'], d['qrcode']
+        except Exception:
+            pass
+        time.sleep(2 ** attempt)
+    return None, None
+
+
+@st.dialog("🔗 远控通道", width="large")
+def _show_channels_dialog():
+    """以 dialog 形式展示远控通道管理界面。"""
+    mgr = _get_channel_mgr()
+    st.caption("选择并配置远控通道，通过社交软件与 Agent 交互")
+
+    for row_start in range(0, len(CHANNEL_REGISTRY), 2):
+        cols = st.columns(2)
+        for col_idx, ch in enumerate(CHANNEL_REGISTRY[row_start:row_start + 2]):
+            with cols[col_idx]:
+                status = mgr.get_status(ch.key)
+                badge_map = {"running": "🟢 运行中", "stopped": "🔴 已停止", "unconfigured": "暂未配置 Agent"}
+                status_text = badge_map.get(status, "")
+                with st.container(border=True):
+                    hdr_cols = st.columns([3, 1])
+                    with hdr_cols[0]:
+                        rec_tag = " `推荐`" if ch.recommended else ""
+                        st.markdown(f"**{ch.label}**{rec_tag}")
+                    with hdr_cols[1]:
+                        if status == "running":
+                            if st.button("管理", key=f"dlg_manage_{ch.key}", use_container_width=True):
+                                st.session_state[f'_ch_action_{ch.key}'] = 'manage'
+                                st.rerun()
+                        elif status == "stopped":
+                            if st.button("启动", key=f"dlg_start_{ch.key}", use_container_width=True, type="primary"):
+                                ok, msg = mgr.start(ch.key)
+                                st.toast(f"{'✅' if ok else '❌'} {msg}"); st.rerun()
+                        else:
+                            if st.button("添加", key=f"dlg_add_{ch.key}", use_container_width=True):
+                                st.session_state['_ch_adding'] = ch.key
+                                st.rerun()
+                    st.caption(ch.description)
+                    st.markdown(f"<small style='color:gray'>{status_text}</small>", unsafe_allow_html=True)
+
+    for ch in CHANNEL_REGISTRY:
+        if st.session_state.get(f'_ch_action_{ch.key}') == 'manage':
+            st.divider()
+            st.markdown(f"**管理 {ch.label}**")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                if st.button(f"停止 {ch.label}", key=f"dlg_stop_{ch.key}"):
+                    mgr.stop(ch.key); del st.session_state[f'_ch_action_{ch.key}']
+                    st.toast(f"✅ {ch.label} 已停止"); st.rerun()
+            with c2:
+                if st.button(f"移除 {ch.label}", key=f"dlg_rm_{ch.key}"):
+                    mgr.remove(ch.key); del st.session_state[f'_ch_action_{ch.key}']
+                    st.toast(f"🗑️ 已移除"); st.rerun()
+            with c3:
+                if st.button("取消", key=f"dlg_cancel_{ch.key}"):
+                    del st.session_state[f'_ch_action_{ch.key}']; st.rerun()
+
+    adding_key = st.session_state.get('_ch_adding')
+    if adding_key:
+        ch = get_channel(adding_key)
+        if ch:
+            st.divider()
+            st.markdown(f"**配置 {ch.label}**")
+            if not ch.config_keys:
+                st.info("请使用微信扫描下方二维码完成登录")
+                with st.spinner("正在获取二维码..."):
+                    qr_url, qr_id = _get_wechat_qr_url()
+                if qr_url:
+                    import qrcode as _qr, io as _io
+                    qr_img = _qr.make(qr_url)
+                    buf = _io.BytesIO()
+                    qr_img.save(buf, format='PNG')
+                    st.image(buf.getvalue(), caption="微信扫码登录", width=260)
+                    st.caption("扫码后等待确认...")
+                    if st.button("已扫码，启动通道", key="dlg_wx_confirm"):
+                        mgr.configure(adding_key, {"qr_id": qr_id})
+                        ok, msg = mgr.start(adding_key)
+                        st.session_state.pop('_ch_adding', None)
+                        st.toast(f"{'✅' if ok else '❌'} {msg}"); st.rerun()
+                else:
+                    st.error("获取二维码失败，请稍后重试")
+                if st.button("取消", key="dlg_wx_cancel"):
+                    st.session_state.pop('_ch_adding', None); st.rerun()
+            else:
+                vals = {}
+                for cfg_key in ch.config_keys:
+                    vals[cfg_key] = st.text_input(cfg_key, key=f"dlg_cfg_{ch.key}_{cfg_key}")
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("确认添加", key=f"dlg_cfm_{ch.key}", type="primary"):
+                        if all(v.strip() for v in vals.values()):
+                            config = {k: v.strip() for k, v in vals.items()}
+                            mgr.configure(adding_key, config)
+                            try:
+                                from llmcore import mykeys
+                                for k, v in config.items():
+                                    mykeys[k] = v
+                            except Exception:
+                                pass
+                            ok, msg = mgr.start(adding_key)
+                            st.session_state.pop('_ch_adding', None)
+                            st.toast(f"{'✅' if ok else '❌'} {msg}"); st.rerun()
+                        else:
+                            st.warning("请填写所有配置项")
+                with c2:
+                    if st.button("取消", key=f"dlg_cfg_cancel_{ch.key}"):
+                        st.session_state.pop('_ch_adding', None); st.rerun()
+
+
+# 远控通道入口：通过三点菜单注入的 JS 项 → 导航到 /?channels=open → 触发 dialog
+_qp = st.query_params.to_dict()
+if _qp.get("channels") == "open":
+    st.query_params.clear()
+    _show_channels_dialog()
 
 st.title("🖥️ Cowork")
 
@@ -169,6 +419,7 @@ def render_sidebar():
             st.session_state.autonomous_enabled = True
             st.toast("✅"); st.rerun(scope="app")
         st.caption(T('auto_off_cap'))
+
 with st.sidebar: render_sidebar()
 
 def fold_turns(text):

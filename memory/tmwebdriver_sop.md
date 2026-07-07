@@ -6,6 +6,7 @@
 
 ## 通用特性
 - ⚠web_execute_js里使用`await`时需**显式`return`**才能拿到返回值（底层async包裹，不写return则返回null）
+- ⭐web_execute_js注入代码运行在页面**主世界(world:'MAIN'+eval)**，能直接读写页面顶层`let`/`const`全局变量(非仅window属性)——验证GA这类状态存顶层let的页面时,可直接改状态变量+dispatch事件,无需绕DOM
 - ✅web_scan自动穿透同源iframe；跨域iframe需CDP或postMessage（见下方章节）
 
 ## 限制(isTrusted)

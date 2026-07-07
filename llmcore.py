@@ -156,7 +156,9 @@ def _parse_claude_sse(resp_lines):
                 if current_block and current_block.get("type") == "text": current_block["text"] += text
                 if text: yield text
             elif delta.get("type") == "thinking_delta":
-                if current_block and current_block.get("type") == "thinking": current_block["thinking"] += delta.get("thinking", "")
+                if current_block and current_block.get("type") == "thinking":
+                    current_block["thinking"] += delta.get("thinking", "")
+                    if delta.get("thinking", ""): yield delta["thinking"]
             elif delta.get("type") == "signature_delta":
                 if current_block and current_block.get("type") == "thinking":
                     current_block["signature"] = current_block.get("signature", "") + delta.get("signature", "")

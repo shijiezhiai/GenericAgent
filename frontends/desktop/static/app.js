@@ -219,6 +219,28 @@ let bridgeUiOffline = false;
       case 'app/path/selectGaRoot': return http('/config');
       case 'list_continuable_sessions': return { sessions: [] };
       case 'restore_session': throw new Error('restore_session is not implemented in web2 bridge');
+      case 'workspace/list': return http('/workspaces');
+      case 'workspace/prepare': return http('/workspace/prepare', { method: 'POST', body: params || {} });
+      case 'workspace/remove': {
+        const wname = params.name;
+        if (!wname) throw new Error('workspace/remove missing name');
+        return http(`/workspace/${encodeURIComponent(wname)}`, { method: 'DELETE' });
+      }
+      case 'session/workspace/get': {
+        const wsid = params.sessionId;
+        if (!wsid) throw new Error('session/workspace/get missing sessionId');
+        return http(`/session/${encodeURIComponent(wsid)}/workspace`);
+      }
+      case 'session/workspace/set': {
+        const wsid2 = params.sessionId;
+        if (!wsid2) throw new Error('session/workspace/set missing sessionId');
+        return http(`/session/${encodeURIComponent(wsid2)}/workspace`, { method: 'POST', body: params });
+      }
+      case 'session/workspace/off': {
+        const wsid3 = params.sessionId;
+        if (!wsid3) throw new Error('session/workspace/off missing sessionId');
+        return http(`/session/${encodeURIComponent(wsid3)}/workspace/off`, { method: 'POST' });
+      }
       default: throw new Error(`Unknown RPC method: ${method}`);
     }
   }
@@ -294,6 +316,13 @@ let bridgeUiOffline = false;
     onBridgeLog: (cb) => on('bridge-log', cb),
     onServiceState: (cb) => on('service-state', cb),
     onOpenSearch: (cb) => on('open-search', cb),
+    // Workspace helpers
+    listWorkspaces: () => rpc('workspace/list'),
+    prepareWorkspace: (path) => rpc('workspace/prepare', { path }),
+    removeWorkspace: (name) => rpc('workspace/remove', { name }),
+    getSessionWorkspace: (sessionId) => rpc('session/workspace/get', { sessionId }),
+    setSessionWorkspace: (sessionId, name) => rpc('session/workspace/set', { sessionId, name }),
+    offSessionWorkspace: (sessionId) => rpc('session/workspace/off', { sessionId }),
   };
 
   connectWs();
@@ -307,7 +336,7 @@ const I18N = {
     'app.title': 'GenericAgent 桌面版',
     'brand.sub': '桌面终端',
     'nav.chat': '聊天', 'nav.services': '后台服务', 'nav.channels': '消息通道', 'nav.status': '状态面板',
-    'nav.collab': '指挥家', 'nav.token': '用量',
+    'nav.collab': '指挥家', 'nav.token': '用量', 'nav.tasks': '定时任务',
     'foot.settings': '配置', 'foot.ver': 'GenericAgent · 桌面版',
     'chat.startTitle': '开始对话', 'chat.startSub': '直接输入，或点预设功能一键启动',
     'preset.butler.t': '指挥家', 'preset.butler.d': '复杂任务自动拆解，只需查看进度和简报',
@@ -320,6 +349,16 @@ const I18N = {
     'preset.mine.t': '我的·周报', 'preset.mine.d': '自定义：抓本周提交并写周报',
     'preset.add.t': '自定义', 'preset.add.d': '任意一句话存为功能',
     'composer.placeholder': 'GA 能帮你做些什么？',
+    'workspace.selectTitle': '工作区', 'workspace.empty': '未选择',
+    'workspace.panelTitle': '工作区', 'workspace.current': '当前',
+    'workspace.offTitle': '解除绑定', 'workspace.add': '添加工作区',
+    'workspace.emptyList': '暂无工作区，点击下方添加',
+    'workspace.addTitle': '输入项目根目录的绝对路径',
+    'workspace.addPlaceholder': '/path/to/your/project',
+    'workspace.addConfirm': '添加', 'workspace.addCancel': '取消',
+    'workspace.removeTitle': '删除', 'workspace.switchTitle': '切换到该工作区',
+    'workspace.dangling': '(已失效)',
+    'workspace.switched': '工作区已切换',
     'search.placeholder': '搜索会话…', 'conv.new': '新对话',
     'ctx.pin': '置顶', 'ctx.unpin': '取消置顶', 'ctx.rename': '重命名', 'ctx.del': '删除',
     'common.close': '关闭', 'common.more': '更多', 'common.optional': '选填', 'common.save': '保存',
@@ -332,7 +371,7 @@ const I18N = {
     'customPreset.removeTitle': '删除',
     'customPreset.editTitle': '编辑',
     'builtinPreset.restoreBtn': '恢复默认预设',
-    'set.appearance': '外观', 'set.plainUi': '素色', 'set.fontSize': '聊天字号', 'set.lang': '语言', 'set.model': '模型', 'set.addModel': '添加模型', 'set.features': '功能', 'set.importMykey': '导入已有模型配置（mykey.py）', 'set.exportMykey': '导出当前模型配置', 'set.serviceManager': '后台服务管理',
+    'set.appearance': '外观', 'set.plainUi': '素色', 'set.fontSize': '聊天字号', 'set.lang': '语言', 'set.model': '模型', 'set.addModel': '添加模型', 'set.features': '功能', 'set.chatFilesDir': '对话文件目录', 'set.save': '保存', 'set.importMykey': '导入已有模型配置（mykey.py）', 'set.exportMykey': '导出当前模型配置', 'set.serviceManager': '后台服务管理',
     'shortcut.askConfirm': '是否在桌面创建 GenericAgent 快捷方式？',
     'appearance.light': '浅色', 'appearance.dark': '深色',
     'set.noModels': '暂无模型，点击下方添加',
@@ -450,6 +489,14 @@ const I18N = {
     'sys.channelStarted': '已启动', 'sys.channelStopped': '已停止',
     'modal.channelLogs': '进程日志',
     'modal.mykeyConfig': 'mykey.py 配置',
+    'modal.qrLogin': '{name} 扫码登录',
+    'qr.scanTip': '请使用 {name} 扫描下方二维码完成登录',
+    'qr.statusScanning': '等待扫码...',
+    'qr.statusScanned': '已扫码，请确认...',
+    'qr.statusConfirmed': '登录成功！',
+    'qr.statusExpired': '二维码已过期，请刷新重试',
+    'qr.failed': '获取二维码失败，请稍后重试',
+    'qr.refresh': '刷新二维码',
     'sys.configSaved': '配置已保存',
     'sys.mykeyImported': '模型配置已导入',
     'sys.mykeyExported': '模型配置已导出',
@@ -463,6 +510,10 @@ const I18N = {
     'tok.colSession': '会话', 'tok.colIn': '输入', 'tok.colOut': '输出', 'tok.colCacheW': '缓存写入', 'tok.colCache': '缓存读取', 'tok.colCost': '成本',
     'tok.from': '从', 'tok.to': '到', 'tok.reset': '重置', 'tok.noData': '暂无记录', 'tok.deleted': '此会话已删除',
     'tok.pricingUnknown': '⚠ 此模型计费规则尚未明确，按默认估算',
+    'page.tasks.title': '定时任务', 'page.tasks.list': '任务列表', 'page.tasks.history': '历史任务',
+    'page.tasks.emptyTitle': '选择下方对话，开启你的第一个任务吧',
+    'page.tasks.emptySub': '',
+    'page.tasks.create': '创建任务', 'page.tasks.historyEmpty': '暂无历史任务',
     'tok.priceInput': '输入: $', 'tok.priceOutput': '输出: $',
     'tok.priceCacheW': '缓存写入: $', 'tok.priceCacheR': '缓存读取: $',
     'presetPrompt.goal': '进入 Goal 模式：读 L3 goal mode SOP，自主达成我接下来描述的目标。',
@@ -475,12 +526,24 @@ const I18N = {
     'ask.banner': 'GA 等你回答',
     'ask.replyHint': '在下方输入框回复',
     'ask.placeholderOpen': '在此输入你的回答… (Enter 发送)',
+    'nav.files': '文件', 'page.files.title': '文件管理', 'files.filterTitle': '按类型筛选',
+    'files.all': '全部', 'files.source.chat': '对话上传', 'files.source.task': '定时任务', 'files.source.config': '配置', 'files.source.generated': '生成文件',
+    'files.referencedBy': '被引用', 'files.download': '下载', 'files.delete': '删除',
+    'files.confirmDelete': '确定删除该文件？', 'files.empty': '暂无文件',
+    'files.sizeB': 'B', 'files.sizeKB': 'KB', 'files.sizeMB': 'MB',
+    'files.viewList': '列表视图', 'files.viewGrid': '网格视图', 'files.refresh': '刷新',
+    'files.menu': '更多操作', 'files.open': '打开文件', 'files.preview': '预览文件', 'files.openLocation': '打开文件位置', 'files.copy': '复制文件', 'files.sort.name': '名称', 'files.sort.size': '大小', 'files.sort.mtime': '修改时间', 'files.sort.created': '创建时间', 'files.sortAsc': '升序', 'files.sortDesc': '降序',
+    'files.confirmDelete': '确定删除该文件？', 'files.confirmDeleteMulti': '确定删除选中的 {n} 个文件？',
+    'files.confirmCopy': '确定复制该文件？', 'files.copied': '已复制', 'files.copying': '复制中…',
+    'files.selectMode': '选择', 'files.selectAll': '全选', 'files.deselectAll': '取消全选',
+    'files.batchOpenLocation': '打开位置', 'files.batchCopy': '复制', 'files.batchDelete': '删除',
+    'files.selected': '已选 {n} 项', 'files.cancel': '取消',
   },
   en: {
     'app.title': 'GenericAgent Desktop',
     'brand.sub': 'Desktop terminal',
     'nav.chat': 'Chat', 'nav.services': 'Services', 'nav.channels': 'Channels', 'nav.status': 'Status',
-    'nav.collab': 'Conductor', 'nav.token': 'Usage',
+    'nav.collab': 'Conductor', 'nav.token': 'Usage', 'nav.tasks': 'Scheduled Tasks',
     'foot.settings': 'Settings', 'foot.ver': 'GenericAgent · Desktop',
     'chat.startTitle': 'Start a conversation', 'chat.startSub': 'Type a message, or pick a preset',
     'preset.butler.t': 'Conductor', 'preset.butler.d': 'Auto-decompose complex tasks; just check progress and briefings',
@@ -493,6 +556,16 @@ const I18N = {
     'preset.mine.t': 'My · Weekly', 'preset.mine.d': 'Custom: weekly report from commits',
     'preset.add.t': 'Custom', 'preset.add.d': 'Save any prompt as a function',
     'composer.placeholder': 'What can GA do for you?',
+    'workspace.selectTitle': 'Workspace', 'workspace.empty': 'None',
+    'workspace.panelTitle': 'Workspace', 'workspace.current': 'Current',
+    'workspace.offTitle': 'Unbind', 'workspace.add': 'Add Workspace',
+    'workspace.emptyList': 'No workspaces yet. Add one below.',
+    'workspace.addTitle': 'Enter absolute path to project root',
+    'workspace.addPlaceholder': '/path/to/your/project',
+    'workspace.addConfirm': 'Add', 'workspace.addCancel': 'Cancel',
+    'workspace.removeTitle': 'Remove', 'workspace.switchTitle': 'Switch to this workspace',
+    'workspace.dangling': '(unavailable)',
+    'workspace.switched': 'Workspace switched',
     'search.placeholder': 'Search chats…', 'conv.new': 'New chat',
     'ctx.pin': 'Pin', 'ctx.unpin': 'Unpin', 'ctx.rename': 'Rename', 'ctx.del': 'Delete',
     'common.close': 'Close', 'common.more': 'More', 'common.optional': 'Optional', 'common.save': 'Save',
@@ -505,7 +578,7 @@ const I18N = {
     'customPreset.removeTitle': 'Delete',
     'customPreset.editTitle': 'Edit',
     'builtinPreset.restoreBtn': 'Restore defaults',
-    'set.appearance': 'Appearance', 'set.plainUi': 'Plain', 'set.fontSize': 'Chat font size', 'set.lang': 'Language', 'set.model': 'Model', 'set.addModel': 'Add model', 'set.features': 'Features', 'set.importMykey': 'Import model config (mykey.py)', 'set.exportMykey': 'Export current model config', 'set.serviceManager': 'Service manager',
+    'set.appearance': 'Appearance', 'set.plainUi': 'Plain', 'set.fontSize': 'Chat font size', 'set.lang': 'Language', 'set.model': 'Model', 'set.addModel': 'Add model', 'set.features': 'Features', 'set.chatFilesDir': 'Chat files dir', 'set.save': 'Save', 'set.importMykey': 'Import model config (mykey.py)', 'set.exportMykey': 'Export current model config', 'set.serviceManager': 'Service manager',
     'shortcut.askConfirm': 'Create a desktop shortcut for GenericAgent?',
     'appearance.light': 'Light', 'appearance.dark': 'Dark',
     'set.noModels': 'No models yet — add one below',
@@ -623,6 +696,14 @@ const I18N = {
     'sys.channelStarted': 'Started', 'sys.channelStopped': 'Stopped',
     'modal.channelLogs': 'Process logs',
     'modal.mykeyConfig': 'mykey.py',
+    'modal.qrLogin': '{name} QR Login',
+    'qr.scanTip': 'Scan the QR code below with {name} to complete login',
+    'qr.statusScanning': 'Waiting for scan...',
+    'qr.statusScanned': 'Scanned, please confirm...',
+    'qr.statusConfirmed': 'Login successful!',
+    'qr.statusExpired': 'QR code expired, please refresh',
+    'qr.failed': 'Failed to get QR code, please try again',
+    'qr.refresh': 'Refresh QR code',
     'sys.configSaved': 'Configuration saved',
     'sys.mykeyImported': 'Model config imported',
     'sys.mykeyExported': 'Model config exported',
@@ -636,6 +717,10 @@ const I18N = {
     'tok.colSession': 'Session', 'tok.colIn': 'Input', 'tok.colOut': 'Output', 'tok.colCacheW': 'Cache write', 'tok.colCache': 'Cache read', 'tok.colCost': 'Cost',
     'tok.from': 'From', 'tok.to': 'To', 'tok.reset': 'Reset', 'tok.noData': 'No records', 'tok.deleted': 'Session deleted',
     'tok.pricingUnknown': '⚠ Pricing not confirmed, using defaults',
+    'page.tasks.title': 'Scheduled Tasks', 'page.tasks.list': 'Tasks', 'page.tasks.history': 'History',
+    'page.tasks.emptyTitle': 'Select a conversation below to start your first task',
+    'page.tasks.emptySub': '',
+    'page.tasks.create': 'Create Task', 'page.tasks.historyEmpty': 'No history yet',
     'tok.priceInput': 'Input: $', 'tok.priceOutput': 'Output: $',
     'tok.priceCacheW': 'Cache write: $', 'tok.priceCacheR': 'Cache read: $',
     'presetPrompt.goal': 'Enter Goal mode: read the L3 goal-mode SOP and autonomously achieve the goal I describe next.',
@@ -648,6 +733,18 @@ const I18N = {
     'ask.banner': 'GA is waiting for your answer',
     'ask.replyHint': 'Reply in the input below',
     'ask.placeholderOpen': 'Type your answer here… (Enter to send)',
+    'nav.files': 'Files', 'page.files.title': 'File Manager', 'files.filterTitle': 'Filter by Type',
+    'files.all': 'All', 'files.source.chat': 'Chat Uploads', 'files.source.task': 'Scheduled Tasks', 'files.source.config': 'Config', 'files.source.generated': 'Generated Files',
+    'files.referencedBy': 'Referenced', 'files.download': 'Download', 'files.delete': 'Delete',
+    'files.confirmDelete': 'Delete this file?', 'files.empty': 'No files',
+    'files.sizeB': 'B', 'files.sizeKB': 'KB', 'files.sizeMB': 'MB',
+    'files.viewList': 'List View', 'files.viewGrid': 'Grid View', 'files.refresh': 'Refresh',
+    'files.menu': 'More actions', 'files.open': 'Open File', 'files.preview': 'Preview', 'files.openLocation': 'Reveal in Folder', 'files.copy': 'Duplicate', 'files.sort.name': 'Name', 'files.sort.size': 'Size', 'files.sort.mtime': 'Modified', 'files.sort.created': 'Created', 'files.sortAsc': 'Ascending', 'files.sortDesc': 'Descending',
+    'files.confirmDelete': 'Delete this file?', 'files.confirmDeleteMulti': 'Delete {n} selected files?',
+    'files.confirmCopy': 'Duplicate this file?', 'files.copied': 'Duplicated', 'files.copying': 'Duplicating…',
+    'files.selectMode': 'Select', 'files.selectAll': 'Select All', 'files.deselectAll': 'Deselect All',
+    'files.batchOpenLocation': 'Reveal', 'files.batchCopy': 'Duplicate', 'files.batchDelete': 'Delete',
+    'files.selected': '{n} selected', 'files.cancel': 'Cancel',
   },
 };
 const LANGS = ['zh', 'en'];
@@ -698,8 +795,9 @@ function syncBootCache() {
 }
 async function persistUiPrefs() {
   try {
+    const _cfd = document.getElementById('chat-files-dir-input');
     await window.ga.saveConfig({
-      config: { lang, theme, appearance, plain: plainUi, llmNo: state.llmNo, fontSize: chatFontSize },
+      config: { lang, theme, appearance, plain: plainUi, llmNo: state.llmNo, fontSize: chatFontSize, chatFilesDir: _cfd ? (_cfd.value.trim() || 'temp') : 'temp' },
     });
     syncBootCache();
   } catch (_) {}
@@ -905,6 +1003,10 @@ function gaGoPage(key) {
   currentPage = key;
   nav.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n === item));
   pages.forEach(p => p.classList.toggle('active', p.dataset.page === key));
+  if (bodyEl) {
+    if (key === 'tasks' || key === 'token' || key === 'services' || key === 'files') bodyEl.classList.add('rp-collapsed');
+    else bodyEl.classList.remove('rp-collapsed');
+  }
   renderSessionList();
   window.gaSetActiveFileComposer?.(key === 'collab' ? 'collab' : 'chat');
   if (key === 'collab') window.collabInit?.();
@@ -1727,7 +1829,7 @@ function postRenderEnhance(containerEl) {
 /* ═══════════════ 状态 ═══════════════ */
 const state = {
   sessions: new Map(), activeId: null, bridgeReady: false,
-  llmNo: 0, modelProfiles: [], modelName: null,
+  llmNo: 0, llmNoUserSet: false, modelProfiles: [], modelName: null,
   runtime: new Map(),
   pendingFiles: [],
   fileSeq: 0,
@@ -1756,7 +1858,9 @@ async function loadSessions() {
       state.sessions.set(s.id, {
         id: s.id, bridgeSessionId: s.id, title: s.title,
         messages: [], untitled: s.untitled ?? true,
-        pinned: s.pinned ?? false, lastActiveTs: s.updatedAt || s.createdAt
+        pinned: s.pinned ?? false, lastActiveTs: s.updatedAt || s.createdAt,
+        updatedAt: s.updatedAt || s.createdAt,
+        workspace: s.workspace || '', branch: s.branch || ''
       });
     }
     // 刷新后固定恢复「上次正在看的会话」（前端持久化的 ga_active），而不是 bridge 的
@@ -2753,6 +2857,21 @@ function sortedSessions() {
     return (b.lastActiveTs || 0) - (a.lastActiveTs || 0);
   });
 }
+function relativeTime(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - ts * 1000;
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return s + 's ago';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  const d = Math.floor(h / 24);
+  if (d < 7) return d + 'd ago';
+  const w = Math.floor(d / 7);
+  if (w < 5) return w + 'w ago';
+  return new Date(ts * 1000).toLocaleDateString();
+}
 function renderSessionList() {
   convListEl.innerHTML = '';
   const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
@@ -2776,13 +2895,110 @@ function renderSessionList() {
     item.className = 'conv-item' + (currentPage === 'chat' && sess.id === state.activeId ? ' active' : '') + (busy ? '' : ' idle');
     item.dataset.id = sess.id;
     const pinSvg = sess.pinned ? GA_ICON('pushPinSimple', 'ci-pin') : '';
+    const metaParts = [busy ? t('status.running') : t('status.idle')];
+    if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
+    if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? `:${sess.branch}` : ''));
     item.innerHTML =
       `<span class="ci-dot"></span><div class="ci-main">` +
       `<div class="ci-title">${pinSvg}${escapeHtml(displayTitle(sess))}</div>` +
-      `<div class="ci-meta">${busy ? t('status.running') : t('status.idle')}</div></div>` +
+      `<div class="ci-meta">${escapeHtml(metaParts.join(' · '))}</div></div>` +
       `<button class="ci-more" title="${escapeHtml(t('common.more'))}">${GA_ICON('dotsThreeVertical')}</button>`;
     convListEl.appendChild(item);
   }
+}
+async function openResumeModal() {
+  const listEl = document.getElementById('resume-list');
+  if (!listEl) return;
+  try { await loadSessions(); } catch (_) {}
+  const items = sortedSessions();
+  if (!items.length) {
+    listEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);">暂无可恢复会话</div>';
+    openModal('resume-modal');
+    return;
+  }
+  listEl.innerHTML = '';
+  for (const sess of items) {
+    const r = state.runtime.get(sess.id);
+    const busy = !!(r && r.busy);
+    const metaParts = [busy ? t('status.running') : t('status.idle')];
+    if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
+    if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? `:${sess.branch}` : ''));
+    const div = document.createElement('div');
+    div.className = 'conv-item' + (busy ? '' : ' idle');
+    div.innerHTML =
+      `<span class="ci-dot"></span><div class="ci-main">` +
+      `<div class="ci-title">${escapeHtml(displayTitle(sess))}</div>` +
+      `<div class="ci-meta">${escapeHtml(metaParts.join(' · '))}</div></div>`;
+    div.addEventListener('click', () => { closeModals(); setActiveSession(sess.id); });
+    listEl.appendChild(div);
+  }
+  openModal('resume-modal');
+}
+// ── resume inline session picker (mirrors slash/at panels) ──
+let _resumeActive = false, _resumeAll = [], _resumeDisplayed = [], _resumeIdx = -1;
+const RESUME_PANEL = () => document.getElementById('resume-panel');
+const RESUME_LIST = () => document.getElementById('resume-list');
+async function showResumePanel() {
+  _resumeActive = true;
+  hideSlashPanel(); hideAtPanel();
+  _resumeAll = sortedSessions();
+  _resumeDisplayed = _resumeAll;
+  _resumeIdx = _resumeAll.length > 0 ? 0 : -1;
+  renderResumeList();
+  const p = RESUME_PANEL(); if (p) p.hidden = false;
+  try { await loadSessions(); } catch (_) {}
+  _resumeAll = sortedSessions();
+  _resumeDisplayed = _resumeAll;
+  _resumeIdx = _resumeAll.length > 0 ? 0 : -1;
+  renderResumeList();
+}
+function hideResumePanel() {
+  _resumeActive = false;
+  const p = RESUME_PANEL(); if (p) p.hidden = true;
+}
+function renderResumeList() {
+  const el = RESUME_LIST(); if (!el) return;
+  if (!_resumeDisplayed.length) { el.innerHTML = '<div class="resume-empty">' + t('conv.emptyList') + '</div>'; return; }
+  el.innerHTML = '';
+  _resumeDisplayed.forEach((sess, i) => {
+    const r = state.runtime.get(sess.id);
+    const busy = !!(r && r.busy);
+    const metaParts = [busy ? t('status.running') : t('status.idle')];
+    if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
+    if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? `:${sess.branch}` : ''));
+    const div = document.createElement('div');
+    div.className = 'conv-item' + (i === _resumeIdx ? ' active' : '') + (busy ? '' : ' idle');
+    div.innerHTML = '<span class="ci-dot"></span><div class="ci-main"><div class="ci-title">' + escapeHtml(displayTitle(sess)) + '</div><div class="ci-meta">' + escapeHtml(metaParts.join(' · ')) + '</div></div>';
+    div.addEventListener('mousedown', (e) => { e.preventDefault(); selectResumeItem(i); });
+    el.appendChild(div);
+  });
+  // scroll active item into view (sync, no rAF — rAF is throttled when tab is backgrounded)
+  const active = el.querySelector('.conv-item.active');
+  if (active) {
+    const top = active.offsetTop;
+    const bottom = top + active.offsetHeight;
+    if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom - el.clientHeight;
+    else if (top < el.scrollTop) el.scrollTop = top;
+  }
+}
+function selectResumeItem(i) {
+  const idx = (i == null) ? _resumeIdx : i;
+  const sess = _resumeDisplayed[idx];
+  hideResumePanel();
+  if (!sess) return;
+  inputEl.innerHTML = '';
+  setActiveSession(sess.id);
+}
+async function invokeResumePicker() {
+  inputEl.innerHTML = '';
+  inputEl.appendChild(document.createTextNode('/resume '));
+  const sel = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(inputEl);
+  range.collapse(false);
+  sel.removeAllRanges(); sel.addRange(range);
+  inputEl.focus();
+  await showResumePanel();
 }
 if (searchInput) searchInput.addEventListener('input', () => renderSessionList());
 async function ensureBridgeSession(sess) {
@@ -2860,6 +3076,13 @@ function setActiveSession(id) {
   if (id) localStorage.setItem('ga_active', id);  // 持久化当前会话，刷新后固定恢复它
   const sess = state.sessions.get(id);
   if (!sess) return;
+  // 选中会话 → 自动把当前 workspace 切到该会话绑定的 workspace（Claude Code 风格）
+  if (sess.bridgeSessionId && sess.workspace) {
+    fetch(`${BRIDGE_ORIGIN}/session/${sess.bridgeSessionId}/workspace`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: sess.workspace })
+    }).catch(() => {});
+  }
   if (msgsEl) msgsEl.innerHTML = '';
   const r = rt(sess);
   r.draftEl = null;
@@ -2987,6 +3210,15 @@ convMenu.addEventListener('click', (e) => {
   convMenu.hidden = true;
 });
 document.addEventListener('click', () => { convMenu.hidden = true; });
+// Close @ and / panels on outside click
+document.addEventListener('click', (e) => {
+  if (_atActive && AT_PANEL && !AT_PANEL.contains(e.target) && e.target !== inputEl) {
+    hideAtPanel();
+  }
+  if (_slashActive && SLASH_PANEL && !SLASH_PANEL.contains(e.target) && e.target !== inputEl) {
+    hideSlashPanel();
+  }
+});
 newConvBtn.addEventListener('click', (e) => { e.preventDefault(); newSession(); });
 
 /* ═══════════════ 轮询 + 流式 ═══════════════ */
@@ -3359,14 +3591,124 @@ async function cancelPrompt() {
   } catch (e) { showError(t('err.stop') + ': ' + (e.message || e)); return false; }
 }
 
+async function sendSlashCommand(rawText) {
+  const parts = rawText.split(/\s+/);
+  const cmd = parts[0];
+  const args = parts.slice(1).join(' ');
+  if (!state.bridgeReady) { showError(t('err.bridge')); return; }
+  if (!state.activeId) { await newSession(); }
+  const sess = activeSess();
+  const r = rt(sess);
+  if (r.busy) {
+    const interrupted = await interruptBeforeSend(sess);
+    if (!interrupted) return;
+  }
+  try {
+    const sid = await ensureBridgeSession(sess);
+    const text = expandFilePlaceholders(rawText).trim();
+    const usedFiles = collectUsedFiles(text);
+    const previewFiles = usedFiles.filter(f => !f.isImage).map(f => ({ id: 'f-' + f.sid, name: f.name, path: f.path }));
+    const previewImgs = usedFiles.filter(f => f.isImage).map(f => ({ id: 'f-' + f.sid, name: f.name, path: f.path, dataUrl: f.dataUrl || '' }));
+
+    const userMsg = { role: 'user', content: rawText, ts: Date.now() / 1000 };
+    if (previewImgs.length) userMsg.images = previewImgs;
+    if (previewFiles.length) userMsg.files = previewFiles;
+    sess.messages.push(userMsg); appendMessage(sess, userMsg);
+    sess.lastActiveTs = Date.now();
+    saveSessions();
+    setBusy(sess, true);
+
+    const res = await bridgeFetch(`/session/${encodeURIComponent(sid)}/slash`, {
+      method: 'POST',
+      body: { cmd, args, files: previewFiles, imageMetas: previewImgs.map(im => ({ name: im.name, path: im.path })), llmNo: state.llmNo },
+    });
+    if (res?.error) throw new Error(res.error.message || res.error);
+    removeUsedPendingFiles(usedFiles);
+    pollSession(sess);
+  } catch (e) {
+    const em = { role: 'error', content: e.message || String(e) };
+    sess.messages.push(em); appendMessage(sess, em);
+    setBusy(sess, false);
+  }
+}
+
+async function sendExecCommand(cmdText) {
+  // cmdText is the !-prefixed text, e.g. "!ls -la" → extract "ls -la"
+  const cmdStr = cmdText.slice(1).trim();
+  if (!cmdStr) return;
+  if (!state.bridgeReady) { showError(t('err.bridge')); return; }
+  if (!state.activeId) { await newSession(); }
+  const sess = activeSess();
+  const r = rt(sess);
+  if (r.busy) {
+    const interrupted = await interruptBeforeSend(sess);
+    if (!interrupted) return;
+  }
+  const userMsg = { role: 'user', content: cmdText, ts: Date.now() / 1000 };
+  sess.messages.push(userMsg); appendMessage(sess, userMsg);
+  sess.lastActiveTs = Date.now();
+  saveSessions();
+  setBusy(sess, true);
+  try {
+    const sid = await ensureBridgeSession(sess);
+    const res = await bridgeFetch(`/session/${encodeURIComponent(sid)}/exec`, {
+      method: 'POST',
+      body: { cmd: cmdStr },
+    });
+    if (res?.error) throw new Error(res.error.message || res.error);
+    // Show command output as a system message
+    let outputText = '';
+    if (res.stdout) outputText += res.stdout;
+    if (res.stderr) {
+      if (outputText) outputText += '\n';
+      outputText += res.stderr;
+    }
+    const statusTag = res.ok ? '✓ ' : '✗ (exit ' + res.code + ') ';
+    const sysMsg = { role: 'system', content: statusTag + outputText, ts: Date.now() / 1000 };
+    sess.messages.push(sysMsg); appendMessage(sess, sysMsg);
+    sess.lastActiveTs = Date.now();
+    saveSessions();
+  } catch (e) {
+    const em = { role: 'error', content: e.message || String(e) };
+    sess.messages.push(em); appendMessage(sess, em);
+  } finally {
+    setBusy(sess, false);
+  }
+}
+
 /* ═══════════════ 输入区 / slash / 预设 ═══════════════ */
 async function submitInput() {
   if (_submitInFlight) return;
   let text = composerText('chat');
   if (!text.trim()) return;
-  if (text.trim().startsWith('/')) {
+  // Save to history (deduplicate consecutive identical entries)
+  const trimmed = text.trim();
+  if (_history.length === 0 || _history[_history.length - 1] !== trimmed) {
+    _history.push(trimmed);
+    while (_history.length > HISTORY_MAX) _history.shift();
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(_history)); } catch (_) {}
+  }
+  _historyIdx = -1;
+  _historyDraft = '';
+  if (text.trim().startsWith('!')) {
     inputEl.innerHTML = '';
-    handleSlash(text.trim());
+    await sendExecCommand(text.trim());
+    return;
+  }
+  if (text.trim().startsWith('/')) {
+    const cmdName = text.trim().split(/\s+/)[0];
+    if (['/help','/new','/clear','/stop','/settings','/resume'].includes(cmdName)) {
+      inputEl.innerHTML = '';
+      handleSlash(text.trim());
+      return;
+    }
+    if (cmdName === '/scheduler') {
+      inputEl.innerHTML = '';
+      openSchedulerPicker();
+      return;
+    }
+    inputEl.innerHTML = '';
+    await sendSlashCommand(text.trim());
     return;
   }
   if (text.length > 20000) {
@@ -3392,9 +3734,260 @@ sendBtn.addEventListener('click', (e) => {
   if (sess && rt(sess).busy) { cancelPrompt(); return; }  // 运行中：发送键是录制键 → 纯停止
   submitInput();
 });
+// Panel keyboard navigation — document-level capture to guarantee it fires first
+document.addEventListener('keydown', (e) => {
+  try {
+  if (_atActive) {
+    if (e.code === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); _atIdx = Math.min(_atIdx + 1, _atDisplayed.length - 1); renderAtList(_atDisplayed); return; }
+    if (e.code === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); _atIdx = Math.max(_atIdx - 1, 0); renderAtList(_atDisplayed); return; }
+    if (e.code === 'Enter') { e.preventDefault(); e.stopPropagation(); selectAtItem(); return; }
+    if (e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); hideAtPanel(); return; }
+    if (e.code === 'Backspace') {
+      setTimeout(() => {
+        const text = composerText('chat');
+        if (!text.includes('@')) hideAtPanel();
+      }, 50);
+      return;
+    }
+  }
+  if (_slashActive) {
+    if (e.code === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); _slashIdx = Math.min(_slashIdx + 1, _slashDisplayed.length - 1); renderSlashList(_slashDisplayed); return; }
+    if (e.code === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); _slashIdx = Math.max(_slashIdx - 1, 0); renderSlashList(_slashDisplayed); return; }
+    if (e.code === 'Enter') {
+      // If the typed text exactly matches a command name, submit it directly
+      // instead of selecting the highlighted panel item (which may differ).
+      const typed = composerText('chat').trim();
+      const exactMatch = _slashCmds.find(c => c.name === typed);
+      if (exactMatch) { e.preventDefault(); e.stopPropagation(); hideSlashPanel(); submitInput(); return; }
+      e.preventDefault(); e.stopPropagation(); selectSlashItem(); return;
+    }
+    if (e.code === 'Tab') { e.preventDefault(); e.stopPropagation(); fillSlashItem(); return; }
+    if (e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); hideSlashPanel(); return; }
+    if (e.code === 'Backspace') {
+      setTimeout(() => {
+        const text = composerText('chat').trim();
+        if (!text.startsWith('/')) hideSlashPanel();
+      }, 50);
+      return;
+    }
+  }
+  if (_resumeActive) {
+    if (e.code === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); _resumeIdx = Math.min(_resumeIdx + 1, _resumeDisplayed.length - 1); renderResumeList(); return; }
+    if (e.code === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); _resumeIdx = Math.max(_resumeIdx - 1, 0); renderResumeList(); return; }
+    if (e.code === 'Enter') { e.preventDefault(); e.stopPropagation(); selectResumeItem(); return; }
+    if (e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); hideResumePanel(); return; }
+    if (e.code === 'Backspace') {
+      setTimeout(() => {
+        const text = composerText('chat');
+        if (!text.startsWith('/resume')) hideResumePanel();
+      }, 50);
+      return;
+    }
+  }
+  } catch(e) { console.error('panel keydown error:', e); }
+  // Safety net: if an exception happened while a slash panel was active,
+  // prevent the keydown from bubbling to the history-navigation handler
+  // (which would overwrite the input text and make the panel "disappear").
+  if ((_slashActive || _resumeActive) && (e.code === 'ArrowDown' || e.code === 'ArrowUp' || e.code === 'Enter' || e.code === 'Tab')) {
+    e.preventDefault(); e.stopPropagation();
+  }
+}, true /* capture */);
+
+// Enter to submit (only when no panel is open)
 inputEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); submitInput(); }
+  // ── History navigation (ArrowUp / ArrowDown) when input is empty or at start ──
+  if (e.key === 'ArrowUp' && !e.shiftKey) {
+    if (_atActive || _slashActive) return;
+    const sel = window.getSelection();
+    const atStart = sel && sel.rangeCount && sel.getRangeAt(0).startOffset === 0
+      && sel.anchorNode === inputEl && inputEl.contains(sel.anchorNode);
+    const isEmpty = !composerText('chat').trim();
+    // 已在历史导航中(_historyIdx!==-1)则无条件继续往前翻;否则需输入为空或光标在起始(避免文本中间误触发)
+    if (_historyIdx !== -1 || isEmpty || atStart) {
+      e.preventDefault();
+      if (_historyIdx === -1) {
+        _historyDraft = composerText('chat');
+        _historyIdx = _history.length - 1;
+      } else if (_historyIdx > 0) {
+        _historyIdx--;
+      }
+      if (_historyIdx >= 0 && _historyIdx < _history.length) {
+        inputEl.textContent = _history[_historyIdx];
+        // move cursor to end
+        const range = document.createRange();
+        range.selectNodeContents(inputEl);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      return;
+    }
+  }
+  if (e.key === 'ArrowDown' && !e.shiftKey) {
+    if (_atActive || _slashActive) return;
+    if (_historyIdx >= 0) {
+      e.preventDefault();
+      _historyIdx++;
+      if (_historyIdx >= _history.length) {
+        // Restore the draft saved before navigation started
+        inputEl.textContent = _historyDraft;
+        _historyIdx = -1;
+        _historyDraft = '';
+        const range = document.createRange();
+        range.selectNodeContents(inputEl);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        inputEl.textContent = _history[_historyIdx];
+        const range = document.createRange();
+        range.selectNodeContents(inputEl);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      return;
+    }
+  }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+    if (_atActive || _slashActive) return;
+    e.preventDefault(); submitInput();
+  }
+  // Backspace: remove exclam-prefix if the input is just the styled ! (and possibly trailing space)
+  if (e.key === 'Backspace') {
+    const exclamEl = inputEl.querySelector('.exclam-prefix');
+    if (exclamEl) {
+      // Check if input content is only the exclam-prefix + optional whitespace
+      const text = composerText('chat');
+      if (text.trim() === '!' && text.indexOf('!') === 0) {
+        // If there's anything after the !, it's a real command — don't remove
+        const afterExclam = text.slice(1).trim();
+        if (!afterExclam) {
+          e.preventDefault();
+          inputEl.innerHTML = '';
+          inputEl.focus();
+        }
+      }
+    }
+  }
 });
+
+// Detect @ and / triggers in contenteditable, and filter panels when active
+inputEl.addEventListener('input', () => {
+  // ── exit history mode if user types/changes text manually ──
+  if (_historyIdx >= 0 && composerText('chat') !== _history[_historyIdx]) {
+    _historyIdx = -1;
+    _historyDraft = '';
+  }
+  // ── resume trigger: activate inline session picker when composer text is /resume ──
+  { const _rt = composerText('chat').trim(); if (_rt === '/resume' || _rt.startsWith('/resume ')) { if (!_resumeActive) showResumePanel(); } }
+  // ── panel is open: use composer text to filter ──
+  if (_atActive) {
+    const raw = composerText('chat');
+    const idx = raw.lastIndexOf('@');
+    const filter = idx >= 0 ? raw.slice(idx + 1).trim() : '';
+    if (AT_SEARCH) AT_SEARCH.value = filter;
+    if (!filter) {
+      // show all files (re-fetch to reset the list)
+      const dir = getWorkspacePath() || '/';
+      fetchFiles(dir, '').then(res => {
+        _atFiles = res.entries || [];
+        _atIdx = _atFiles.length > 0 ? 0 : -1;
+        renderAtList(_atFiles);
+      });
+    } else {
+      // search server-side so deep files are included
+      const dir = getWorkspacePath() || '/';
+      fetchFiles(dir, filter).then(res => {
+        _atFiles = res.entries || [];
+        _atIdx = _atFiles.length > 0 ? 0 : -1;
+        renderAtList(_atFiles);
+      });
+    }
+    return;
+  }
+  if (_slashActive) {
+    const raw = composerText('chat').trim();
+    const filter = raw.startsWith('/') ? raw.slice(1).trim() : raw;
+    // Only re-filter and reset selection when the filter text actually changes;
+    // this preserves arrow-key navigation when a stray input event fires.
+    if (filter === _slashFilterCache) return;
+    _slashFilterCache = filter;
+    if (SLASH_SEARCH) SLASH_SEARCH.value = filter;
+    const q = filter.toLowerCase();
+    let filtered = _slashCmds;
+    if (q) {
+      filtered = _slashCmds.filter(c =>
+        c.name.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q)
+      );
+    }
+    _slashDisplayed = filtered;
+    _slashIdx = filtered.length > 0 ? 0 : -1;
+    renderSlashList(filtered);
+    return;
+  }
+  // ── resume panel is open: filter sessions by text after /resume ──
+  if (_resumeActive) {
+    const raw = composerText('chat');
+    const still = raw === '/resume' || raw.startsWith('/resume ');
+    if (!still) { hideResumePanel(); }
+    else {
+      const m = raw.match(/^\/resume\s([\s\S]*)$/);
+      const filter = m ? m[1] : '';
+      const q = filter.trim().toLowerCase();
+      let f = _resumeAll;
+      if (q) f = _resumeAll.filter(s => displayTitle(s).toLowerCase().includes(q));
+      _resumeDisplayed = f;
+      _resumeIdx = f.length > 0 ? 0 : -1;
+      renderResumeList();
+      return;
+    }
+  }
+  // ── panel not open: detect triggers ──
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount) {
+    const node = sel.anchorNode;
+    const offset = sel.anchorOffset;
+    if (node && node.nodeType === 3 && offset > 0 && node.nodeValue[offset - 1] === '@') {
+      showAtPanel();
+      return;
+    }
+    // Detect ! typed — style it and enter exec mode
+    if (node && node.nodeType === 3 && offset > 0 && node.nodeValue[offset - 1] === '!') {
+      // Only trigger when input otherwise empty (before the !)
+      const beforeExclam = node.nodeValue.slice(0, offset - 1).trim();
+      if (!beforeExclam && !inputEl.querySelector('.exclam-prefix')) {
+        // Verify no other non-whitespace content exists
+        const text = composerText('chat');
+        if (text.trim() === '!') {
+          // Replace the plain ! with styled span + space
+          inputEl.innerHTML = '';
+          const span = document.createElement('span');
+          span.className = 'exclam-prefix';
+          span.contentEditable = 'false';
+          span.textContent = '!';
+          inputEl.appendChild(span);
+          const nbsp = document.createTextNode('\u00A0');
+          inputEl.appendChild(nbsp);
+          const range = document.createRange();
+          range.setStartAfter(nbsp);
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          return;
+        }
+      }
+    }
+  }
+  const text = composerText('chat').trim();
+  if (text === '/') {
+    showSlashPanel();
+    return;
+  }
+});
+
 // 输入框的 input/paste 监听统一在 bindComposerUpload(ctx) 里绑(chat + collab 通用)
 function showSystem(text) {
   const sess = activeSess(); if (!sess) return;
@@ -3407,6 +4000,83 @@ function showError(text) {
   else console.error(text);
 }
 let _toastTimer = null;
+// --- /scheduler picker modal ---
+let _schedulerState = { services: [], running: {}, selected: new Set() };
+
+async function openSchedulerPicker() {
+  if (!state.bridgeReady) { showError(t('err.bridge')); return; }
+  if (!state.activeId) { await newSession(); }
+  const sess = state.sessions[state.activeId];
+  if (!sess) return;
+  const sid = await ensureBridgeSession(sess);
+  openModal('scheduler-modal');
+  const body = document.getElementById('scheduler-list');
+  if (body) body.innerHTML = '<div style="padding:12px;color:var(--text-dim)">Loading…</div>';
+  try {
+    const res = await bridgeFetch(`/session/${encodeURIComponent(sid)}/slash`, {
+      method: 'POST', body: { cmd: '/scheduler', args: '' }
+    });
+    if (res?.error) { showError(res.error); closeModals(); return; }
+    _schedulerState.services = res.services || [];
+    _schedulerState.running = res.running || {};
+    _schedulerState.selected = new Set(Object.keys(_schedulerState.running));
+    renderSchedulerList();
+  } catch (e) { showError(String(e.message || e)); closeModals(); }
+}
+
+function renderSchedulerList() {
+  const body = document.getElementById('scheduler-list');
+  if (!body) return;
+  const svcs = _schedulerState.services;
+  if (!svcs.length) {
+    body.innerHTML = '<div style="padding:12px;color:var(--text-dim)">No launchable services found.</div>';
+    return;
+  }
+  body.innerHTML = svcs.map(svc => {
+    const name = svc.name;
+    const checked = _schedulerState.selected.has(name);
+    const runningTag = _schedulerState.running[name] ? ' <span class="sched-run-tag">· running</span>' : '';
+    const doc = svc.doc ? '<div class="sched-doc">' + escapeHtml(svc.doc) + '</div>' : '';
+    const kindTag = svc.kind ? '<span class="sched-kind">' + escapeHtml(svc.kind) + '</span>' : '';
+    return '<label class="sched-row">' +
+      '<input type="checkbox" data-svc="' + escapeHtml(name) + '"' + (checked ? ' checked' : '') + '>' +
+      '<div class="sched-info"><div class="sched-name">' + escapeHtml(name) + runningTag + ' ' + kindTag + '</div>' + doc + '</div>' +
+    '</label>';
+  }).join('');
+  body.querySelectorAll('input[data-svc]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const n = cb.getAttribute('data-svc');
+      if (cb.checked) _schedulerState.selected.add(n); else _schedulerState.selected.delete(n);
+    });
+  });
+}
+
+async function applySchedulerSelection() {
+  const sess = state.sessions[state.activeId];
+  if (!sess) return;
+  const sid = await ensureBridgeSession(sess);
+  const names = Array.from(_schedulerState.selected);
+  if (!names.length) { showToast('No services selected.'); return; }
+  const btn = document.getElementById('scheduler-apply');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const res = await bridgeFetch(`/session/${encodeURIComponent(sid)}/slash`, {
+      method: 'POST', body: { cmd: '/scheduler', args: 'start ' + names.join(',') }
+    });
+    const results = res?.schedulerResults || [];
+    const ok = results.filter(r => r.ok).length;
+    const fail = results.filter(r => !r.ok);
+    let msg = '✓ ' + ok + ' service(s) updated';
+    if (fail.length) msg += ' · ✗ ' + fail.length + ' failed: ' + fail.map(r => r.name).join(', ');
+    const sysMsg = { role: 'system', content: msg, ts: Date.now() / 1000 };
+    sess.messages.push(sysMsg); appendMessage(sess, sysMsg);
+    saveSessions();
+    closeModals();
+  } catch (e) { showError(String(e.message || e)); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Apply'; } }
+}
+bindClick('scheduler-apply', applySchedulerSelection);
+
 function showToast(text) {
   let el = document.getElementById('ga-toast');
   if (!el) { el = document.createElement('div'); el.id = 'ga-toast'; el.className = 'ga-toast'; document.body.appendChild(el); }
@@ -3418,14 +4088,432 @@ function showToast(text) {
 async function handleSlash(cmd) {
   const name = cmd.slice(1).split(/\s+/)[0];
   switch (name) {
-    case 'help': showSystem(t('slash.help')); break;
+    case 'help': {
+      // Dynamically build the help text from the actual command list
+      // (including actions, skills, and custom presets) so it never goes stale.
+      if (!_slashCmds.length) {
+        _slashCmds = [...(await fetchCommands()), ...getCustomPresetCommands()];
+      }
+      const groups = {};
+      for (const c of _slashCmds) {
+        const g = c.group || 'other';
+        (groups[g] = groups[g] || []).push(c);
+      }
+      const groupOrder = ['actions', 'skills', 'custom', 'other'];
+      const groupLabels = { actions: '内置命令', skills: '技能命令', custom: '自定义预设', other: '其他' };
+      const parts = [];
+      for (const g of groupOrder) {
+        if (!groups[g]) continue;
+        parts.push(`── ${groupLabels[g] || g} ──`);
+        for (const c of groups[g]) {
+          // Strip redundant command-name prefix from label (e.g. label "update [note]" for "/update" → "[note]")
+          let labelPart = '';
+          if (c.label && c.label !== c.name) {
+            const baseName = c.name.replace(/^\//, '');
+            if (c.label.startsWith(baseName)) {
+              const rest = c.label.slice(baseName.length).trim();
+              labelPart = rest ? ` ${rest}` : '';
+            } else {
+              labelPart = ` ${c.label}`;
+            }
+          }
+          const descPart = (c.desc && c.desc !== c.label) ? `  — ${c.desc}` : '';
+          parts.push(`${c.name}${labelPart}${descPart}`);
+        }
+      }
+      showSystem(`可用命令（共 ${_slashCmds.length} 个）：\n\n${parts.join('\n')}`);
+      break;
+    }
     case 'new': await newSession(); break;
     case 'clear': { const s = activeSess(); if (s) { s.messages = []; renderAllMessages(s); } break; }
     case 'stop': if (await cancelPrompt()) showSystem(t('sys.stopRequested')); break;
     case 'settings': openSettings(); break;
+    case 'resume': await invokeResumePicker(); break;
     default: showSystem(t('slash.unknown') + ': /' + name);
   }
 }
+
+/* ═══════════════ @ 文件选择 & / 命令面板 ═══════════════ */
+
+const AT_PANEL = document.getElementById('at-panel');
+const AT_LIST = document.getElementById('at-list');
+const AT_SEARCH = document.getElementById('at-search-input');
+const AT_BROWSE = document.getElementById('at-browse-btn');
+const SLASH_PANEL = document.getElementById('slash-panel');
+const SLASH_GROUPS = document.getElementById('slash-groups');
+const SLASH_SEARCH = document.getElementById('slash-search-input');
+
+let _atFiles = [];
+let _atDisplayed = [];  // currently displayed (may be filtered subset)
+let _atIdx = -1;
+let _atActive = false;
+let _slashCmds = [];
+let _slashDisplayed = [];   // currently displayed (filtered) list — ArrowUp/Down & select operate on this
+let _slashIdx = -1;
+let _slashActive = false;
+let _slashFilterCache = '';  // last filter text — used to skip redundant re-renders that reset selection
+const HISTORY_KEY = 'ga_input_history';
+const HISTORY_MAX = 500;
+let _history = (() => { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch (_) { return []; } })();          // sent messages history (persisted to localStorage)
+let _historyIdx = -1;       // current position in history (-1 = not navigating)
+let _historyDraft = '';     // saved draft before starting history navigation
+
+// ── @ panel ─────────────────────────────────────────────────────────
+
+function getWorkspacePath() {
+  const sess = activeSess();
+  if (sess && sess._workspacePath) return sess._workspacePath;
+  return state.lastWorkspacePath || '';
+}
+
+async function fetchFiles(dirPath, filter) {
+  let url = `${BRIDGE_ORIGIN}/api/files/list?path=${encodeURIComponent(dirPath)}`;
+  if (filter) url += `&filter=${encodeURIComponent(filter)}`;
+  try {
+    const res = await fetch(url);
+    const j = await res.json();
+    return j.entries ? j : { entries: [] };
+  } catch (e) { return { entries: [] }; }
+}
+
+function renderAtList(files) {
+  _atDisplayed = files;
+  if (!files.length) {
+    AT_LIST.innerHTML = '<div class="at-empty">No files found</div>';
+    _atIdx = -1;
+    return;
+  }
+  _atIdx = Math.max(-1, Math.min(_atIdx, files.length - 1));
+  if (_atIdx < 0 && files.length > 0) _atIdx = 0;
+  AT_LIST.innerHTML = files.map((f, i) => {
+    const icon = f.type === 'dir' ? '📁' : '📄';
+    const cls = 'at-item' + (i === _atIdx ? ' active' : '');
+    const display = escapeHtml(f.rel || f.name);
+    return `<div class="${cls}" data-idx="${i}"><span class="at-icon">${icon}</span>${display}</div>`;
+  }).join('');
+  // scroll active item into view
+  requestAnimationFrame(() => {
+    const active = AT_LIST.querySelector('.at-item.active');
+    if (active) active.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+async function showAtPanel() {
+  hideSlashPanel();
+  _atActive = true;
+  AT_PANEL.hidden = false;
+  renderAtList([]);
+  const dir = getWorkspacePath() || '/';
+  const raw = composerText('chat');
+  const idx = raw.lastIndexOf('@');
+  const filter = idx >= 0 ? raw.slice(idx + 1).trim() : '';
+  const res = await fetchFiles(dir, filter);
+  _atFiles = res.entries || [];
+  _atIdx = _atFiles.length > 0 ? 0 : -1;
+  renderAtList(_atFiles);
+  if (AT_SEARCH) AT_SEARCH.value = filter;
+}
+
+function hideAtPanel() {
+  AT_PANEL.hidden = true;
+  _atActive = false;
+  _atFiles = [];
+  _atDisplayed = [];
+  _atIdx = -1;
+}
+
+function selectAtItem() {
+  try {
+    if (_atIdx < 0 || _atIdx >= _atDisplayed.length) return;
+    const f = _atDisplayed[_atIdx];
+    _removeMentionText();
+    insertAtChip(f);
+    hideAtPanel();
+  } catch(e) { console.error('selectAtItem error:', e); }
+}
+
+// Remove @ and everything after it from the composer (direct DOM manipulation)
+function _removeMentionText() {
+  const input = composerCfg('chat').input;
+  if (!input) return;
+  // Find the text node with @
+  const walker = document.createTreeWalker(input, NodeFilter.SHOW_TEXT);
+  let node, atNode = null, atOffset = 0;
+  while (node = walker.nextNode()) {
+    const txt = node.nodeValue || '';
+    const idx = txt.lastIndexOf('@');
+    if (idx >= 0) { atNode = node; atOffset = idx; }
+  }
+  if (!atNode) return;
+  // Truncate text at @
+  atNode.nodeValue = (atNode.nodeValue || '').slice(0, atOffset);
+  // Remove all siblings after atNode
+  let next = atNode.nextSibling;
+  while (next) {
+    const toRemove = next;
+    next = next.nextSibling;
+    toRemove.remove();
+  }
+  // Place cursor at end
+  const range = document.createRange();
+  range.setStartAfter(atNode);
+  range.collapse(true);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+function insertAtChip(f) {
+  const input = composerCfg('chat').input;
+  if (!input) return;
+  const seq = ++state.fileSeq;
+  const isDir = f.type === 'dir';
+  // Use relative path from API if available, otherwise compute from workspace
+  let displayPath = f.rel || f.path || f.name || '';
+  if (!f.rel) {
+    const wsPath = getWorkspacePath();
+    if (wsPath && displayPath.startsWith(wsPath)) {
+      displayPath = displayPath.slice(wsPath.length).replace(/^\//, '');
+    }
+  }
+  if (!displayPath) displayPath = f.name || '';
+  const label = `@${displayPath}`;
+  const chip = document.createElement('span');
+  chip.className = 'ph-chip';
+  chip.contentEditable = 'false';
+  chip.dataset.sid = seq;
+  chip.dataset.kind = isDir ? '@folder' : '@file';
+  chip.textContent = label;
+
+  // Always focus the input first, then try to insert at cursor
+  input.focus();
+  const sel = window.getSelection();
+  let inserted = false;
+  if (sel && sel.rangeCount) {
+    try {
+      const range = sel.getRangeAt(0);
+      // Check if range is inside or can be moved into the input
+      if (input.contains(range.commonAncestorContainer) || input === range.commonAncestorContainer) {
+        range.insertNode(chip);
+        range.setStartAfter(chip);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        inserted = true;
+      }
+    } catch (_) {}
+  }
+  if (!inserted) {
+    input.appendChild(chip);
+  }
+
+  state.pendingFiles.push({
+    sid: seq, name: f.name, path: f.path, isImage: false,
+    isAtMention: true, atKind: isDir ? '@folder' : '@file', ctx: 'chat',
+  });
+  const space = document.createTextNode('\u00A0');
+  chip.after(space);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// @ panel event listeners
+if (AT_SEARCH) {
+  AT_SEARCH.oninput = async () => {
+    const q = AT_SEARCH.value.trim();
+    const dir = getWorkspacePath() || '/';
+    const res = await fetchFiles(dir, q);
+    _atFiles = res.entries || [];
+    _atIdx = _atFiles.length > 0 ? 0 : -1;
+    renderAtList(_atFiles);
+  };
+}
+
+if (AT_LIST) {
+  AT_LIST.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.at-item');
+    if (!item) return;
+    e.preventDefault(); // prevent focus loss from contenteditable
+    _atIdx = Number(item.dataset.idx);
+    selectAtItem();
+  });
+}
+
+if (AT_BROWSE) {
+  AT_BROWSE.onclick = async () => {
+    hideAtPanel();
+    try {
+      if (window.__TAURI__?.core?.invoke) {
+        const picked = await window.__TAURI__.core.invoke('pick_folder');
+        if (picked) {
+          const name = picked.split('/').pop() || picked;
+          insertAtChip({ name, path: picked, type: 'dir' });
+          return;
+        }
+      }
+    } catch (_) {}
+    // Fallback: open system file dialog
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.webkitdirectory = true;
+    inp.onchange = () => {
+      if (inp.files && inp.files.length > 0) {
+        const p = inp.files[0].path || inp.files[0].webkitRelativePath || inp.files[0].name;
+        insertAtChip({ name: p.split('/')[0], path: p, type: 'dir' });
+      }
+    };
+    inp.click();
+  };
+}
+
+// ── / command panel ─────────────────────────────────────────────────
+
+async function fetchCommands() {
+  try {
+    const res = await fetch(`${BRIDGE_ORIGIN}/api/commands`);
+    const j = await res.json();
+    return j.commands || [];
+  } catch (e) { return []; }
+}
+
+function getCustomPresetCommands() {
+  try {
+    const raw = localStorage.getItem('ga_custom_presets');
+    if (!raw) return [];
+    return JSON.parse(raw).map(p => ({
+      name: '/preset:' + p.id, label: p.title, desc: p.title, group: 'custom',
+      _presetPrompt: p.prompt,
+    }));
+  } catch (_) { return []; }
+}
+
+function renderSlashList(cmds) {
+  if (!cmds.length) {
+    SLASH_GROUPS.innerHTML = '<div class="slash-empty">No commands found</div>';
+    _slashIdx = -1;
+    return;
+  }
+  _slashIdx = Math.max(-1, Math.min(_slashIdx, cmds.length - 1));
+  if (_slashIdx < 0 && cmds.length > 0) _slashIdx = 0;
+  const groups = {};
+  for (const c of cmds) {
+    (groups[c.group] = groups[c.group] || []).push(c);
+  }
+  const groupLabels = { skills: 'Skills', actions: 'Actions', custom: 'Custom' };
+  const order = ['skills', 'actions', 'custom'];
+  let html = '';
+  for (const g of order) {
+    const items = groups[g];
+    if (!items || !items.length) continue;
+    html += `<div class="slash-group-label">${escapeHtml(groupLabels[g] || g)}</div>`;
+    for (let i = 0; i < items.length; i++) {
+      const c = items[i];
+      const globalIdx = cmds.indexOf(c);
+      const cls = 'slash-item' + (globalIdx === _slashIdx ? ' active' : '');
+      html += `<div class="${cls}" data-idx="${globalIdx}"><span class="slash-cmd">${escapeHtml(c.name)}</span><span class="slash-desc">${escapeHtml(c.desc)}</span></div>`;
+    }
+  }
+  SLASH_GROUPS.innerHTML = html;
+  // scroll active item into view
+  requestAnimationFrame(() => {
+    const active = SLASH_GROUPS.querySelector('.slash-item.active');
+    if (active) active.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+async function showSlashPanel() {
+  hideAtPanel();
+  _slashActive = true;
+  _slashFilterCache = null;  // reset so the first input event re-filters properly
+  SLASH_PANEL.hidden = false;
+  renderSlashList([]);  // show empty skeleton immediately
+  if (!_slashCmds.length) {
+    const bridgeCmds = await fetchCommands();
+    const customCmds = getCustomPresetCommands();
+    _slashCmds = [...bridgeCmds, ...customCmds];
+  }
+  _slashIdx = _slashCmds.length > 0 ? 0 : -1;
+  _slashDisplayed = _slashCmds;
+  renderSlashList(_slashDisplayed);
+  if (SLASH_SEARCH) SLASH_SEARCH.value = '';
+}
+
+function hideSlashPanel() {
+  SLASH_PANEL.hidden = true;
+  _slashActive = false;
+  _slashIdx = -1;
+  _slashFilterCache = null;
+}
+
+function selectSlashItem() {
+  if (_slashIdx < 0 || _slashIdx >= _slashDisplayed.length) return;
+  const cmd = _slashDisplayed[_slashIdx];
+  hideSlashPanel();
+  if (cmd.group === 'actions') {
+    inputEl.innerHTML = '';
+    handleSlash(cmd.name);
+  } else if (cmd._presetPrompt) {
+    inputEl.textContent = cmd._presetPrompt;
+    inputEl.focus();
+  } else {
+    // Skills commands: distinguish by optional-arg marker ([xxx] in label).
+    // No optional arg → execute immediately; has optional arg → fill in and wait for user to complete.
+    if (/\[[^\]]+\]/.test(cmd.label || cmd.desc || '')) {
+      inputEl.textContent = cmd.name + ' ';
+      inputEl.focus();
+      const range = document.createRange();
+      range.selectNodeContents(inputEl);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      inputEl.textContent = cmd.name;
+      submitInput();
+    }
+  }
+}
+
+// Tab: fill in the selected command name (without executing) so the user can
+// review / append arguments before pressing Enter.
+function fillSlashItem() {
+  if (_slashIdx < 0 || _slashIdx >= _slashDisplayed.length) return;
+  const cmd = _slashDisplayed[_slashIdx];
+  hideSlashPanel();
+  inputEl.textContent = cmd.name + ' ';
+  inputEl.focus();
+  const range = document.createRange();
+  range.selectNodeContents(inputEl);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+if (SLASH_SEARCH) {
+  SLASH_SEARCH.oninput = () => {
+    const q = SLASH_SEARCH.value.trim().toLowerCase();
+    let filtered = _slashCmds;
+    if (q) {
+      filtered = _slashCmds.filter(c =>
+        c.name.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q) || (c.label || '').toLowerCase().includes(q)
+      );
+    }
+    _slashDisplayed = filtered;
+    _slashIdx = filtered.length > 0 ? 0 : -1;
+    renderSlashList(filtered);
+  };
+}
+
+if (SLASH_GROUPS) {
+  SLASH_GROUPS.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.slash-item');
+    if (!item) return;
+    e.preventDefault(); // prevent focus loss
+    _slashIdx = Number(item.dataset.idx);
+    selectSlashItem();
+  });
+}
+
 // 预设卡：按 data-preset 解耦（与翻译后的标题无关）
 document.querySelectorAll('.feature-grid').forEach(grid => {
   grid.addEventListener('click', (e) => {
@@ -3482,6 +4570,7 @@ function modelDisplayName(p, fallbackName) {
 }
 async function selectModel(id, name) {
   state.llmNo = id;
+  state.llmNoUserSet = true;
   state.liveModel = null;
   const p = (state.modelProfiles || []).find(x => (x.id ?? 0) === id);
   state.modelName = modelDisplayName(p, name);
@@ -3826,10 +4915,22 @@ async function loadModelProfiles() {
     const res = await window.ga.getModelProfiles();
     const list = res?.profiles || res?.result?.profiles || [];
     state.modelProfiles = normalizeProfiles(list);
-    const active = state.modelProfiles.find(p => p.active) || state.modelProfiles[0];
-    if (active) {
-      state.llmNo = active.id ?? 0;
-      state.modelName = modelDisplayName(active);
+    // 仅在首次初始化（用户未主动选择过模型）时采用服务端 active；用户已选则保留
+    if (!state.llmNoUserSet) {
+      const active = state.modelProfiles.find(p => p.active) || state.modelProfiles[0];
+      if (active) {
+        state.llmNo = active.id ?? 0;
+        state.modelName = modelDisplayName(active);
+      }
+    } else {
+      // 确保当前选中的模型显示名与 profiles 同步（不改变 llmNo）
+      const cur = state.modelProfiles.find(p => (p.id ?? 0) === state.llmNo);
+      if (cur) { state.modelName = modelDisplayName(cur); }
+      else {
+        // 当前选中模型已不存在（被删除等），回退到 active 或第一个
+        const active = state.modelProfiles.find(p => p.active) || state.modelProfiles[0];
+        if (active) { state.llmNo = active.id ?? 0; state.modelName = modelDisplayName(active); }
+      }
     }
     updateModelChip();
     renderSettingsModels();
@@ -3901,16 +5002,31 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('#model-menu') || e.target.closest('#model-chip') ||
       e.target.closest('#cdb-model-menu') || e.target.closest('#cdb-model-chip') ||
       e.target.closest('#chat-menu') || e.target.closest('#chat-plus-btn') ||
-      e.target.closest('#cdb-menu') || e.target.closest('#cdb-plus-btn')) return;
+      e.target.closest('#cdb-menu') || e.target.closest('#cdb-plus-btn') ||
+      e.target.closest('#workspace-panel') || e.target.closest('#workspace-chip')) return;
   closeAllModelMenus();
   window.chatComposer?.closeMenu?.();
   window.collabComposer?.closeMenu?.();
+  // Close workspace panel
+  const wsPanel = document.getElementById('workspace-panel');
+  const wsChip = document.getElementById('workspace-chip');
+  if (wsPanel && !wsPanel.hidden) { wsPanel.hidden = true; wsChip?.classList.remove('open'); }
+  // Close @ and / panels
+  if (_atActive && AT_PANEL && !AT_PANEL.contains(e.target) && e.target !== inputEl) {
+    hideAtPanel();
+  }
+  if (_slashActive && SLASH_PANEL && !SLASH_PANEL.contains(e.target) && e.target !== inputEl) {
+    hideSlashPanel();
+  }
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeAllModelMenus();
     window.chatComposer?.closeMenu?.();
     window.collabComposer?.closeMenu?.();
+    const wsPanel = document.getElementById('workspace-panel');
+    const wsChip = document.getElementById('workspace-chip');
+    if (wsPanel && !wsPanel.hidden) { wsPanel.hidden = true; wsChip?.classList.remove('open'); }
   }
 });
 
@@ -3937,7 +5053,8 @@ async function loadBridgeConfig() {
     if (cfg.theme != null) applyTheme(cfg.theme, { persist: false });
     if (cfg.appearance) applyAppearance(cfg.appearance, !!cfg.plain, { persist: false });
     if (cfg.fontSize != null) applyChatFontSize(cfg.fontSize, { persist: false });
-    if (cfg.llmNo != null && state.modelProfiles.length) {
+    // 仅在用户未主动选择过模型时用服务端 config 覆盖；用户已选则保留
+    if (cfg.llmNo != null && !state.llmNoUserSet && state.modelProfiles.length) {
       const p = state.modelProfiles.find(x => (x.id ?? 0) === cfg.llmNo);
       if (p) {
         state.llmNo = cfg.llmNo;
@@ -3946,11 +5063,25 @@ async function loadBridgeConfig() {
         renderSettingsModels();
       }
     }
+    if (cfg.chatFilesDir != null) {
+      const _el = document.getElementById('chat-files-dir-input');
+      if (_el) _el.value = cfg.chatFilesDir || 'temp';
+    }
     syncBootCache();
   } catch (_) {}
 }
 
 const addModelForm = document.getElementById('add-model-form');
+// 对话文件目录(chatFilesDir): 输入框 change 即保存, 同步到后端配置
+(function () {
+  const _inp = document.getElementById('chat-files-dir-input');
+  if (_inp) {
+    const _apply = () => persistUiPrefs();
+    _inp.addEventListener('change', _apply);
+    const _btn = document.getElementById('save-chat-files-dir-btn');
+    if (_btn) _btn.addEventListener('click', _apply);
+  }
+})();
 if (addModelForm) addModelForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const errEl = document.getElementById('add-model-err');
@@ -4082,9 +5213,13 @@ function readComposerTextFrom(input) {
   const ser = (node, first) => {
     if (node.nodeType === 3) return node.nodeValue;
     if (node.nodeType !== 1) return '';
+    if (node.classList && node.classList.contains('exclam-prefix')) return '!';
     if (node.classList && node.classList.contains('ph-chip')) {
-      const kind = node.dataset.kind === 'image' ? 'Image' : 'File';
-      return `[${kind} #${node.dataset.sid}]`;
+      const kind = node.dataset.kind || 'file';
+      if (kind === 'image') return `[Image #${node.dataset.sid}]`;
+      if (kind === '@file') return `[@file #${node.dataset.sid}]`;
+      if (kind === '@folder') return `[@folder #${node.dataset.sid}]`;
+      return `[File #${node.dataset.sid}]`;
     }
     if (node.tagName === 'BR') return '\n';
     let inner = '';
@@ -4105,11 +5240,14 @@ function isImageFile(f) {
 }
 
 function placeholderFor(file) {
-  return file.isImage ? `[Image #${file.sid}]` : `[File #${file.sid}]`;
+  if (file.isImage) return `[Image #${file.sid}]`;
+  if (file.atKind === '@file') return `[@file #${file.sid}]`;
+  if (file.atKind === '@folder') return `[@folder #${file.sid}]`;
+  return `[File #${file.sid}]`;
 }
 
 function expandFilePlaceholders(text) {
-  return text.replace(/\[(Image|File) #(\d+)\]/g, (m, kind, n) => {
+  return text.replace(/\[(Image|File|@file|@folder) #(\d+)\]/g, (m, kind, n) => {
     const f = state.pendingFiles.find(x => x.sid === Number(n));
     return (f && f.path) ? f.path : '';  // #3 悬空占位符(无对应文件)→ 删掉,不把垃圾发给 agent
   });
@@ -4117,7 +5255,7 @@ function expandFilePlaceholders(text) {
 
 function collectUsedFiles(text) {
   const used = [];
-  text.replace(/\[(Image|File) #(\d+)\]/g, (m, kind, n) => {
+  text.replace(/\[(Image|File|@file|@folder) #(\d+)\]/g, (m, kind, n) => {
     const f = state.pendingFiles.find(x => x.sid === Number(n));
     if (f) used.push(f);
     return m;
@@ -4385,13 +5523,21 @@ window.ga.onBridgeReady(async () => {
 setTimeout(() => { delete document.documentElement.dataset.bootHasSessions; }, 3000);
 window.ga.onBridgeNotification((msg) => {
   if (msg && msg.type === 'session-state') {
+    let found = false;
     for (const sess of state.sessions.values()) {
       if (sess.bridgeSessionId === msg.sessionId) {
+        found = true;
         if (msg.status === 'running' || msg.state === 'running') pollSession(sess);
         if (msg.state === 'idle' || msg.status === 'idle') tokPollBridge();
         renderSessionList();
         break;
       }
+    }
+    if (!found) {
+      loadSessions().then(() => {
+        state.activeId = msg.sessionId;
+        renderSessionList();
+      });
     }
   }
 });
@@ -4668,7 +5814,160 @@ const tokResetBtn=document.getElementById('tok-reset');
 if(tokResetBtn)tokResetBtn.addEventListener('click',()=>{if(fpSince)fpSince.clear();if(fpUntil)fpUntil.clear();_tokPage=0;loadTokenPage();});
 
 /* ─── Token trend chart ─── */
-nav.addEventListener('click',(e)=>{const item=e.target.closest('.nav-item');if(item&&item.dataset.page==='token'){if(_tokTab==='conductor')loadConductorTokens();else loadTokenPage();}if(item&&item.dataset.page==='services')refreshServicesPanel();});
+nav.addEventListener('click',(e)=>{const item=e.target.closest('.nav-item');if(item&&item.dataset.page==='token'){if(_tokTab==='conductor')loadConductorTokens();else loadTokenPage();}if(item&&item.dataset.page==='services')refreshServicesPanel();if(item&&item.dataset.page==='tasks')loadTasksPage();if(item&&item.dataset.page==='files')loadFilesPage();});
+/* ═══════════════ 定时任务 ═══════════════ */
+let _taskTab = 'list';
+const taskTabs = document.getElementById('task-tabs');
+const taskListEl = document.getElementById('task-list');
+const taskTemplatesEl = document.getElementById('task-templates');
+const taskEmptyEl = document.getElementById('task-empty');
+const taskHistoryListEl = document.getElementById('task-history-list');
+const taskHistoryEmptyEl = document.getElementById('task-history-empty');
+
+const TASK_TEMPLATES = [
+  { title: '设置每日「14:00」的自动定时任务，根据我的星座「双子座」提供今日的行动注意指引发送给我', desc: '' },
+  { title: '提醒我喝水，在「每日 14:00」执行，从「今天」开始并「持续生效」，任务创建后设置为「立即启用」', desc: '' },
+  { title: '设置「每天」为我推送当天最新的「10条」科技新闻，每条新闻总结要精简', desc: '' },
+];
+
+function setTaskTab(tab) {
+  if (!taskTabs) return;
+  _taskTab = tab;
+  taskTabs.querySelectorAll('.task-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.task-panel').forEach(p => p.classList.toggle('active', p.dataset.taskPanel === tab));
+  if (tab === 'list') renderTaskTemplates();
+  else loadTaskHistory();
+}
+
+if (taskTabs) taskTabs.addEventListener('click', e => {
+  const btn = e.target.closest('.task-tab');
+  if (!btn || btn.dataset.tab === _taskTab) return;
+  setTaskTab(btn.dataset.tab);
+});
+
+function renderTaskTemplates() {
+  if (!taskTemplatesEl) return;
+  taskTemplatesEl.innerHTML = TASK_TEMPLATES.map(t => `
+    <div class="task-template" data-template="${encodeURIComponent(t.title)}">
+      <div class="task-template-left">
+        <div class="task-template-title">${escapeHtml(t.title)}</div>
+        ${t.desc ? `<div class="task-template-desc">${escapeHtml(t.desc)}</div>` : ''}
+      </div>
+      <div class="task-template-arrow"><span data-ga-icon="caretRight"></span></div>
+    </div>
+  `).join('');
+  phosphorIcons.render();
+}
+
+async function loadTasksPage() {
+  setTaskTab('list');
+  renderTaskTemplates();
+  await loadTaskList();
+  loadTaskHistory();
+}
+
+async function loadTaskList() {
+  if (!taskListEl || !taskEmptyEl) return;
+  try {
+    const resp = await fetch(`${BRIDGE_ORIGIN}/services/tasks/list`);
+    const data = await resp.json();
+    const tasks = data.tasks || [];
+    if (tasks.length === 0) {
+      taskEmptyEl.hidden = false;
+      taskListEl.innerHTML = '';
+    } else {
+      taskEmptyEl.hidden = true;
+      taskListEl.innerHTML = tasks.map(t => `
+        <div class="task-item">
+          <div class="task-item-check ${t.enabled ? 'on' : ''}" data-task-id="${t.id}" title="${t.enabled ? '禁用' : '启用'}">
+            ${t.enabled ? '<span data-ga-icon="check"></span>' : ''}
+          </div>
+          <div class="task-item-info">
+            <div class="task-item-name">${escapeHtml(t.name || t.id)}</div>
+            <div class="task-item-meta">
+              <span class="task-item-schedule"><span data-ga-icon="clock"></span>${escapeHtml(t.schedule || '')} ${escapeHtml(t.repeat || '')}</span>
+              <span class="task-item-status ${t.status || 'healthy'}">${statusText(t.status)}</span>
+            </div>
+          </div>
+          <div class="task-item-actions">
+            <button type="button" data-task-id="${t.id}" data-action="edit" title="编辑"><span data-ga-icon="pencilSimple"></span></button>
+            <button type="button" data-task-id="${t.id}" data-action="delete" title="删除" class="danger"><span data-ga-icon="trash"></span></button>
+          </div>
+        </div>
+      `).join('');
+      phosphorIcons.render();
+    }
+  } catch (_) {
+    taskEmptyEl.hidden = false;
+    taskListEl.innerHTML = '';
+  }
+}
+
+function statusText(status) {
+  const map = { healthy: '正常', overdue: '逾期', disabled: '已禁用', never: '从未运行', error: '错误' };
+  return map[status] || status || '正常';
+}
+
+async function loadTaskHistory() {
+  if (!taskHistoryListEl || !taskHistoryEmptyEl) return;
+  try {
+    const resp = await fetch(`${BRIDGE_ORIGIN}/services/tasks/history`);
+    const data = await resp.json();
+    const history = data.history || [];
+    if (history.length === 0) {
+      taskHistoryEmptyEl.hidden = false;
+      taskHistoryListEl.innerHTML = '';
+    } else {
+      taskHistoryEmptyEl.hidden = true;
+      taskHistoryListEl.innerHTML = history.map(h => `
+        <div class="task-history-item">
+          <div class="task-history-name">${escapeHtml(h.name || '')}</div>
+          <div class="task-history-time">${escapeHtml(h.time || '')}</div>
+        </div>
+      `).join('');
+    }
+  } catch (_) {
+    taskHistoryEmptyEl.hidden = false;
+    taskHistoryListEl.innerHTML = '';
+  }
+}
+
+if (taskListEl) taskListEl.addEventListener('click', async e => {
+  const check = e.target.closest('.task-item-check');
+  const btn = e.target.closest('button[data-action]');
+  if (check) {
+    const tid = check.dataset.taskId;
+    await fetch(`${BRIDGE_ORIGIN}/services/tasks/toggle/${tid}`, { method: 'POST' });
+    await loadTaskList();
+  } else if (btn) {
+    const tid = btn.dataset.taskId;
+    const action = btn.dataset.action;
+    if (action === 'delete') {
+      if (confirm(t('common.confirm') + ' ' + t('common.delete') + '?')) {
+        await fetch(`${BRIDGE_ORIGIN}/services/tasks/delete/${tid}`, { method: 'DELETE' });
+        await loadTaskList();
+      }
+    }
+  }
+});
+
+if (taskTemplatesEl) taskTemplatesEl.addEventListener('click', e => {
+  const tmpl = e.target.closest('.task-template');
+  if (!tmpl) return;
+  const title = decodeURIComponent(tmpl.dataset.template);
+  gaGoPage('chat');
+  const input = document.getElementById('chat-input');
+  if (input) {
+    input.textContent = title;
+    input.focus();
+  }
+});
+
+const taskCreateBtn = document.getElementById('task-create-btn');
+if (taskCreateBtn) taskCreateBtn.addEventListener('click', () => {
+  gaGoPage('chat');
+});
+
 /* ═══════════════ 自定义预设 ═══════════════ */
 const CP_KEY = 'ga_custom_presets';
 const HB_KEY = 'ga_hidden_builtins';
@@ -5015,9 +6314,21 @@ const chanConfigModal = document.getElementById('chan-config-modal');
 const chanConfigTitle = document.getElementById('chan-config-title');
 const chanConfigEditor = document.getElementById('chan-config-editor');
 const chanConfigSave = document.getElementById('chan-config-save');
+const chanQrModal = document.getElementById('chan-qr-modal');
+const chanQrTitle = document.getElementById('chan-qr-title');
+const chanQrLoading = document.getElementById('chan-qr-loading');
+const chanQrContent = document.getElementById('chan-qr-content');
+const chanQrImg = document.getElementById('chan-qr-img');
+const chanQrTip = document.getElementById('chan-qr-tip');
+const chanQrStatus = document.getElementById('chan-qr-status');
+const chanQrError = document.getElementById('chan-qr-error');
+const chanQrCancel = document.getElementById('chan-qr-cancel');
+const chanQrRefresh = document.getElementById('chan-qr-refresh');
 let _chanLogId = null;
 let _chanBusy = false;
 let _chanToastTimer = null;
+let _qrPollTimer = null;
+let _qrChannel = null;
 
 function getToastRoot() {
   let root = document.getElementById('toast-root');
@@ -5369,6 +6680,194 @@ if (chanConfigSave) {
   chanConfigSave.addEventListener('click', saveChannelMykey);
 }
 
+/* ═══════════════ 二维码登录 ═══════════════ */
+const QR_CHANNEL_MAP = {
+  'frontends/wechatapp.py': { key: 'wechat', label: '微信' },
+};
+
+function stopQrPolling() {
+  if (_qrPollTimer) {
+    clearInterval(_qrPollTimer);
+    _qrPollTimer = null;
+  }
+}
+
+function resetQrUi() {
+  stopQrPolling();
+  chanQrLoading.hidden = false;
+  chanQrContent.hidden = true;
+  chanQrError.hidden = true;
+  chanQrRefresh.hidden = true;
+  chanQrImg.src = '';
+  chanQrStatus.textContent = '';
+}
+
+async function fetchChannelQr(channelKey) {
+  try {
+    const res = await bridgeFetch(`/services/channel/qr?channel=${encodeURIComponent(channelKey)}`);
+    if (res.ok && res.qr_url && res.qr_id) {
+      return { qr_url: res.qr_url, qr_id: res.qr_id };
+    }
+    throw new Error(res.error || 'Failed to get QR code');
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+function generateQrCode(url) {
+  try {
+    const qr = qrcode(0, 'H');
+    qr.addData(url);
+    qr.make();
+    return qr.createDataURL(4, 0);
+  } catch (e) {
+    console.error('[QR] QR code generation failed:', e);
+    throw e;
+  }
+}
+
+async function pollQrStatus(channelKey, qrId) {
+  try {
+    const res = await bridgeFetch(`/services/channel/qr-status?channel=${encodeURIComponent(channelKey)}&qr_id=${encodeURIComponent(qrId)}`);
+    if (res.ok) {
+      return res;
+    }
+    throw new Error(res.error || 'Poll failed');
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+async function openChannelQrLogin(channelId) {
+  console.log('[QR] openChannelQrLogin called with channelId:', channelId);
+  const info = QR_CHANNEL_MAP[channelId];
+  console.log('[QR] QR_CHANNEL_MAP:', JSON.stringify(QR_CHANNEL_MAP));
+  console.log('[QR] info:', info);
+  if (!info) {
+    console.log('[QR] No info, calling openChannelMykey');
+    openChannelMykey(channelId);
+    return;
+  }
+
+  _qrChannel = channelId;
+  chanQrTitle.textContent = t('modal.qrLogin').replace('{name}', info.label);
+  chanQrTip.textContent = t('qr.scanTip').replace('{name}', info.label);
+  resetQrUi();
+  openModal('chan-qr-modal');
+  console.log('[QR] Modal opened, fetching QR code...');
+
+  const qrResult = await fetchChannelQr(info.key);
+  console.log('[QR] fetchChannelQr result:', qrResult);
+  if (qrResult.error) {
+    chanQrLoading.hidden = true;
+    chanQrError.hidden = false;
+    chanQrError.textContent = t('qr.failed');
+    chanQrRefresh.hidden = false;
+    return;
+  }
+
+  chanQrLoading.hidden = true;
+  chanQrContent.hidden = false;
+  console.log('[QR] Generating QR code for:', qrResult.qr_url);
+  try {
+    const qrDataUrl = generateQrCode(qrResult.qr_url);
+    console.log('[QR] QR code generated successfully, length:', qrDataUrl.length);
+    chanQrImg.src = qrDataUrl;
+  } catch (e) {
+    console.error('[QR] QR code generation error:', e);
+    chanQrError.hidden = false;
+    chanQrError.textContent = 'QR code generation failed: ' + e.message;
+    chanQrRefresh.hidden = false;
+    return;
+  }
+  chanQrStatus.textContent = t('qr.statusScanning');
+
+  _qrPollTimer = setInterval(async () => {
+    const status = await pollQrStatus(info.key, qrResult.qr_id);
+    if (status.error) {
+      return;
+    }
+    if (status.status === 'confirmed') {
+      stopQrPolling();
+      chanQrStatus.textContent = t('qr.statusConfirmed');
+      await window.ga.startService(channelId);
+      showChanToast(t('sys.channelStarted') + ' · ' + info.label, '', 'ok');
+      setTimeout(() => {
+        chanQrModal.hidden = true;
+      }, 1500);
+    } else if (status.status === 'expired') {
+      stopQrPolling();
+      chanQrStatus.textContent = t('qr.statusExpired');
+      chanQrRefresh.hidden = false;
+    } else if (status.status === 'scanned') {
+      chanQrStatus.textContent = t('qr.statusScanned');
+    }
+  }, 2000);
+}
+
+async function refreshChannelQr() {
+  if (!_qrChannel) return;
+  const info = QR_CHANNEL_MAP[_qrChannel];
+  if (!info) return;
+  resetQrUi();
+
+  const qrResult = await fetchChannelQr(info.key);
+  if (qrResult.error) {
+    chanQrLoading.hidden = true;
+    chanQrError.hidden = false;
+    chanQrError.textContent = t('qr.failed');
+    chanQrRefresh.hidden = false;
+    return;
+  }
+
+  chanQrLoading.hidden = true;
+  chanQrContent.hidden = false;
+  chanQrImg.src = generateQrCode(qrResult.qr_url);
+  chanQrStatus.textContent = t('qr.statusScanning');
+
+  _qrPollTimer = setInterval(async () => {
+    const status = await pollQrStatus(info.key, qrResult.qr_id);
+    if (status.error) {
+      return;
+    }
+    if (status.status === 'confirmed') {
+      stopQrPolling();
+      chanQrStatus.textContent = t('qr.statusConfirmed');
+      await window.ga.startService(_qrChannel);
+      showChanToast(t('sys.channelStarted') + ' · ' + info.label, '', 'ok');
+      setTimeout(() => {
+        chanQrModal.hidden = true;
+      }, 1500);
+    } else if (status.status === 'expired') {
+      stopQrPolling();
+      chanQrStatus.textContent = t('qr.statusExpired');
+      chanQrRefresh.hidden = false;
+    } else if (status.status === 'scanned') {
+      chanQrStatus.textContent = t('qr.statusScanned');
+    }
+  }, 2000);
+}
+
+if (chanQrCancel) {
+  chanQrCancel.addEventListener('click', () => {
+    stopQrPolling();
+    chanQrModal.hidden = true;
+  });
+}
+
+if (chanQrRefresh) {
+  chanQrRefresh.addEventListener('click', refreshChannelQr);
+}
+
+if (chanQrModal) {
+  chanQrModal.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal-backdrop')) {
+      stopQrPolling();
+      chanQrModal.hidden = true;
+    }
+  });
+}
+
 /* ═══════════════ 状态面板（复用 ServiceManager + 启停/日志） ═══════════════ */
 const statusListEl = document.getElementById('status-list');
 const BRIDGE_SERVICE_ID = '__bridge__';
@@ -5595,7 +7094,7 @@ if (chanListEl) {
       return;
     }
     if (act === 'configure') {
-      openChannelMykey(id);
+      openChannelQrLogin(id);
       return;
     }
     if (act === 'toggle') {
@@ -6200,4 +7699,978 @@ function bindComposerInRoot(root, opts) {
     input.addEventListener('input', update);
     update();
   });
+})();
+
+/* ═══════════════ Workspace UI ═══════════════ */
+(function initWorkspaceUI() {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const chip = $('workspace-chip');
+  const panel = $('workspace-panel');
+  const panelCurrent = $('ws-panel-current');
+  const currentRow = $('ws-current-row');
+  const currentOff = $('ws-current-off');
+  const panelList = $('ws-panel-list');
+  const panelEmpty = $('ws-panel-empty');
+  const addBtn = $('ws-add-btn');
+  const addForm = $('ws-add-form');
+  const addInput = $('ws-add-input');
+  const addConfirm = $('ws-add-confirm');
+  const addCancel = $('ws-add-cancel');
+  const chipName = chip?.querySelector('.ws-chip-name');
+  if (!chip || !panel) return;
+
+  let _workspaces = [];
+  let _currentWs = null;  // {name, path} or null
+
+  function refreshChip() {
+    if (_currentWs) {
+      chipName.textContent = _currentWs.name;
+      chip.title = _currentWs.path;
+    } else {
+      chipName.textContent = t('workspace.empty');
+      chip.title = t('workspace.selectTitle');
+    }
+  }
+
+  function closePanel() {
+    panel.hidden = true;
+    panel.style.left = '';
+    panel.style.bottom = '';
+    chip.classList.remove('open');
+  }
+
+  function openPanel() {
+    closeAllModelMenus?.();
+    if (window.collabComposer?.closeMenu) window.collabComposer.closeMenu();
+    if (window.chatComposer?.closeMenu) window.chatComposer.closeMenu();
+    refreshPanel().then(() => {
+      // Position panel relative to chip
+      const chipRect = chip.getBoundingClientRect();
+      const composer = chip.closest('.composer');
+      if (composer) {
+        const composerRect = composer.getBoundingClientRect();
+        panel.style.left = (chipRect.left - composerRect.left) + 'px';
+        panel.style.bottom = (composerRect.bottom - chipRect.top + 4) + 'px';
+      }
+      panel.hidden = false;
+      chip.classList.add('open');
+    });
+  }
+
+  function togglePanel() {
+    if (panel.hidden) openPanel();
+    else closePanel();
+  }
+
+  async function refreshPanel() {
+    try {
+      const res = await window.ga.listWorkspaces();
+      _workspaces = (res && res.workspaces) || [];
+    } catch (_) { _workspaces = []; }
+    try {
+      const sid = state.activeId;
+      if (sid) {
+        const res = await window.ga.getSessionWorkspace(sid);
+        _currentWs = (res && res.workspace) || null;
+        refreshChip();
+      }
+    } catch (_) { /* API 失败不清空，保留上一个已知值 */ refreshChip(); }
+
+    // Current workspace section
+    if (_currentWs) {
+      panelCurrent.hidden = false;
+      const nameEl = currentRow.querySelector('.ws-row-name');
+      const pathEl = currentRow.querySelector('.ws-row-path');
+      if (nameEl) nameEl.textContent = _currentWs.name;
+      if (pathEl) pathEl.textContent = _currentWs.path;
+    } else {
+      panelCurrent.hidden = true;
+    }
+
+    // Workspace list
+    const others = _workspaces.filter(w => w.name !== (_currentWs?.name || ''));
+    if (others.length === 0) {
+      panelList.innerHTML = '';
+      if (!_currentWs) panelEmpty.hidden = false;
+      else panelEmpty.hidden = true;
+    } else {
+      panelEmpty.hidden = true;
+      panelList.innerHTML = others.map(w => {
+        const name = esc(w.name);
+        const path = esc(w.path || '');
+        const dangling = w.dangling ? `<span class="ws-row-dangling">${esc(t('workspace.dangling'))}</span>` : '';
+        return `<div class="ws-panel-row" data-ws-name="${esc(w.name)}" data-ws-path="${esc(w.path || '')}">
+          <span class="ws-row-name">${name}</span>
+          <span class="ws-row-path">${path}${dangling}</span>
+          <button type="button" class="ws-row-del" data-ws-name="${esc(w.name)}" data-i18n-title="workspace.removeTitle" title="${t('workspace.removeTitle')}">×</button>
+        </div>`;
+      }).join('');
+    }
+    applyI18n();
+    // Attach click handlers directly (more reliable than event delegation)
+    setTimeout(() => {
+      panelList.querySelectorAll('.ws-panel-row').forEach(row => {
+        if (row._wsBound) return;
+        row._wsBound = true;
+        row.addEventListener('click', function(e) {
+          const delBtn = e.target.closest('.ws-row-del');
+          if (delBtn) {
+            removeWorkspace(delBtn.dataset.wsName);
+            return;
+          }
+          const name = this.dataset.wsName;
+          if (name) switchTo(name);
+        });
+      });
+    }, 0);
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+
+  async function switchTo(name) {
+    if (!name) return;
+    showToast('切换中...');
+    let sid = state.activeId;
+    if (!sid) {
+      try {
+        const res = await window.ga.rpc('session/new', {});
+        if (res && res.sessionId) {
+          sid = res.sessionId;
+          state.activeId = sid;
+          localStorage.setItem('ga_active', sid);
+        } else {
+          alert('创建会话失败，请重试');
+          return;
+        }
+      } catch (e) {
+        alert('创建会话失败: ' + (e.message || String(e)));
+        return;
+      }
+    }
+    try {
+      await window.ga.setSessionWorkspace(sid, name);
+      const info = _workspaces.find(w => w.name === name);
+      _currentWs = { name, path: info?.path || '' };
+      const sess = activeSess();
+      if (sess && info?.path) {
+        sess._workspacePath = info.path;
+        state.lastWorkspacePath = info.path;
+      }
+      refreshChip();
+      closePanel();
+      showToast(t('workspace.switched') || '已切换到 ' + name);
+    } catch (e) {
+      alert('切换失败: ' + (e.message || String(e)));
+    }
+  }
+
+  async function turnOff() {
+    const sid = state.activeId;
+    if (!sid) return;
+    try {
+      await window.ga.offSessionWorkspace(sid);
+      _currentWs = null;
+      refreshChip();
+      refreshPanel();
+    } catch (e) {
+      alert('Error: ' + (e.message || String(e)));
+    }
+  }
+
+  async function removeWorkspace(name) {
+    if (!confirm(`确认删除工作区「${name}」？\n（仅删除索引和快捷方式，不会删除真实文件）`)) return;
+    try {
+      await window.ga.removeWorkspace(name);
+      if (_currentWs && _currentWs.name === name) {
+        _currentWs = null;
+        refreshChip();
+        const sid = state.activeId;
+        if (sid) {
+          try { await window.ga.offSessionWorkspace(sid); } catch (_) {}
+        }
+      }
+      refreshPanel();
+    } catch (e) {
+      alert('Error: ' + (e.message || String(e)));
+    }
+  }
+
+  async function showAddForm() {
+    // Try native folder picker (Tauri) first
+    const invoke = window.__TAURI__?.core?.invoke;
+    if (invoke) {
+      try {
+        const folder = await invoke('pick_folder');
+        if (folder) { doAdd(folder); return; }
+      } catch (e) {
+        console.error('[workspace] pick_folder failed:', e);
+      }
+    }
+    // Always show inline form as fallback
+    if (addBtn) addBtn.hidden = true;
+    if (addForm) addForm.hidden = false;
+    if (addInput) { addInput.value = ''; addInput.focus(); }
+  }
+
+  function hideAddForm() {
+    addBtn.hidden = false;
+    addForm.hidden = true;
+    addInput.value = '';
+  }
+
+  async function doAdd(path) {
+    path = path || addInput.value.trim();
+    if (!path) return;
+    hideAddForm();
+    try {
+      const res = await window.ga.prepareWorkspace(path);
+      if (res && res.ok) {
+        const sid = state.activeId;
+        if (sid && res.name) {
+          try {
+            await window.ga.setSessionWorkspace(sid, res.name);
+            const sess = activeSess();
+            if (sess) {
+              sess._workspacePath = path;
+              state.lastWorkspacePath = path;
+            }
+          } catch (_) {}
+        }
+        refreshPanel();
+      } else if (res && res.error) {
+        alert('Error: ' + res.error);
+      }
+    } catch (e) {
+      alert('Error: ' + (e.message || String(e)));
+    }
+  }
+
+  // Event handlers
+  chip.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePanel();
+  });
+
+  currentOff?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    turnOff();
+  });
+
+  // Make the current workspace row clickable (e.g. reveal in Finder)
+  currentRow?.addEventListener('click', (e) => {
+    if (e.target.closest('.ws-row-off')) return;
+    if (_currentWs && _currentWs.path) {
+      // Could open in Finder via Tauri, but skip for now — just show feedback
+      showToast(_currentWs.path);
+    }
+  });
+
+  addBtn?.addEventListener('click', showAddForm);
+  addCancel?.addEventListener('click', hideAddForm);
+  addConfirm?.addEventListener('click', () => doAdd());
+  addInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doAdd(); }
+  });
+
+  // Watch for session changes (poll state.activeId)
+  let _lastActiveId = state.activeId;
+  setInterval(async () => {
+    if (state.activeId !== _lastActiveId) {
+      _lastActiveId = state.activeId;
+      try {
+        if (state.activeId) {
+          const res = await window.ga.getSessionWorkspace(state.activeId);
+          _currentWs = (res && res.workspace) || null;
+          const sess = activeSess();
+          if (sess && _currentWs?.path) {
+            sess._workspacePath = _currentWs.path;
+            state.lastWorkspacePath = _currentWs.path;
+          }
+        }
+        // activeId 为 null 时保留 _currentWs 旧值，避免误显"无 workspace"
+        refreshChip();
+      } catch (_) { /* API 失败不清空，保留上一个已知值 */ refreshChip(); }
+    }
+  }, 500);
+
+  // Initial load
+  window.addEventListener('load', () => {
+    setTimeout(async () => {
+      if (!state.bridgeReady) return;
+      try {
+        const sid = state.activeId;
+        if (sid) {
+          const res = await window.ga.getSessionWorkspace(sid);
+          _currentWs = (res && res.workspace) || null;
+          const sess = activeSess();
+          if (sess && _currentWs?.path) {
+            sess._workspacePath = _currentWs.path;
+            state.lastWorkspacePath = _currentWs.path;
+          }
+        }
+        refreshChip();
+      } catch (_) {}
+    }, 300);
+  });
+
+  // Refresh on bridge-ready
+  window.ga.onBridgeReady(() => {
+    setTimeout(async () => {
+      const sid = state.activeId;
+      if (sid) {
+        try {
+          const res = await window.ga.getSessionWorkspace(sid);
+          _currentWs = (res && res.workspace) || null;
+          const sess = activeSess();
+          if (sess && _currentWs?.path) {
+            sess._workspacePath = _currentWs.path;
+            state.lastWorkspacePath = _currentWs.path;
+          }
+          refreshChip();
+        } catch (_) {}
+      }
+    }, 200);
+  });
+
+  window.gaRefreshWorkspaceChip = () => { refreshChip(); };
+
+/* ═══════════════ 文件管理 ═══════════════ */
+let _filesData = { files: [], counts: {} };
+let _filesFilter = 'all';
+let _filesTypeFilter = 'all';
+let _filesView = 'list';
+let _filesSortKey = 'mtime';
+let _filesSortDir = 'desc';
+let _filesSelected = new Set();
+let _filesMenuEl = null;
+let _filesPreviewEl = null;
+
+async function loadFilesPage() {
+  await fetchFilesData();
+  renderFilesFilter();
+  renderFilesList();
+  bindFilesEvents();
+}
+
+async function fetchFilesData() {
+  try {
+    const res = await fetch(`${BRIDGE_ORIGIN}/api/files/browse`);
+    const d = await res.json();
+    if (d.ok) {
+      _filesData = { files: d.files || [], counts: d.counts || {} };
+    }
+  } catch (_) {
+    _filesData = { files: [], counts: {} };
+  }
+}
+
+function renderFilesFilter() {
+  const el = document.getElementById('filesFilterList');
+  if (!el) return;
+  const counts = _filesData.counts;
+  const total = (counts.total || 0);
+  const allFiles = _filesData.files || [];
+  const typeCounts = {};
+  allFiles.forEach(f => {
+    const ty = (f.type || 'file').toLowerCase();
+    typeCounts[ty] = (typeCounts[ty] || 0) + 1;
+  });
+  const typeItems = Object.entries(typeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([ty, cnt]) => ({ key: ty, label: ty.toUpperCase(), count: cnt }));
+  const items = [
+    { key: 'all', label: t('files.all'), count: total },
+    ...typeItems,
+  ];
+  el.innerHTML = items.map(item => `
+    <li class="files-filter-item ${_filesTypeFilter === item.key ? 'active' : ''}" data-filter="${escapeHtml(item.key)}">
+      <span>${escapeHtml(item.label)}</span>
+      <span class="files-filter-badge">${item.count}</span>
+    </li>
+  `).join('');
+
+  const sourceEl = document.getElementById('filesSource');
+  if (sourceEl) {
+    sourceEl.innerHTML = `
+      <option value="all">${t('files.all')}</option>
+      <option value="chat">${t('files.source.chat')}</option>
+      <option value="task">${t('files.source.task')}</option>
+      <option value="config">${t('files.source.config')}</option>
+      <option value="generated">${t('files.source.generated')}</option>
+    `;
+    sourceEl.value = _filesFilter;
+  }
+
+  const sortEl = document.getElementById('filesSort');
+  if (sortEl) {
+    sortEl.innerHTML = `
+      <option value="mtime">${t('files.sort.mtime')}</option>
+      <option value="created">${t('files.sort.created')}</option>
+      <option value="name">${t('files.sort.name')}</option>
+      <option value="size">${t('files.sort.size')}</option>
+    `;
+    sortEl.value = _filesSortKey;
+  }
+  const sortDirEl = document.getElementById('filesSortDir');
+  if (sortDirEl) {
+    const arrow = sortDirEl.querySelector('.sort-dir-arrow');
+    if (arrow) arrow.textContent = _filesSortDir === 'asc' ? '↑' : '↓';
+    sortDirEl.title = _filesSortDir === 'asc' ? t('files.sortAsc') : t('files.sortDesc');
+  }
+}
+
+function renderFilesList() {
+  const el = document.getElementById('filesList');
+  if (!el) return;
+
+  let files = (_filesData.files || []).slice();
+
+  const searchEl = document.getElementById('filesSearch');
+  const q = (searchEl?.value || '').toLowerCase().trim();
+  if (q) {
+    files = files.filter(f => f.name.toLowerCase().includes(q));
+  }
+
+  if (_filesFilter !== 'all') {
+    files = files.filter(f => f.source === _filesFilter);
+  }
+
+  if (_filesTypeFilter !== 'all') {
+    files = files.filter(f => (f.type || 'file') === _filesTypeFilter);
+  }
+
+  files.sort((a, b) => {
+    let va, vb;
+    switch (_filesSortKey) {
+      case 'name': va = (a.name || '').toLowerCase(); vb = (b.name || '').toLowerCase(); break;
+      case 'size': va = a.size || 0; vb = b.size || 0; break;
+      case 'created': va = new Date(a.created || 0).getTime(); vb = new Date(b.created || 0).getTime(); break;
+      default: va = new Date(a.mtime || 0).getTime(); vb = new Date(b.mtime || 0).getTime();
+    }
+    const cmp = typeof va === 'string' ? (va < vb ? -1 : va > vb ? 1 : 0) : (va - vb);
+    return _filesSortDir === 'asc' ? cmp : -cmp;
+  });
+
+  el.dataset.view = _filesView;
+
+  if (files.length === 0) {
+    el.innerHTML = `<div class="files-empty">${t('files.empty')}</div>`;
+    return;
+  }
+
+  const groups = { chat: [], task: [], config: [], generated: [] };
+  files.forEach(f => {
+    (groups[f.source] = groups[f.source] || []).push(f);
+  });
+
+  const sourceLabels = { chat: t('files.source.chat'), task: t('files.source.task'), config: t('files.source.config'), generated: t('files.source.generated') };
+
+  let html = '';
+  for (const [source, items] of Object.entries(groups)) {
+    if (!items.length) continue;
+    html += `<div class="files-group">
+      <div class="files-group-header">
+        <span>${escapeHtml(sourceLabels[source] || source)}</span>
+        <span class="files-group-count">${items.length}</span>
+        <button type="button" class="files-group-toggle" aria-label="toggle group"><span data-ga-icon="caretDown"></span></button>
+      </div>
+      <div class="files-group-body">`;
+
+    html += items.map(f => {
+      const icon = fileIcon(f.type);
+      const sizeStr = formatFileSize(f.size);
+      const timeStr = formatFileMtime(f.mtime);
+      const refBadge = f.referencedBy
+        ? `<span class="files-item-ref" title="${escapeHtml(f.referencedBy)}">${t('files.referencedBy')}</span>`
+        : '';
+      const dlUrl = `/upload/raw?path=${encodeURIComponent(f.path)}&download=1`;
+      const encodedPath = encodeURIComponent(f.path);
+      const isSel = _filesSelected.has(f.path);
+      const fKind = f.source === 'chat' ? 'upload' : (f.source || 'general');
+      const previewable = isFilePreviewable(f.type, f.source);
+      return `
+        <div class="files-item${isSel ? ' selected' : ''}" data-path="${encodedPath}" data-kind="${fKind}" data-previewable="${previewable ? 1 : 0}">
+          <span class="files-item-check"${isSel ? '' : ' style="display:none"'}><span data-ga-icon="check"></span></span>
+          <span class="files-item-icon">${icon}</span>
+          <div class="files-item-info">
+            <span class="files-item-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+            <span class="files-item-meta">
+              <span>${sizeStr}</span>
+              <span>${timeStr}</span>
+              ${refBadge}
+            </span>
+          </div>
+          <div class="files-item-actions">
+            <a href="${dlUrl}" class="files-item-dl" title="${t('files.download')}" target="_blank"><span data-ga-icon="download"></span></a>
+            <button type="button" class="files-item-menu" data-path="${encodedPath}" title="更多操作"><span data-ga-icon="dotsThreeVertical"></span></button>
+          </div>
+        </div>`;
+    }).join('');
+
+    html += `</div></div>`;
+  }
+
+  el.innerHTML = html;
+  _filesRenderIcons(el);
+
+  // bind item selection (click on item body, not actions)
+  el.querySelectorAll('.files-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.files-item-actions')) return;
+      if (e.target.closest('.files-item-check')) return;
+      const path = decodeURIComponent(item.dataset.path || '');
+      if (!path) return;
+      const additive = e.metaKey || e.ctrlKey;
+      if (additive) {
+        if (_filesSelected.has(path)) _filesSelected.delete(path);
+        else _filesSelected.add(path);
+      } else {
+        _filesSelected.clear();
+        _filesSelected.add(path);
+      }
+      updateFileSelectionUI();
+      updateFilesBatchBar();
+    });
+    // check 点击切换选中
+    const checkEl = item.querySelector('.files-item-check');
+    if (checkEl) {
+      checkEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const path = decodeURIComponent(item.dataset.path || '');
+        if (!path) return;
+        toggleFileSelect(path);
+      });
+    }
+  });
+
+  // bind menu button
+  el.querySelectorAll('.files-item-menu').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFilesMenu(btn);
+    });
+  });
+
+  // group toggle
+  el.querySelectorAll('.files-group-header').forEach(header => {
+    header.addEventListener('click', () => {
+      header.closest('.files-group').classList.toggle('collapsed');
+    });
+  });
+}
+
+function _filesRenderIcons(root) {
+  if (window.gaHydrateIcons) { window.gaHydrateIcons(root); return; }
+  if (typeof phosphorIcons !== 'undefined' && phosphorIcons.render) phosphorIcons.render();
+}
+function isFilePreviewable(type, source) {
+  const tp = (type || '').toLowerCase();
+  const imgs = ['jpg','jpeg','png','gif','webp','svg','bmp','ico'];
+  const texts = ['md','txt','json','py','js','ts','jsx','tsx','yaml','yml','csv','log','ini','toml','html','css','xml','sh','bash','conf','env','sql','rs','go','java','c','cpp','h','rb','php','vue','svelte'];
+  if (source === 'chat' && (imgs.includes(tp) || tp === 'pdf')) return true;
+  return texts.includes(tp);
+}
+function updateFileSelectionUI() {
+  document.querySelectorAll('#filesList .files-item').forEach(item => {
+    const path = decodeURIComponent(item.dataset.path || '');
+    const sel = _filesSelected.has(path);
+    item.classList.toggle('selected', sel);
+    const chk = item.querySelector('.files-item-check');
+    if (chk) chk.style.display = sel ? '' : 'none';
+  });
+}
+function _fileKind(f) {
+  return f.source === 'chat' ? 'upload' : (f.source || 'file');
+}
+function openFilesMenu(btn, path) {
+  closeFilesMenu();
+  if (!_filesSelected.has(path)) {
+    _filesSelected.clear();
+    _filesSelected.add(path);
+    updateFileSelectionUI();
+  }
+  const items = (_filesData && _filesData.items) || [];
+  const fs = [];
+  _filesSelected.forEach(p => {
+    const f = items.find(it => it.path === p);
+    if (f) fs.push(f);
+  });
+  if (!fs.length) return;
+  const single = fs.length === 1;
+  const f0 = fs[0];
+  const menu = document.createElement('div');
+  menu.className = 'files-menu';
+  const add = (label, icon, fn) => {
+    const it = document.createElement('div');
+    it.className = 'files-menu-item';
+    it.innerHTML = `<span data-ga-icon="${icon}"></span><span>${label}</span>`;
+    it.addEventListener('click', () => { closeFilesMenu(); fn(fs); });
+    menu.appendChild(it);
+  };
+  if (single && f0 && isFilePreviewable(f0.type, f0.source)) add(t('files.preview'), 'magnifyingGlass', filesExecPreview);
+  if (single) add('打开文件', 'fileText', filesExecOpen);
+  add('打开位置', 'folderSimple', filesExecReveal);
+  add('复制路径', 'copy', filesExecCopy);
+  add('删除', 'trash', filesExecDelete);
+  document.body.appendChild(menu);
+  _filesRenderIcons(menu);
+  _filesMenuEl = menu;
+  const r = btn.getBoundingClientRect();
+  menu.style.top = (r.bottom + window.scrollY + 4) + 'px';
+  menu.style.left = Math.max(8, r.right + window.scrollX - menu.offsetWidth) + 'px';
+  setTimeout(() => { document.addEventListener('click', _filesMenuOutside); }, 0);
+}
+function _filesMenuOutside(e) {
+  if (_filesMenuEl && !_filesMenuEl.contains(e.target) && !e.target.closest('.files-item-menu')) closeFilesMenu();
+}
+function closeFilesMenu() {
+  if (_filesMenuEl) { _filesMenuEl.remove(); _filesMenuEl = null; }
+  document.removeEventListener('click', _filesMenuOutside);
+}
+function filesExecOpen(fs) {
+  fs.forEach(f => fetch(`${BRIDGE_ORIGIN}/path/open`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: f.path, mode: 'open', kind: _fileKind(f) }) }));
+}
+function filesExecReveal(fs) {
+  fs.forEach(f => fetch(`${BRIDGE_ORIGIN}/path/open`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: f.path, mode: 'reveal', kind: _fileKind(f) }) }));
+}
+function filesExecCopy(fs) {
+  const text = fs.map(f => f.path).join('\n');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => alert('已复制 ' + fs.length + ' 个路径到剪贴板')).catch(() => alert(text));
+  else alert(text);
+}
+async function filesExecDelete(fs) {
+  if (!confirm('确认删除 ' + fs.length + ' 个文件？此操作不可恢复。')) return;
+  for (const f of fs) {
+    try {
+      await fetch(`${BRIDGE_ORIGIN}/api/files/delete`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: f.path }) });
+    } catch (e) {}
+  }
+  _filesSelected.clear();
+  loadFilesPage();
+}
+
+async function filesExecPreview(f) {
+  const tp = (f.type || '').toLowerCase();
+  const imgs = ['jpg','jpeg','png','gif','webp','svg','bmp','ico'];
+  if (f.source === 'chat' && (imgs.includes(tp) || tp === 'pdf')) {
+    openFilePreview(tp === 'pdf' ? 'pdf' : 'image', f.name, `${BRIDGE_ORIGIN}/upload/raw?path=${encodeURIComponent(f.path)}`);
+  } else {
+    try {
+      const res = await fetch(`${BRIDGE_ORIGIN}/api/files/read?path=${encodeURIComponent(f.path)}`);
+      const d = await res.json();
+      if (d.ok) openFilePreview('text', f.name, null, d.content);
+      else alert(d.error || '无法预览');
+    } catch (e) { alert('预览失败: ' + e.message); }
+  }
+}
+function openFilePreview(kind, name, url, text) {
+  closeFilePreview();
+  const ov = document.createElement('div');
+  ov.className = 'files-preview-overlay';
+  let body = '';
+  if (kind === 'image') body = `<img src="${url}" alt="${escapeHtml(name)}" />`;
+  else if (kind === 'pdf') body = `<iframe src="${url}" title="${escapeHtml(name)}"></iframe>`;
+  else body = `<pre>${escapeHtml(text || '')}</pre>`;
+  ov.innerHTML = `<div class="files-preview-modal"><div class="files-preview-header"><span class="files-preview-name">${escapeHtml(name)}</span><button type="button" class="files-preview-close" title="关闭"><span data-ga-icon="x"></span></button></div><div class="files-preview-body">${body}</div></div>`;
+  document.body.appendChild(ov);
+  _filesRenderIcons(ov);
+  _filesPreviewEl = ov;
+  ov.querySelector('.files-preview-close').addEventListener('click', closeFilePreview);
+  ov.addEventListener('click', (e) => { if (e.target === ov) closeFilePreview(); });
+  document.addEventListener('keydown', _filesPreviewEsc);
+}
+function _filesPreviewEsc(e) { if (e.key === 'Escape') closeFilePreview(); }
+function closeFilePreview() {
+  if (_filesPreviewEl) { _filesPreviewEl.remove(); _filesPreviewEl = null; }
+  document.removeEventListener('keydown', _filesPreviewEsc);
+}
+
+let _filesEventsBound = false;
+function bindFilesEvents() {
+  if (_filesEventsBound) return;
+  const searchEl = document.getElementById('filesSearch');
+  const sourceEl = document.getElementById('filesSource');
+  const viewBtn = document.getElementById('filesViewBtn');
+  const refreshBtn = document.getElementById('filesRefresh');
+  const filterList = document.getElementById('filesFilterList');
+
+  if (searchEl) searchEl.addEventListener('input', () => { renderFilesList(); });
+  if (sourceEl) sourceEl.addEventListener('change', () => { _filesFilter = sourceEl.value; renderFilesList(); });
+  const sortEl = document.getElementById('filesSort');
+  const sortDirEl = document.getElementById('filesSortDir');
+  if (sortEl) sortEl.addEventListener('change', () => { _filesSortKey = sortEl.value; renderFilesList(); });
+  if (sortDirEl) sortDirEl.addEventListener('click', () => {
+    _filesSortDir = _filesSortDir === 'asc' ? 'desc' : 'asc';
+    const arrow = sortDirEl.querySelector('.sort-dir-arrow');
+    if (arrow) arrow.textContent = _filesSortDir === 'asc' ? '↑' : '↓';
+    sortDirEl.title = _filesSortDir === 'asc' ? t('files.sortAsc') : t('files.sortDesc');
+    renderFilesList();
+  });
+  if (viewBtn) viewBtn.addEventListener('click', () => {
+    _filesView = _filesView === 'list' ? 'grid' : 'list';
+    const iconEl = viewBtn.querySelector('[data-ga-icon]');
+    if (iconEl) iconEl.dataset.gaIcon = _filesView === 'list' ? 'list' : 'gridFour';
+    if (typeof phosphorIcons !== 'undefined') phosphorIcons.render();
+    renderFilesList();
+  });
+  if (refreshBtn) refreshBtn.addEventListener('click', () => { loadFilesPage(); });
+  if (filterList) filterList.addEventListener('click', (e) => {
+    const item = e.target.closest('.files-filter-item');
+    if (!item) return;
+    _filesTypeFilter = item.dataset.filter;
+    renderFilesFilter();
+    renderFilesList();
+  });
+  _filesEventsBound = true;
+}
+
+// 关闭所有已打开的文件菜单下拉
+function closeAllFilesMenus() {
+  document.querySelectorAll('.files-menu-dropdown.open').forEach(d => d.remove());
+}
+
+// 切换单个文件选中状态
+function toggleFileSelect(path) {
+  if (_filesSelected.has(path)) _filesSelected.delete(path);
+  else _filesSelected.add(path);
+  renderFilesList();
+  updateFilesBatchBar();
+}
+
+// 更新批量操作工具栏
+function updateFilesBatchBar() {
+  let bar = document.getElementById('filesBatchBar');
+  const toolbar = document.querySelector('.files-toolbar');
+  const list = document.getElementById('filesList');
+  if (!toolbar) return;
+  const n = _filesSelected.size;
+  if (n === 0) {
+    if (bar) bar.remove();
+    return;
+  }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'filesBatchBar';
+    bar.className = 'files-batch-bar';
+    toolbar.parentNode.insertBefore(bar, list);
+  }
+  bar.innerHTML = `
+    <span class="files-batch-count">${t('files.selected').replace('{n}', n)}</span>
+    <button type="button" class="files-batch-btn" data-act="openLocation"><span data-ga-icon="folderOpen"></span>${t('files.batchOpenLocation')}</button>
+    <button type="button" class="files-batch-btn" data-act="copy"><span data-ga-icon="copy"></span>${t('files.batchCopy')}</button>
+    <button type="button" class="files-batch-btn danger" data-act="delete"><span data-ga-icon="trash"></span>${t('files.batchDelete')}</button>
+    <button type="button" class="files-batch-cancel" data-act="cancel">${t('files.cancel')}</button>
+  `;
+  _filesRenderIcons(bar);
+  // bind batch actions
+  bar.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => handleFilesBatch(btn.dataset.act));
+  });
+}
+
+// 批量操作处理
+async function handleFilesBatch(act) {
+  const paths = Array.from(_filesSelected);
+  if (act === 'cancel') {
+    _filesSelected.clear();
+    renderFilesList();
+    updateFilesBatchBar();
+    return;
+  }
+  if (act === 'delete') {
+    if (!confirm(t('files.confirmDeleteMulti').replace('{n}', paths.length))) return;
+    for (const path of paths) {
+      try {
+        const res = await fetch(`${BRIDGE_ORIGIN}/api/files/delete`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path })
+        });
+        const d = await res.json();
+        if (d.ok) {
+          _filesData.files = _filesData.files.filter(f => f.path !== path);
+          if (_filesData.counts) {
+            _filesData.counts.total = Math.max(0, (_filesData.counts.total || 1) - 1);
+            if (d.source && _filesData.counts[d.source] != null) _filesData.counts[d.source] = Math.max(0, _filesData.counts[d.source] - 1);
+          }
+        }
+      } catch (_) {}
+    }
+    _filesSelected.clear();
+    renderFilesFilter();
+    renderFilesList();
+    updateFilesBatchBar();
+    return;
+  }
+  if (act === 'copy') {
+    showToast(t('files.copying'));
+    for (const path of paths) {
+      try {
+        await fetch(`${BRIDGE_ORIGIN}/api/files/copy`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path })
+        });
+      } catch (_) {}
+    }
+    await fetchFilesData();
+    _filesSelected.clear();
+    renderFilesList();
+    updateFilesBatchBar();
+    showToast(t('files.copied'));
+    return;
+  }
+  if (act === 'openLocation') {
+    for (const path of paths) {
+      try {
+        await fetch(`${BRIDGE_ORIGIN}/path/open`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path, mode: 'reveal' })
+        });
+      } catch (_) {}
+    }
+    return;
+  }
+}
+
+// 单个文件操作
+async function handleFileAction(act, path, btn) {
+  closeAllFilesMenus();
+  if (act === 'preview') {
+    const f = _filesData.files.find(x => x.path === path);
+    if (f) filesExecPreview(f);
+    return;
+  }
+  if (act === 'open') {
+    try {
+      await fetch(`${BRIDGE_ORIGIN}/path/open`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, mode: 'open' })
+      });
+    } catch (_) {}
+    return;
+  }
+  if (act === 'openLocation') {
+    try {
+      await fetch(`${BRIDGE_ORIGIN}/path/open`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, mode: 'reveal' })
+      });
+    } catch (_) {}
+    return;
+  }
+  if (act === 'copy') {
+    showToast(t('files.copying'));
+    try {
+      const res = await fetch(`${BRIDGE_ORIGIN}/api/files/copy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path })
+      });
+      const d = await res.json();
+      if (d.ok) {
+        await fetchFilesData();
+        renderFilesList();
+        showToast(t('files.copied'));
+      }
+    } catch (_) {}
+    return;
+  }
+  if (act === 'delete') {
+    if (!confirm(t('files.confirmDelete'))) return;
+    try {
+      const res = await fetch(`${BRIDGE_ORIGIN}/api/files/delete`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path })
+      });
+      const d = await res.json();
+      if (d.ok) {
+        _filesData.files = _filesData.files.filter(f => f.path !== path);
+        _filesSelected.delete(path);
+        if (_filesData.counts) {
+          _filesData.counts.total = Math.max(0, (_filesData.counts.total || 1) - 1);
+          if (d.source && _filesData.counts[d.source] != null) _filesData.counts[d.source] = Math.max(0, _filesData.counts[d.source] - 1);
+        }
+        renderFilesFilter();
+        renderFilesList();
+        updateFilesBatchBar();
+      }
+    } catch (_) {}
+    return;
+  }
+}
+
+// 打开/关闭菜单下拉
+function toggleFilesMenu(btn) {
+  const wasOpen = btn.parentElement.querySelector('.files-menu-dropdown.open');
+  closeAllFilesMenus();
+  if (wasOpen) return;
+  const path = decodeURIComponent(btn.dataset.path);
+  const item = btn.closest('.files-item');
+  const previewable = item && item.dataset.previewable === '1';
+  const multiSelected = _filesSelected.size > 1;
+  const dropdown = document.createElement('div');
+  dropdown.className = 'files-menu-dropdown open files-menu';
+  dropdown.innerHTML = `
+    ${previewable && !multiSelected ? `<button type="button" class="files-menu-item" data-act="preview"><span data-ga-icon="eye"></span>${t('files.preview')}</button>` : ''}
+    <button type="button" class="files-menu-item${multiSelected ? ' disabled' : ''}" data-act="open"${multiSelected ? ' disabled' : ''}><span data-ga-icon="arrowUpRight"></span>${t('files.open')}</button>
+    <button type="button" class="files-menu-item" data-act="openLocation"><span data-ga-icon="folderOpen"></span>${t('files.openLocation')}</button>
+    <button type="button" class="files-menu-item" data-act="copy"><span data-ga-icon="copy"></span>${t('files.copy')}</button>
+    <div class="files-menu-sep"></div>
+    <button type="button" class="files-menu-item danger" data-act="delete"><span data-ga-icon="trash"></span>${t('files.delete')}</button>
+  `;
+  btn.parentElement.appendChild(dropdown);
+  _filesRenderIcons(dropdown);
+  dropdown.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (b.disabled) return;
+      handleFileAction(b.dataset.act, path, b);
+    });
+  });
+}
+
+function fileIcon(type) {
+  const map = {
+    jpg:'🖼',jpeg:'🖼',png:'🖼',gif:'🖼',webp:'🖼',svg:'🖼',bmp:'🖼',ico:'🖼',
+    md:'📝',txt:'📝',log:'📝',
+    json:'📋',yaml:'📋',yml:'📋',toml:'📋',xml:'📋',
+    py:'🐍',js:'📜',ts:'📜',jsx:'📜',tsx:'📜',html:'📜',css:'📜',
+    pdf:'📄',doc:'📄',docx:'📄',
+    zip:'📦',gz:'📦',tar:'📦',rar:'📦','7z':'📦',
+    mp3:'🎵',wav:'🎵',flac:'🎵',
+    mp4:'🎬',avi:'🎬',mov:'🎬',
+    csv:'📊',xlsx:'📊',xls:'📊',
+  };
+  return map[(type||'').toLowerCase()]||'📁';
+}
+
+function formatFileSize(bytes) {
+  if (bytes == null) return '-';
+  const n = Number(bytes);
+  if (n < 1024) return n + ' ' + t('files.sizeB');
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' ' + t('files.sizeKB');
+  return (n / (1024 * 1024)).toFixed(1) + ' ' + t('files.sizeMB');
+}
+
+function formatFileMtime(mtime) {
+  if (!mtime) return '-';
+  try {
+    const d = new Date(mtime);
+    if (isNaN(d.getTime())) return '-';
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch (_) { return '-'; }
+}
+
+window.initFilesPage = loadFilesPage;
+window.loadFilesPage = loadFilesPage;
 })();

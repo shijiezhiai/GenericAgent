@@ -594,6 +594,92 @@ PALETTE_ENTRIES: list[tuple[str, str, str]] = [
 ]
 
 
+# ---- skill / command discovery for desktop slash panel ------------------
+
+# Additional SOP files not covered by PALETTE_ENTRIES but are valid skills
+_SOP_SKILL_MAP: dict[str, tuple[str, str]] = {
+    "review_sop.md": ("/review", "深度审查 — 按 code_review_principles.md 审查代码"),
+    "plan_sop.md":   ("/plan",   "进入 Plan 模式：探索→规划→执行→验证"),
+}
+
+
+def list_all_commands(ga_root: Optional[str] = None) -> list[dict]:
+    """Return all slash-commands available for the desktop / palette.
+
+    Returns a list of dicts: {name, label, desc, group}
+    - Skills: from PALETTE_ENTRIES + memory/*_sop.md scan
+    - Actions: hardcoded UI-level commands
+    """
+    commands: list[dict] = []
+
+    # --- skills from PALETTE_ENTRIES ---
+    seen_names: set[str] = set()
+    for cmd, hint, desc in PALETTE_ENTRIES:
+        label = cmd.lstrip("/")
+        if hint:
+            label = f"{label} {hint}"
+        commands.append({"name": cmd, "label": label, "desc": desc, "group": "skills"})
+        seen_names.add(cmd)
+
+    # --- skills from memory/*_sop.md scan ---
+    if ga_root:
+        mem_dir = Path(ga_root) / "memory"
+        if mem_dir.is_dir():
+            for sop_path in sorted(mem_dir.glob("*_sop.md")):
+                fname = sop_path.name
+                if fname in _SOP_SKILL_MAP:
+                    cmd, desc = _SOP_SKILL_MAP[fname]
+                    if cmd not in seen_names:
+                        commands.append({"name": cmd, "label": cmd, "desc": desc, "group": "skills"})
+                        seen_names.add(cmd)
+                else:
+                    # auto-derive from first heading
+                    try:
+                        first_line = sop_path.read_text(encoding="utf-8").split("\n", 1)[0].strip()
+                    except Exception:
+                        first_line = ""
+                    skill_name = sop_path.stem.replace("_sop", "")
+                    label = first_line.lstrip("# ").strip() or skill_name
+                    cmd = f"/{skill_name}"
+                    if cmd not in seen_names:
+                        commands.append({"name": cmd, "label": label, "desc": label, "group": "skills"})
+                        seen_names.add(cmd)
+
+    # --- plugin skills (Claude Code Plugin spec: /plugin-name:skill-name) ---
+    try:
+        from plugins import plugin_loader
+        for _pc in plugin_loader.list_plugin_commands():
+            if _pc["name"] not in seen_names:
+                commands.append(_pc)
+                seen_names.add(_pc["name"])
+    except Exception:
+        pass
+
+    # --- UI action commands ---
+    actions = [
+        ("/new",      "新建会话", "创建新的对话会话"),
+        ("/clear",    "清空消息", "清空当前会话消息列表"),
+        ("/stop",     "停止运行", "停止当前正在运行的 agent"),
+        ("/settings", "设置",     "打开设置面板"),
+        ("/help",     "帮助",     "显示可用命令列表"),
+    ]
+    for name, label, desc in actions:
+        commands.append({"name": name, "label": label, "desc": desc, "group": "actions"})
+
+    return commands
+
+
+def build_resume_prompt(args_text: str) -> str:
+    """Prompt injected for /resume — mirrors the logic in agentmain._handle_slash_cmd
+    so the desktop frontend (which routes via prompt_for) behaves identically to the TUI."""
+    return (
+        '帮我看看最近有哪些会话可以恢复。读model_responses/目录，'
+        '按修改时间取最近10个文件，从每个文件里找最后一个<history>...</history>块，'
+        '用一句话总结每个会话在聊什么，列表给我选。'
+        '注意读文件后要把字面的\\n替换成真换行才能正确匹配。'
+    )
+
+
 def prompt_for(cmd: str, args_text: str) -> Optional[str]:
     """Return the injected user-message for a given slash command, or None if
     the command isn't one of ours (e.g. /scheduler — handled by TUI directly).
@@ -609,6 +695,24 @@ def prompt_for(cmd: str, args_text: str) -> Optional[str]:
         "/goal":      build_goal_prompt,
         "/hive":      build_hive_prompt,
         "/conductor": build_conductor_prompt,
+        "/resume":    build_resume_prompt,
     }
     fn = table.get(cmd)
-    return fn(args_text) if fn else None
+    if fn:
+        return fn(args_text)
+    # --- plugin skills (Claude Code Plugin spec): /plugin-name:skill-name [args] ---
+    if ":" in cmd.lstrip("/"):
+        try:
+            from plugins import plugin_loader
+            _rendered = plugin_loader.render_plugin_skill(cmd, args_text)
+            if _rendered:
+                try:
+                    _parts = cmd[1:].split(":", 1)
+                    if len(_parts) == 2:
+                        plugin_loader.start_skill_monitors(_parts[0], _parts[1])
+                except Exception:
+                    pass
+                return _rendered
+        except Exception:
+            pass
+    return None

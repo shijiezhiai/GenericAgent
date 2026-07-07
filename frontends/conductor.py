@@ -9,7 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path: sys.path.insert(0, ROOT)
+FRONTENDS_DIR = os.path.dirname(os.path.abspath(__file__))
+for p in (ROOT, FRONTENDS_DIR):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 from agentmain import GenericAgent
 
@@ -269,9 +272,10 @@ GET /subagent/{{id}}?max_len=N\t返回单个subagent详情，reply经清洗后�
 "usermsg": """\
 用户消息流程：
 1. 结合记忆、上下文和用户偏好判断真实需求；不清楚/不能代劳时，用精简checklist一次性问用户。
-2. 判断是新任务还是延续现有任务；优先复用已有stopped subagent（用input追加），只有确实无关的新任务才新建。
-3. 分派前必须POST /chat告知用户：改写后的prompt + 分派方案（新建/复用哪个subagent）。
-4. 执行分派，完成即停。危险操作（改源码/删数据/安全敏感）必须改成先让subagent出方案；你验收后POST /chat请用户确认，确认后才继续执行。""",
+2. 如果用户意图是定时/周期/重复执行任务（每天/每周/每月/每N小时/定时等关键词），按GET /readme/scheduled处理。
+3. 判断是新任务还是延续现有任务；优先复用已有stopped subagent（用input追加），只有确实无关的新任务才新建。
+4. 分派前必须POST /chat告知用户：改写后的prompt + 分派方案（新建/复用哪个subagent）。
+5. 执行分派，完成即停。危险操作（改源码/删数据/安全敏感）必须改成先让subagent出方案；你验收后POST /chat请用户确认，确认后才继续执行。""",
 "subagent": """\
 subagent完成流程：
 1. 如果是IM采集subagent，按GET /readme/im进行而非本流程
@@ -289,6 +293,17 @@ subagent完成流程：
 5. 如果形成用户TODO，POST /approval 推送，prompt里同时写清两部分：
    ① 奏折式报告给用户拍板：背景(什么事/来自谁) + 已核实(你做了哪些调查/关键事实) + 判断(为什么这样建议) + 风险。用户看完这段就能直接拍板，不用再去翻原消息。
    ② 用户同意后该执行的完整任务指令（approval通过会直接作为subagent的prompt派发，必须具体到可直接执行）。""",
+"scheduled": """\
+定时任务流程：
+1. 用户表述中包含这些特征时判断为定时任务：每天/每日/每周/每月/每N小时/每N天/定时/周期/定期/重复/设定闹钟式提醒
+2. 不要自己去执行——必须派一个subagent去创建定时任务JSON文件
+3. subagent的prompt必须包含：
+   a) 先 file_read ../memory/scheduled_task_sop.md 了解JSON格式
+   b) 用 file_write 在 ../sche_tasks/{任务名}.json 写入任务定义
+   JSON格式：{"schedule":"08:00", "repeat":"daily", "enabled":true, "prompt":"...(要执行的具体任务)", "max_delay_hours":6}
+   repeat可选：daily | weekday | weekly | monthly | once | every_Nh | every_Nd
+   c) 写入后告知用户任务已创建，scheduler会按时间自动执行
+4. 先POST /chat告知用户：已识别为定时任务 + 提取出的schedule/repeat + 将要创建的任务名，确认后再派subagent创建""",
 }
 
 class Conductor:

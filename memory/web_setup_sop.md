@@ -18,8 +18,9 @@
 1. 打开扩展管理页，开启「开发者模式」
 2. 点击「加载已解压的扩展程序」，选择 `assets/tmwd_cdp_bridge/` 目录，或让用户直接拖入
 3. 显示“错误”不用管，一般只是因为还没连上GA
+- ⚠**自动加载扩展不可靠**：用 `--user-data-dir`+`--load-extension` 起临时Chrome实例，扩展虽进Preferences但service worker不连WS(实测2次失败)，手动装到主Chrome最可靠
 
 ## 验证
 ⚠ web_scan 显示「没有可用标签页」不一定是扩展没装好，可能是浏览器未打开或只有 blank 页。
-此时禁止乱试，先用 `start "" "https://www.baidu.com"` 打开一个正常页面，再 `web_scan` 确认。
+此时禁止乱试，先打开一个正常页面（Win:`start "" "https://www.baidu.com"` / macOS:`open https://www.baidu.com`），再 `web_scan` 确认。
 若仍不可用，无法自动探测默认浏览器是哪个、插件装在了哪个浏览器、或是否已安装——此时请求用户协助。

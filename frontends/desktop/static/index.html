@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>GenericAgent</title>
 <link rel="stylesheet" href="assets/fonts/fonts.css?v=2">
-<link rel="stylesheet" href="styles.css?v=181">
+<link rel="stylesheet" href="styles.css?v=184">
 <!-- KaTeX: LaTeX 公式渲染 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
 <!-- highlight.js: 代码高亮 -->
@@ -73,9 +73,17 @@
           <span class="ic" data-ga-icon="broadcast"></span>
           <span data-i18n="nav.services"></span>
         </a>
+        <a class="nav-item" data-page="tasks">
+          <span class="ic" data-ga-icon="clock"></span>
+          <span data-i18n="nav.tasks"></span>
+        </a>
         <a class="nav-item" data-page="token">
           <span class="ic" data-ga-icon="coins"></span>
           <span data-i18n="nav.token"></span>
+        </a>
+        <a class="nav-item" data-page="files">
+          <span class="ic" data-ga-icon="fileText"></span>
+          <span data-i18n="nav.files"></span>
         </a>
       </nav>
 
@@ -162,6 +170,26 @@
             <div class="composer" id="chat-composer" data-composer-ctx="chat">
             <div class="composer-slot">
             <div class="plan-card" id="plan-bar" hidden aria-live="polite"></div>
+            <!-- @ file mention panel -->
+            <div class="at-panel" id="at-panel" hidden>
+              <div class="at-panel-inner">
+                <div class="at-search"><input type="text" id="at-search-input" placeholder="Search files..." autocomplete="off"></div>
+                <div class="at-list" id="at-list"></div>
+                <div class="at-footer"><button type="button" class="at-browse-btn" id="at-browse-btn">Browse files...</button></div>
+              </div>
+            </div>
+            <!-- / slash command panel -->
+            <div class="slash-panel" id="slash-panel" hidden>
+              <div class="slash-panel-inner">
+                <div class="slash-search"><input type="text" id="slash-search-input" placeholder="Search commands..." autocomplete="off"></div>
+                <div class="slash-groups" id="slash-groups"></div>
+              </div>
+            </div>
+            <div class="resume-panel" id="resume-panel" hidden>
+              <div class="resume-panel-inner">
+                <div class="resume-list" id="resume-list"></div>
+              </div>
+            </div>
             <div class="composer-inset">
               <div class="thumb-strip" id="thumb-strip" hidden></div>
               <div class="input" id="chat-input" contenteditable="true" role="textbox" aria-multiline="true" data-i18n-ph="composer.placeholder"></div>
@@ -182,6 +210,11 @@
                   </div>
                 </div>
                 <span class="spacer"></span>
+                <button type="button" class="chip ws-chip" id="workspace-chip" data-i18n-title="workspace.selectTitle" title="">
+                  <span class="ws-chip-icon" data-ga-icon="folderSimple"></span>
+                  <span class="ws-chip-name" data-i18n="workspace.empty"></span>
+                  <span class="chip-ic" data-ga-icon="caretDown"></span>
+                </button>
                 <button type="button" class="chip" id="model-chip" data-i18n-title="model.menuLabel" title=""><span class="model-name"></span> <span class="chip-ic" data-ga-icon="caretDown"></span></button>
                 <button type="button" class="send" id="send-btn" aria-label="send">
                   <span data-ga-icon="paperPlaneTilt"></span>
@@ -190,6 +223,34 @@
             </div>
             </div>
             <div class="ga-menu" id="model-menu" hidden></div>
+            <div class="ws-panel" id="workspace-panel" hidden>
+              <div class="ws-panel-head">
+                <span class="ws-panel-title" data-i18n="workspace.panelTitle"></span>
+              </div>
+              <div class="ws-panel-current" id="ws-panel-current" hidden>
+                <span class="ws-panel-label" data-i18n="workspace.current"></span>
+                <div class="ws-panel-row" id="ws-current-row">
+                  <span class="ws-row-name"></span>
+                  <span class="ws-row-path"></span>
+                  <button type="button" class="ws-row-off" id="ws-current-off" data-i18n-title="workspace.offTitle" title="">×</button>
+                </div>
+              </div>
+              <div class="ws-panel-list" id="ws-panel-list"></div>
+              <div class="ws-panel-empty" id="ws-panel-empty" hidden data-i18n="workspace.emptyList"></div>
+              <div class="ws-panel-foot" id="ws-panel-foot">
+                <button type="button" class="ws-add-btn" id="ws-add-btn">
+                  <span data-ga-icon="plus"></span>
+                  <span data-i18n="workspace.add"></span>
+                </button>
+                <div class="ws-add-form" id="ws-add-form" hidden>
+                  <input type="text" class="ws-add-input" id="ws-add-input" data-i18n-ph="workspace.addPlaceholder" placeholder="" maxlength="500">
+                  <div class="ws-add-actions">
+                    <button type="button" class="ws-add-cancel" id="ws-add-cancel" data-i18n="workspace.addCancel"></button>
+                    <button type="button" class="ws-add-confirm" id="ws-add-confirm" data-i18n="workspace.addConfirm"></button>
+                  </div>
+                </div>
+              </div>
+            </div>
             <input type="file" id="chat-file-input" multiple hidden>
             </div>
           </div>
@@ -346,6 +407,43 @@
           </div>
         </section>
 
+        <!-- 定时任务 -->
+        <section class="page" data-page="tasks">
+          <div class="page-top">
+            <button type="button" class="pt-icon pt-sb-toggle" aria-label="toggle sidebar">
+              <span data-ga-icon="caretLeft"></span>
+            </button>
+            <span class="pt-spacer"></span>
+            <button type="button" class="pt-icon pt-rp-toggle" aria-label="toggle conversations">
+              <span data-ga-icon="caretRight"></span>
+            </button>
+          </div>
+          <div class="page-pad">
+            <div class="page-title" data-i18n="page.tasks.title"></div>
+            <div class="task-tabs" id="task-tabs">
+              <button type="button" class="task-tab active" data-tab="list" data-i18n="page.tasks.list"></button>
+              <button type="button" class="task-tab" data-tab="history" data-i18n="page.tasks.history"></button>
+            </div>
+            <div class="task-panel active" data-task-panel="list">
+              <div class="task-empty" id="task-empty">
+                <div class="task-empty-icon" aria-hidden="true"><span data-ga-icon="clock"></span></div>
+                <div class="task-empty-title" data-i18n="page.tasks.emptyTitle"></div>
+                <div class="task-empty-sub" data-i18n="page.tasks.emptySub"></div>
+              </div>
+              <div class="task-templates" id="task-templates"></div>
+              <div class="task-list" id="task-list"></div>
+              <button type="button" class="task-create-btn" id="task-create-btn">
+                <span data-ga-icon="plus"></span>
+                <span data-i18n="page.tasks.create"></span>
+              </button>
+            </div>
+            <div class="task-panel" data-task-panel="history">
+              <div class="task-history-list" id="task-history-list"></div>
+              <div class="task-history-empty" id="task-history-empty" hidden data-i18n="page.tasks.historyEmpty"></div>
+            </div>
+          </div>
+        </section>
+
         <!-- Token 统计 -->
         <section class="page" data-page="token">
           <div class="page-top">
@@ -387,6 +485,45 @@
               <tbody id="tok-tbody"></tbody>
             </table>
             <div class="tok-pager" id="tok-pager"></div>
+          </div>
+        </section>
+
+        <!-- 文件管理 -->
+        <section class="page" data-page="files">
+          <div class="page-top">
+            <button type="button" class="pt-icon pt-sb-toggle" aria-label="toggle sidebar">
+              <span data-ga-icon="caretLeft"></span>
+            </button>
+            <span class="pt-spacer"></span>
+            <button type="button" class="pt-icon pt-rp-toggle" aria-label="toggle conversations">
+              <span data-ga-icon="caretRight"></span>
+            </button>
+          </div>
+          <div class="page-pad">
+            <div class="page-title" data-i18n="page.files.title"></div>
+            <div class="files-layout" id="filesLayout">
+              <aside class="files-filter" id="filesFilter">
+                <div class="files-filter-title" data-i18n="files.filterTitle"></div>
+                <ul class="files-filter-list" id="filesFilterList"></ul>
+              </aside>
+              <div class="files-main">
+                <div class="files-toolbar">
+                  <input type="text" id="filesSearch" class="files-search" placeholder="search">
+                  <select id="filesSource" class="files-source" aria-label="source"></select>
+                  <select id="filesSort" class="files-source" aria-label="sort by"></select>
+                  <button type="button" class="files-view-btn" id="filesSortDir" aria-label="sort direction">
+                    <span class="sort-dir-arrow">↓</span>
+                  </button>
+                  <button type="button" class="files-view-btn" id="filesViewBtn" aria-label="toggle view">
+                    <span data-ga-icon="list"></span>
+                  </button>
+                  <button type="button" class="files-refresh" id="filesRefresh" aria-label="refresh">
+                    <span data-ga-icon="arrowClockwise"></span>
+                  </button>
+                </div>
+                <div class="files-list" id="filesList"></div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -441,6 +578,20 @@
       <div class="modal-body preset-pop">
         <div class="feature-grid"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- 会话恢复 弹窗 -->
+  <div class="modal" id="resume-modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card" role="dialog">
+      <div class="modal-head">
+        <div class="modal-title">恢复会话</div>
+        <button class="modal-x" data-close data-i18n-title="common.close" title="">
+          <span data-ga-icon="x"></span>
+        </button>
+      </div>
+      <div class="modal-body" id="resume-list" style="display:flex;flex-direction:column;gap:4px;min-width:420px;max-height:60vh;overflow-y:auto;"></div>
     </div>
   </div>
 
@@ -524,6 +675,27 @@
     </div>
   </div>
 
+  <!-- 服务调度 /scheduler 弹窗 -->
+  <div class="modal" id="scheduler-modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card scheduler-card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <div class="modal-title">服务调度 · /scheduler</div>
+        <button class="modal-x" data-close data-i18n-title="common.close" title="">
+          <span data-ga-icon="x"></span>
+        </button>
+      </div>
+      <div class="modal-body scheduler-body">
+        <div class="sched-hint">勾选需要运行的服务，取消勾选将停止。已运行的默认勾选。</div>
+        <div class="sched-list" id="scheduler-list"></div>
+        <div class="sched-actions">
+          <button type="button" class="set-btn ghost" data-close>取消</button>
+          <button type="button" class="set-btn primary" id="scheduler-apply">Apply</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 自定义预设 弹窗 -->
   <div class="modal" id="custom-preset-modal" hidden>
     <div class="modal-backdrop" data-close></div>
@@ -576,6 +748,37 @@
         <textarea id="chan-config-editor" class="mykey-editor" spellcheck="false" maxlength="1000000"></textarea>
         <div class="chan-config-foot">
           <button type="button" class="chan-config-save" id="chan-config-save" data-i18n="common.save"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 二维码登录 弹窗 -->
+  <div class="modal" id="chan-qr-modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card" role="dialog">
+      <div class="modal-head">
+        <div class="modal-title" id="chan-qr-title"></div>
+        <button class="modal-x" data-close data-i18n-title="common.close" title="">
+          <span data-ga-icon="x"></span>
+        </button>
+      </div>
+      <div class="modal-body chan-qr-body">
+        <div class="chan-qr-loading" id="chan-qr-loading" hidden>
+          <span class="ga-spin" aria-hidden="true"></span>
+          <span data-i18n="ch.loading"></span>
+        </div>
+        <div class="chan-qr-content" id="chan-qr-content" hidden>
+          <div class="chan-qr-img-wrap">
+            <img class="chan-qr-img" id="chan-qr-img" alt="">
+          </div>
+          <div class="chan-qr-tip" id="chan-qr-tip"></div>
+          <div class="chan-qr-status" id="chan-qr-status"></div>
+        </div>
+        <div class="chan-qr-error" id="chan-qr-error" hidden></div>
+        <div class="chan-qr-actions">
+          <button type="button" class="set-btn ghost" id="chan-qr-cancel" data-i18n="common.cancel"></button>
+          <button type="button" class="set-btn primary" id="chan-qr-refresh" hidden>刷新二维码</button>
         </div>
       </div>
     </div>
@@ -640,6 +843,13 @@
         </div>
         <div class="set-block">
           <div class="set-sec-t" data-i18n="set.features"></div>
+          <div style="font-size:12px;color:var(--txt-2);margin-bottom:4px;" data-i18n="set.chatFilesDir"></div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+            <input id="chat-files-dir-input" type="text" placeholder="temp" style="flex:1;min-width:0;border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:4px;padding:8px 10px;font-size:13px;font-family:inherit;" />
+            <button class="set-btn" id="save-chat-files-dir-btn" type="button" style="width:auto;padding:8px 12px;flex:0 0 auto;">
+              <span data-i18n="set.save"></span>
+            </button>
+          </div>
           <button class="set-btn" id="import-mykey-btn" type="button">
             <span data-ga-icon="fileText"></span>
             <span data-i18n="set.importMykey"></span>
@@ -669,11 +879,12 @@
 <div id="toast-root" class="toast-root" aria-live="polite"></div>
 
 <script src="vendor/marked.min.js"></script>
+<script src="vendor/qrcode.min.js"></script>
 <!-- KaTeX JS -->
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
 <!-- highlight.js -->
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js" crossorigin="anonymous"></script>
-<script src="phosphor-icons.js?v=2"></script>
-<script src="app.js?v=208"></script>
+<script src="phosphor-icons.js?v=3"></script>
+<script src="app.js?v=218"></script>
 </body>
 </html>

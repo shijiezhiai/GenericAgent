@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from typing import Any, Optional
 try: from plugins.hooks import trigger as _hook
 except ImportError: _hook = lambda *a, **k: None
+try: from plugins.plugin_loader import run_cc_hook as _run_cc_hook
+except ImportError: _run_cc_hook = None
 @dataclass
 class StepOutcome:
     data: Any
@@ -20,11 +22,44 @@ class BaseHandler:
         if hasattr(self, method_name):
             args['_index'] = index; args['_tool_num'] = tool_num
             _hook('tool_before', locals())
+            # Claude Code plugin hooks (PreToolUse): block / 改写参数 / 停止 agent。fail-open：hook 异常不阻断工具。
+            if _run_cc_hook is not None:
+                _cc_input = {k: v for k, v in args.items() if k not in ('_index', '_tool_num')}
+                _d = _run_cc_hook('PreToolUse', tool_name, _cc_input)
+                if _d.get('stop'):
+                    return StepOutcome(None, next_prompt=_d.get('stop_reason') or 'stopped by plugin hook', should_exit=True)
+                if _d.get('block'):
+                    yield f"⚠️ 工具 `{tool_name}` 被 plugin hook 阻止: {_d.get('reason','')}\n"
+                    return StepOutcome({'error': 'blocked', 'reason': _d.get('reason','')},
+                                       next_prompt=f"工具 {tool_name} 被 plugin hook 阻止: {_d.get('reason','')}。请根据反馈调整后重试。")
+                _ui = _d.get('updated_input')
+                if _ui is not None and isinstance(_ui, dict): args.update(_ui)
             ret = yield from try_call_generator(getattr(self, method_name), args, response)
             _hook('tool_after', locals())
             return ret
         elif tool_name == 'bad_json': return StepOutcome(None, next_prompt=args.get('msg', 'bad_json'), should_exit=False)
         else:
+            # MCP fallback：tool_name 形如 mcp__<plugin>__<server>__<tool>，路由到对应 client
+            _mcp_map = getattr(getattr(self, "parent", None), "mcp_tool_map", None) or {}
+            if tool_name in _mcp_map:
+                _c, _orig = _mcp_map[tool_name]
+                try:
+                    _res = _c.call_tool(_orig, args)
+                    _txt = ""
+                    if isinstance(_res, dict):
+                        for _p in (_res.get("content") or []):
+                            if isinstance(_p, dict) and _p.get("type") == "text":
+                                _txt += _p.get("text", "")
+                        if _res.get("isError"):
+                            _txt = f"⚠️ MCP 工具返回错误: {_txt}"
+                    else:
+                        _txt = str(_res)
+                    yield (_txt + "\n") if _txt else f"MCP 工具 `{tool_name}` 执行完成（无输出）\n"
+                    return StepOutcome({"result": _txt}, next_prompt=self._get_anchor_prompt(), should_exit=False)
+                except Exception as _e:
+                    yield f"⚠️ MCP 工具 `{tool_name}` 执行失败: {_e}\n"
+                    return StepOutcome({"error": str(_e)},
+                                       next_prompt=f"MCP 工具 {tool_name} 执行失败: {_e}。可重试或换方案。")
             yield f"未知工具: {tool_name}\n"
             return StepOutcome(None, next_prompt=f"未知工具 {tool_name}", should_exit=False)
 
@@ -47,6 +82,11 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
     ]
     turn = 0;  handler.max_turns = max_turns
     _hook('agent_before', locals())
+    try:
+        from plugins.plugin_loader import start_session_monitors
+        start_session_monitors(handler.parent)
+    except Exception:
+        pass
     while turn < handler.max_turns:
         turn += 1; turnstr = f'LLM Running (Turn {turn}) ...'
         if handler.parent.task_dir: turnstr = f'Turn {turn} ...'
@@ -104,6 +144,11 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
         messages = [{"role": "user", "content": next_prompt, "tool_results": tool_results}]   # just new message, history is kept in *Session
     if exit_reason: handler.turn_end_callback(response, tool_calls, tool_results, turn, '', exit_reason)
     _hook('agent_after', locals())
+    try:
+        from plugins.plugin_loader import stop_all_monitors
+        stop_all_monitors()
+    except Exception:
+        pass
     return exit_reason or {'result': 'MAX_TURNS_EXCEEDED'}
 
 def _clean_content(text):

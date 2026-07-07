@@ -2,7 +2,10 @@ import webview, threading, subprocess, sys, time, os, ctypes, atexit, socket, ra
 
 WINDOW_WIDTH, WINDOW_HEIGHT, RIGHT_PADDING, TOP_PADDING = 1200, 900, 0, 50
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, '_MEIPASS', None):
+    script_dir = sys._MEIPASS
+else:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
 frontends_dir = os.path.join(script_dir, "frontends")
 
 def find_free_port(lo=18501, hi=18599):
@@ -16,11 +19,25 @@ def get_screen_width():
     try: return ctypes.windll.user32.GetSystemMetrics(0)
     except: return 1920
 
+def run_streamlit_server(port):
+    import streamlit.__main__
+    stapp_path = os.path.join(frontends_dir, "stapp.py")
+    sys.argv = ["streamlit", "run", stapp_path, "--server.port", str(port), "--server.address", "localhost", "--server.headless", "true", "--client.toolbarMode", "minimal", "--global.developmentMode", "false"]
+    streamlit.__main__.main()
+
 def start_streamlit(port):
     global proc
-    cmd = [sys.executable, "-m", "streamlit", "run", os.path.join(frontends_dir, "stapp.py"), "--server.port", str(port), "--server.address", "localhost", "--server.headless", "true", "--client.toolbarMode", "viewer"]
-    proc = subprocess.Popen(cmd)
-    atexit.register(proc.kill)
+    if getattr(sys, '_MEIPASS', None):
+        pid = os.fork()
+        if pid == 0:
+            run_streamlit_server(port)
+            os._exit(0)
+        proc = pid
+        atexit.register(lambda: os.kill(pid, 9) if pid > 0 else None)
+    else:
+        cmd = [sys.executable, "-m", "streamlit", "run", os.path.join(frontends_dir, "stapp.py"), "--server.port", str(port), "--server.address", "localhost", "--server.headless", "true", "--client.toolbarMode", "minimal"]
+        proc = subprocess.Popen(cmd)
+        atexit.register(proc.kill)
 
 PASTE_HOOK_JS = """if (!window._pasteHooked) { window._pasteHooked = true;
     document.addEventListener('paste', e => {

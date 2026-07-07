@@ -4695,6 +4695,15 @@ class GenericAgentTUI(App[None]):
         text = inp.expand_placeholders(event.value).rstrip()
         images = re.findall(r"\[Image #\d+: (.*?)\]", text)
         inp.record_history(event.value)
+        # Persist to disk so Up-arrow recall survives restarts / /continue.
+        try:
+            _sess = self.sessions.get(self.current_id)
+            _lp = getattr(getattr(_sess, "agent", None), "log_path", "") or ""
+            if _lp:
+                import input_history_store
+                input_history_store.append(_lp, event.value)
+        except Exception:
+            pass
         inp.reset()
         self._hide_palette()
         self._resize_input(inp)
@@ -4796,11 +4805,21 @@ class GenericAgentTUI(App[None]):
                 inp = self.query_one("#input", InputArea)
                 needs_args = any(c[1] for c in COMMANDS if c[0] == cmd_id)
                 self._suppress_palette_open = True
-                new_text = cmd_id + (" " if needs_args else "")
-                inp.text = new_text
-                inp.move_cursor((0, len(new_text)))
-            self._hide_palette()
-            self.query_one("#input", InputArea).focus()
+                if needs_args:
+                    # Parameterised command: fill in the name + trailing space
+                    # and keep the input open so the user can type the argument.
+                    new_text = cmd_id + " "
+                    inp.text = new_text
+                    inp.move_cursor((0, len(new_text)))
+                    self._hide_palette()
+                    inp.focus()
+                else:
+                    # No-argument command: execute immediately instead of just
+                    # leaving the name in the input box.
+                    inp.text = cmd_id
+                    self._hide_palette()
+                    inp.focus()
+                    inp.post_message(inp.Submitted(inp, cmd_id))
             return
         if isinstance(ol, ChoiceList):
             self._collapse_choice(ol.msg, event.option_index)
@@ -5819,6 +5838,30 @@ class GenericAgentTUI(App[None]):
                     sess.name = nm
                     if new_log and new_log != path:   # 仅拷贝续才迁移名字到新副本;原地无需迁移
                         session_names.migrate(path, new_log)
+            except Exception:
+                pass
+            # Restore persisted input-history (Up/Down recall).  continue is
+            # in-place (current_id unchanged) so the normal _switch_to sync
+            # short-circuits on _input_owner_id==current_id; set both the
+            # session cache AND the live InputArea here.
+            try:
+                import input_history_store
+                _key = new_log or path
+                if new_log and new_log != path:
+                    input_history_store.migrate(path, new_log)
+                restored = input_history_store.get(_key)
+                if restored:
+                    _max = getattr(InputArea, "_HISTORY_MAX", 200)
+                    if len(restored) > _max:
+                        restored = restored[-_max:]
+                    sess.input_history = restored
+                    try:
+                        _inp = self.query_one("#input", InputArea)
+                        _inp._input_history = list(restored)
+                        _inp._history_index = -1
+                        _inp._history_stash = ""
+                    except Exception:
+                        pass
             except Exception:
                 pass
             # Auto-restore workspace: if the continued session worked in a
@@ -7008,6 +7051,19 @@ class GenericAgentTUI(App[None]):
             prev.input_pastes = inp._pastes
             prev.input_paste_counter = inp._paste_counter
         sess = self.current
+        # Lazy-load persisted history on first touch (after a restart the
+        # in-memory cache is empty).  Once populated, serve from memory.
+        if not sess.input_history:
+            try:
+                _lp = getattr(getattr(sess, "agent", None), "log_path", "") or ""
+                if _lp:
+                    import input_history_store
+                    _restored = input_history_store.get(_lp)
+                    if _restored:
+                        _max = getattr(InputArea, "_HISTORY_MAX", 200)
+                        sess.input_history = _restored[-_max:] if len(_restored) > _max else _restored
+            except Exception:
+                pass
         inp._input_history = sess.input_history
         inp._pastes = sess.input_pastes
         inp._paste_counter = sess.input_paste_counter

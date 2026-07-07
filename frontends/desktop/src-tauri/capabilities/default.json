@@ -19,6 +19,7 @@
     "allow-get-config",
     "allow-export-mykey",
     "allow-shortcut-should-ask",
-    "allow-shortcut-decide"
+    "allow-shortcut-decide",
+    "allow-pick-folder"
   ]
 }
