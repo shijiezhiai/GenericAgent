@@ -98,6 +98,60 @@ def safeprint(*argv):
     except OSError: pass
 print = safeprint
 
+# ---- P1: digest folding (replaces blind pop with summary retention) ----
+_DIGEST_MAX = 500  # 单条 digest 摘要最大字符数
+
+def _extract_msg_digest(msg):
+    """从单条消息提取极简摘要文本。"""
+    c = msg.get('content', '')
+    parts = []
+    if isinstance(c, str):
+        parts.append(c)
+    elif isinstance(c, list):
+        for b in c:
+            if not isinstance(b, dict): continue
+            t = b.get('type')
+            if t == 'text' and isinstance(b.get('text'), str): parts.append(b['text'])
+            elif t == 'thinking' and isinstance(b.get('thinking'), str): parts.append('[thinking]')
+            elif t == 'tool_use': parts.append('[tool_use:%s]' % b.get('name', '?'))
+            elif t == 'tool_result':
+                tc = b.get('content', '')
+                if isinstance(tc, list): tc = ' '.join(s.get('text', '') for s in tc if isinstance(s, dict))
+                parts.append('[result:%s]' % str(tc)[:80])
+    text = ' '.join(p for p in parts if p).strip()
+    return text[:_DIGEST_MAX] if len(text) > _DIGEST_MAX else text
+
+def _fold_oldest_to_digest(history, batch=4):
+    """将最旧的 batch 条消息折叠为一条 digest user 消息，插回 history[0]。
+
+    返回折叠的消息条数（实际被消费的）。如果 history[0] 已是 digest，则合并。
+    """
+    if len(history) <= batch + 2: return 0  # 保留尾部至少 batch+2 条不动
+    # 检查 history[0] 是否已是 digest（上一轮折叠的结果）
+    existing_digest = ''
+    start_idx = 0
+    if history and isinstance(history[0].get('content'), list):
+        b0 = history[0]['content'][0] if history[0]['content'] else {}
+        if isinstance(b0, dict) and b0.get('text', '').startswith('[compacted]'):
+            existing_digest = b0['text'][len('[compacted] '):]
+            start_idx = 1  # 跳过已有 digest，从下一条开始 fold
+    to_fold = history[start_idx:start_idx + batch]
+    if not to_fold: return 0
+    digest_parts = []
+    for m in to_fold:
+        role = m.get('role', '?')
+        digest_parts.append('[%s] %s' % (role, _extract_msg_digest(m)))
+    new_digest = ' | '.join(digest_parts)
+    if existing_digest:
+        digest_text = '[compacted] ' + existing_digest + ' | ' + new_digest
+    else:
+        digest_text = '[compacted] ' + new_digest
+    # 删除被折叠的消息（+ 旧 digest 如果有）
+    del history[:start_idx + batch]
+    digest_msg = {'role': 'user', 'content': [{'type': 'text', 'text': digest_text}]}
+    history.insert(0, digest_msg)
+    return len(to_fold)
+
 def trim_messages_history(history, sess):
     cap = sess.context_win * 3
     target = int(cap * getattr(sess, 'trim_keep_rate', 0.6))
@@ -105,12 +159,21 @@ def trim_messages_history(history, sess):
     print(f'[Debug] Current context: {cost()} chars, {len(history)} messages.')
     if cost() <= cap: return
     compress_history_tags(history, keep_recent=4, force=True)
-    if cost() <= target: return
+    # P1: 折叠旧消息为 digest 而非直接丢弃，保留上下文要点
+    fold_count = 0
+    while len(history) > 10 and cost() > target:
+        n = _fold_oldest_to_digest(history)
+        if n == 0: break  # 消息太少无法折叠，退出
+        fold_count += n
+    # 折叠后仍超 target，兜底 pop（极少触发）
     while len(history) > 9 and cost() > target:
         history.pop(0)
         while history and history[0].get('role') != 'user': history.pop(0)
         if history and history[0].get('role') == 'user': history[0] = _sanitize_leading_user_msg(history[0])
-    print(f'[Debug] Trimmed context, current: {cost()} chars, {len(history)} messages.')
+    if fold_count:
+        print(f'[Debug] Folded {fold_count} old msgs into digest. Trimmed: {cost()} chars, {len(history)} messages.')
+    else:
+        print(f'[Debug] Trimmed context, current: {cost()} chars, {len(history)} messages.')
 
 def auto_make_url(base, path):
     b, p = base.rstrip('/'), path.strip('/')
