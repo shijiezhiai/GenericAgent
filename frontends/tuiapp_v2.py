@@ -2088,6 +2088,7 @@ COMMANDS = [
     ("/goal",      "[goal]",           "进入 Goal 模式（需 condition 约束）"),
     ("/hive",      "[target]",         "进入 Hive 多 worker 协作模式"),
     ("/conductor", "[task]",           "调用 frontends/conductor.py 多 subagent 编排"),
+    ("/project",   "[list|new|<名>|status|archive|close]", "项目工作空间：跨会话认知保持 + 会话归档"),
     ("/scheduler", "",                 "多选启动/停止 reflect 任务（cron 由 reflect/scheduler.py 驱动）"),
     ("/continue", "[n|name]",         "列出 / 恢复历史会话"),
     ("/workspace","[path|off]",       "设定工作目录(绝对路径)并进入项目模式"),
@@ -3623,6 +3624,7 @@ class GenericAgentTUI(App[None]):
             "update": self._cmd_slash_inject, "autorun": self._cmd_slash_inject,
             "morphling": self._cmd_slash_inject, "goal": self._cmd_slash_inject,
             "hive": self._cmd_slash_inject, "conductor": self._cmd_slash_inject,
+            "project": self._cmd_slash_inject,
             "scheduler": self._cmd_scheduler,
             "quit": self._cmd_quit, "exit": self._cmd_quit,
         }

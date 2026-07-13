@@ -163,6 +163,10 @@ class GenericAgent:
             sys_prompt = get_system_prompt() + '\n'.join(self.extra_sys_prompts) + getattr(self.llmclient.backend, 'extra_sys_prompt', '')
             if self.peer_hint: sys_prompt += f"\n[Peer] 用户提及其他会话/后台任务状态时: temp/model_responses/ (只找近期修改的文件尾部)\n"
             handler = GenericAgentHandler(self, self.history, os.path.join(script_dir, 'temp'))
+            # workspace 激活时让 code_run/bash 在真实 workspace 执行（而非 temp）
+            _ws = getattr(self, '_ga_project_mode_workspace_path', '') or ''
+            if _ws and os.path.isdir(_ws):
+                handler.cwd = _ws
             if getattr(self, 'no_print', False): handler.print = lambda *a, **k: None
             if self.handler and 'key_info' in self.handler.working: 
                 ki = re.sub(r'\n\[SYSTEM\] 此为.*?工作记忆[。\n]*', '', self.handler.working['key_info'])  # 去旧
@@ -299,6 +303,25 @@ if __name__ == '__main__':
                 print(f'[Reflect] check() error: {e}'); task = None
             if task and task == '/exit': break
             if task:
+                # 解析 [MODEL:xxx] 标记 → 切换到指定模型
+                _model_tag = None
+                _mtag = re.match(r'\[MODEL:(.+?)\]\n', task)
+                if _mtag:
+                    _model_tag = _mtag.group(1).strip()
+                    task = task[_mtag.end():]
+                if _model_tag:
+                    try:
+                        for _i, _name, _cur in agent.list_llms():
+                            # _name 格式如 "ClaudeSession/Claude"，取 / 后段与标记匹配
+                            _short = _name.split('/')[-1] if '/' in _name else _name
+                            if _model_tag == _short or _model_tag == _name:
+                                if not _cur: agent.next_llm(_i)
+                                print(f'[Reflect] switched model → {_name}')
+                                break
+                        else:
+                            print(f'[Reflect] model not found: {_model_tag}, using default')
+                    except Exception as e:
+                        print(f'[Reflect] model switch error: {e}')
                 print(f'[Reflect] triggered: {task[:80]}')
                 dq = agent.put_task(task, source='reflect')
                 try:

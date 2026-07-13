@@ -3,8 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <title>GenericAgent</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/svg+xml" href="ga-icon.svg">
+<link rel="apple-touch-icon" href="ga-icon.svg">
 <link rel="stylesheet" href="assets/fonts/fonts.css?v=2">
-<link rel="stylesheet" href="styles.css?v=184">
+<link rel="stylesheet" href="styles.css?v=199">
 <!-- KaTeX: LaTeX 公式渲染 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
 <!-- highlight.js: 代码高亮 -->
@@ -53,6 +56,7 @@
     <!-- ① 左侧边栏 -->
     <aside class="sidebar">
       <div class="brand">
+        <img class="brand-logo" src="ga-icon.svg" alt="GA">
         <div class="brand-text">
           <div class="brand-name ga-wordmark">Generic Agent</div>
           <div class="brand-sub" data-i18n="brand.sub"></div>
@@ -76,6 +80,10 @@
         <a class="nav-item" data-page="tasks">
           <span class="ic" data-ga-icon="clock"></span>
           <span data-i18n="nav.tasks"></span>
+        </a>
+        <a class="nav-item" data-page="project">
+          <span class="ic" data-ga-icon="folderSimple"></span>
+          <span data-i18n="nav.project"></span>
         </a>
         <a class="nav-item" data-page="token">
           <span class="ic" data-ga-icon="coins"></span>
@@ -444,6 +452,159 @@
           </div>
         </section>
 
+        <!-- 项目空间 -->
+        <section class="page page--project-mgr" data-page="project">
+          <div class="page-top">
+            <button type="button" class="pt-icon pt-sb-toggle" aria-label="toggle sidebar">
+              <span data-ga-icon="caretLeft"></span>
+            </button>
+            <span class="pt-spacer"></span>
+            <button type="button" class="pt-icon pt-rp-toggle" aria-label="toggle conversations">
+              <span data-ga-icon="caretRight"></span>
+            </button>
+          </div>
+          <div class="proj-mgr-body">
+            <div class="proj-mgr-header">
+              <div class="proj-mgr-titles">
+                <h1 class="proj-mgr-title" data-i18n="project.title"></h1>
+                <div class="proj-mgr-sub" data-i18n="project.subtitle"></div>
+              </div>
+              <button type="button" class="proj-new-btn" id="proj-new-btn">
+                <span data-ga-icon="plus"></span>
+                <span data-i18n="project.newBtn"></span>
+              </button>
+            </div>
+            <div class="proj-section">
+              <div class="proj-section-head">
+                <h2 class="proj-section-title" data-i18n="project.myProjects"></h2>
+                <div class="proj-search">
+                  <span class="proj-search-icon" data-ga-icon="magnifyingGlass"></span>
+                  <input type="text" class="proj-search-input" id="proj-search-input" data-i18n-ph="project.searchPh" />
+                </div>
+              </div>
+              <div class="proj-card-grid" id="project-my-grid"></div>
+            </div>
+            <div class="proj-section">
+              <div class="proj-section-head">
+                <h2 class="proj-section-title" data-i18n="project.fromTemplate"></h2>
+              </div>
+              <div class="proj-card-grid" id="project-tpl-grid"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 项目主页（进入项目后的详情页） -->
+        <section class="page page--project-home" data-page="project-home">
+          <div class="ph-layout">
+            <!-- 左侧主内容区 -->
+            <div class="ph-main">
+              <!-- 面包屑 + 邀请 -->
+              <div class="ph-breadcrumb-bar">
+                <div class="ph-breadcrumb">
+                  <span class="ph-crumb-icon" data-ga-icon="folder"></span>
+                  <span class="ph-crumb" data-i18n="nav.project"></span>
+                  <span class="ph-crumb-sep">/</span>
+                  <span class="ph-crumb ph-crumb-current" id="ph-project-name">—</span>
+                </div>
+                <button type="button" class="ph-invite-btn" id="ph-invite-btn" data-i18n="ph.invite"></button>
+              </div>
+              <!-- Tab 导航 -->
+              <div class="ph-tabnav">
+                <div class="ph-tabs">
+                  <button class="ph-tab active" data-ph-tab="feed" data-i18n="ph.tab.feed"></button>
+                  <button class="ph-tab" data-ph-tab="plan" data-i18n="ph.tab.plan"></button>
+                  <button class="ph-tab" data-ph-tab="task" data-i18n="ph.tab.task"></button>
+                  <button class="ph-tab" data-ph-tab="asset" data-i18n="ph.tab.asset"></button>
+                </div>
+                <button type="button" class="ph-settings-btn" id="ph-settings-btn" aria-label="settings">
+                  <span data-ga-icon="settings"></span>
+                </button>
+              </div>
+              <!-- 子筛选 + 内容区 -->
+              <div class="ph-content">
+                <!-- 动态 Tab -->
+                <div class="ph-pane active" data-ph-pane="feed">
+                  <div class="ph-subfilters">
+                    <button class="ph-subfilter active" data-ph-filter="mine" data-i18n="ph.filter.mine"></button>
+                    <button class="ph-subfilter" data-ph-filter="member" data-i18n="ph.filter.member"></button>
+                  </div>
+                  <div class="ph-feed-list" id="ph-feed-list">
+                    <div class="ph-empty" data-i18n="ph.empty.feed"></div>
+                  </div>
+                </div>
+                <!-- 计划 Tab -->
+                <div class="ph-pane" data-ph-pane="plan">
+                  <div class="ph-empty" data-i18n="ph.empty.plan"></div>
+                </div>
+                <!-- 任务 Tab -->
+                <div class="ph-pane" data-ph-pane="task">
+                  <div class="ph-empty" data-i18n="ph.empty.task"></div>
+                </div>
+                <!-- 资产 Tab -->
+                <div class="ph-pane" data-ph-pane="asset">
+                  <div class="ph-empty" data-i18n="ph.empty.asset"></div>
+                </div>
+              </div>
+              <!-- 底部 AI 输入框 -->
+              <div class="ph-composer">
+                <textarea class="ph-composer-input" id="ph-composer-input" rows="1" data-i18n-ph="ph.composer.ph"></textarea>
+                <div class="ph-composer-toolbar">
+                  <div class="ph-composer-left">
+                    <button class="ph-chip" data-ph-tool="craft"><span data-i18n="ph.tool.craft"></span><span class="ph-chip-arrow">▾</span></button>
+                    <button class="ph-chip" data-ph-tool="auto"><span data-i18n="ph.tool.auto"></span><span class="ph-chip-arrow">▾</span></button>
+                    <button class="ph-chip ph-chip-plain" data-ph-tool="skill" data-i18n="ph.tool.skill"></button>
+                    <button class="ph-chip" data-ph-tool="connector"><span data-i18n="ph.tool.connector"></span><span class="ph-chip-arrow">▾</span></button>
+                  </div>
+                  <div class="ph-composer-right">
+                    <button type="button" class="ph-add-btn" aria-label="add" id="ph-add-btn"><span data-ga-icon="plus"></span></button>
+                    <button type="button" class="ph-send-btn" id="ph-send-btn" aria-label="send"><span data-ga-icon="arrowUp"></span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 右侧项目配置边栏 -->
+            <aside class="ph-sidebar">
+              <div class="ph-sidebar-title" data-i18n="ph.config.title"></div>
+              <div class="ph-cfg-card" data-ph-cfg="instruction">
+                <div class="ph-cfg-head">
+                  <span class="ph-cfg-label" data-i18n="ph.cfg.instruction"></span>
+                  <button class="ph-cfg-add" aria-label="add"><span data-ga-icon="plus"></span></button>
+                </div>
+                <div class="ph-cfg-desc" data-i18n="ph.cfg.instruction.d"></div>
+              </div>
+              <div class="ph-cfg-card" data-ph-cfg="connector">
+                <div class="ph-cfg-head">
+                  <span class="ph-cfg-label" data-i18n="ph.cfg.connector"></span>
+                  <button class="ph-cfg-add" aria-label="add"><span data-ga-icon="plus"></span></button>
+                </div>
+                <div class="ph-cfg-desc" data-i18n="ph.cfg.connector.d"></div>
+              </div>
+              <div class="ph-cfg-card" data-ph-cfg="expert">
+                <div class="ph-cfg-head">
+                  <span class="ph-cfg-label" data-i18n="ph.cfg.expert"></span>
+                  <button class="ph-cfg-add" aria-label="add"><span data-ga-icon="plus"></span></button>
+                </div>
+                <div class="ph-cfg-desc" data-i18n="ph.cfg.expert.d"></div>
+                <div class="ph-cfg-experts" id="ph-cfg-experts"></div>
+              </div>
+              <div class="ph-cfg-card" data-ph-cfg="skill">
+                <div class="ph-cfg-head">
+                  <span class="ph-cfg-label" data-i18n="ph.cfg.skill"></span>
+                  <button class="ph-cfg-add" aria-label="add"><span data-ga-icon="plus"></span></button>
+                </div>
+                <div class="ph-cfg-desc" data-i18n="ph.cfg.skill.d"></div>
+              </div>
+              <div class="ph-cfg-card" data-ph-cfg="automation">
+                <div class="ph-cfg-head">
+                  <span class="ph-cfg-label" data-i18n="ph.cfg.automation"></span>
+                  <button class="ph-cfg-add" aria-label="add"><span data-ga-icon="plus"></span></button>
+                </div>
+                <div class="ph-cfg-desc" data-i18n="ph.cfg.automation.d"></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
         <!-- Token 统计 -->
         <section class="page" data-page="token">
           <div class="page-top">
@@ -544,6 +705,12 @@
         <span data-i18n="conv.new"></span>
       </button>
       <div class="conv-list"></div>
+      <div class="batch-bar" id="batch-bar" hidden style="display:none;">
+        <button type="button" class="bb-btn" data-bb="all"><span data-ga-icon="listChecks"></span><span data-i18n="common.selectAll"></span></button>
+        <span class="bb-count" id="bb-count"></span>
+        <button type="button" class="bb-btn bb-del" data-bb="del"><span data-ga-icon="trash"></span><span data-i18n="common.delete"></span></button>
+        <button type="button" class="bb-btn bb-cancel" data-bb="cancel" data-i18n="common.cancel"></button>
+      </div>
 
       <!-- 会话操作菜单 -->
       <div class="ctx-menu" id="conv-menu" hidden>
@@ -555,11 +722,48 @@
           <span data-ga-icon="pencilSimple"></span>
           <span data-i18n="ctx.rename"></span>
         </div>
+        <div class="ctx-item" data-act="move">
+          <span data-ga-icon="folder"></span>
+          <span data-i18n="ctx.moveToFolder"></span>
+        </div>
+        <div class="ctx-item" data-act="move-archived">
+          <span data-ga-icon="archive"></span>
+          <span data-i18n="ctx.moveArchived"></span>
+        </div>
+        <div class="ctx-item" data-act="batch-del">
+          <span data-ga-icon="listChecks"></span>
+          <span data-i18n="ctx.batchDel"></span>
+        </div>
         <div class="ctx-item danger" data-act="del">
           <span data-ga-icon="trash"></span>
           <span data-i18n="ctx.del"></span>
         </div>
       </div>
+      <div class="ctx-menu" id="ph-task-menu" hidden>
+        <div class="ctx-item" data-act="rename">
+          <span data-ga-icon="pencilSimple"></span>
+          <span data-i18n="ctx.rename"></span>
+        </div>
+        <div class="ctx-item danger" data-act="del">
+          <span data-ga-icon="trash"></span>
+          <span data-i18n="ctx.del"></span>
+        </div>
+      </div>
+      <div class="ctx-menu" id="folder-menu" hidden>
+        <div class="ctx-item" data-act="new-in-folder">
+          <span data-ga-icon="plus"></span>
+          <span data-i18n="conv.new"></span>
+        </div>
+        <div class="ctx-item" data-act="rename-folder">
+          <span data-ga-icon="pencilSimple"></span>
+          <span data-i18n="ctx.rename"></span>
+        </div>
+        <div class="ctx-item danger" data-act="delete-folder">
+          <span data-ga-icon="trash"></span>
+          <span data-i18n="ctx.del"></span>
+        </div>
+      </div>
+      <div class="ctx-menu" id="move-menu" hidden></div>
     </aside>
 
   </div>
@@ -670,6 +874,26 @@
         <div class="confirm-actions">
           <button type="button" class="set-btn ghost" id="confirm-cancel"></button>
           <button type="button" class="set-btn primary" id="confirm-ok"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="prompt-modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card confirm-card" role="dialog" aria-modal="true" aria-labelledby="prompt-title">
+      <div class="modal-head">
+        <div class="modal-title" id="prompt-title"></div>
+        <button class="modal-x" data-close data-i18n-title="common.close" title="">
+          <span data-ga-icon="x"></span>
+        </button>
+      </div>
+      <div class="modal-body confirm-body">
+        <div class="confirm-message" id="prompt-message"></div>
+        <input type="text" id="prompt-input" class="cp-input" style="width:100%;margin-top:10px;" />
+        <div class="confirm-actions">
+          <button type="button" class="set-btn ghost" id="prompt-cancel"></button>
+          <button type="button" class="set-btn primary" id="prompt-ok"></button>
         </div>
       </div>
     </div>
@@ -876,6 +1100,341 @@
   <img class="lightbox-img" id="lightbox-img" alt="">
 </div>
 
+<!-- 创建定时任务 弹窗 -->
+<div class="modal" id="task-create-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog">
+    <div class="modal-head">
+      <div class="modal-title" data-i18n="page.tasks.create"></div>
+      <button class="modal-x" data-close data-i18n-title="common.close" title="">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body cp-body">
+      <div class="cp-field">
+        <span class="field-label"><span data-i18n="taskForm.name"></span><span class="field-req" aria-hidden="true">*</span></span>
+        <input type="text" class="cp-input" id="tc-name" placeholder="" data-i18n-ph="taskForm.namePh">
+      </div>
+      <div class="cp-field">
+        <span class="field-label"><span data-i18n="taskForm.prompt"></span><span class="field-req" aria-hidden="true">*</span></span>
+        <textarea class="cp-textarea" id="tc-prompt" placeholder="" data-i18n-ph="taskForm.promptPh"></textarea>
+      </div>
+      <div class="tc-row">
+        <div class="cp-field tc-half">
+          <span class="field-label"><span data-i18n="taskForm.repeat"></span></span>
+          <select class="cp-input" id="tc-repeat">
+            <option value="daily" data-i18n="taskForm.repeatDaily"></option>
+            <option value="weekday" data-i18n="taskForm.repeatWeekday"></option>
+            <option value="weekly" data-i18n="taskForm.repeatWeekly"></option>
+            <option value="monthly" data-i18n="taskForm.repeatMonthly"></option>
+            <option value="once" data-i18n="taskForm.repeatOnce"></option>
+            <option value="every_1h" data-i18n="taskForm.repeat1h"></option>
+            <option value="every_3h" data-i18n="taskForm.repeat3h"></option>
+            <option value="every_6h" data-i18n="taskForm.repeat6h"></option>
+            <option value="every_1d" data-i18n="taskForm.repeat1d"></option>
+          </select>
+        </div>
+        <div class="cp-field tc-half">
+          <span class="field-label"><span data-i18n="taskForm.schedule"></span></span>
+          <input type="time" class="cp-input" id="tc-schedule" value="08:00">
+        </div>
+      </div>
+      <div class="cp-field tc-adv-toggle" id="tc-adv-toggle">
+        <span data-ga-icon="caretRight" class="tc-adv-caret"></span>
+        <span data-i18n="taskForm.advanced"></span>
+      </div>
+      <div class="tc-adv" id="tc-adv" hidden>
+        <div class="cp-field">
+          <span class="field-label"><span data-i18n="taskForm.maxDelay"></span></span>
+          <input type="number" class="cp-input" id="tc-max-delay" value="6" min="0" step="1" style="width:80px">
+          <span class="field-hint" data-i18n="taskForm.maxDelayHint"></span>
+        </div>
+        <div class="set-toggle-row">
+          <span class="set-toggle-label" data-i18n="taskForm.enabled"></span>
+          <button class="set-switch" type="button" id="tc-enabled-switch" role="switch" aria-checked="true">
+            <span class="set-switch-knob" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="cp-field">
+          <span class="field-label"><span data-i18n="taskForm.model"></span></span>
+          <select class="cp-input" id="tc-model" style="width:200px">
+            <option value="" data-i18n="taskForm.modelDefault"></option>
+          </select>
+        </div>
+      </div>
+      <div class="cp-error" id="tc-error" hidden></div>
+      <div class="cp-actions">
+        <button type="button" class="cp-btn" id="tc-cancel" data-close data-i18n="common.cancel"></button>
+        <button type="button" class="cp-btn cp-btn-primary" id="tc-save" data-i18n="common.save"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="project-create-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog">
+    <div class="modal-head">
+      <div class="modal-title" data-i18n="project.create"></div>
+      <button class="modal-x" data-close data-i18n-title="common.close" title="">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body cp-body">
+      <div class="cp-field">
+        <span class="field-label"><span data-i18n="project.name"></span><span class="field-req" aria-hidden="true">*</span></span>
+        <input type="text" class="cp-input" id="pc-name" placeholder="" data-i18n-ph="project.promptName">
+      </div>
+      <div class="cp-field">
+        <span class="field-label"><span data-i18n="project.template"></span></span>
+        <select class="cp-input" id="pc-template">
+          <option value="" data-i18n="project.tplBlank"></option>
+        </select>
+      </div>
+      <div class="cp-field">
+        <span class="field-label"><span data-i18n="project.instruction"></span></span>
+        <textarea class="cp-textarea" id="pc-instruction" rows="6" placeholder="" data-i18n-ph="project.instructionPh"></textarea>
+        <span class="field-hint" data-i18n="project.instructionHint"></span>
+      </div>
+      <div class="cp-field" id="pc-skills-field" hidden>
+        <span class="field-label"><span data-i18n="project.skills"></span></span>
+        <div class="cp-skills-list" id="pc-skills"></div>
+        <span class="field-hint" data-i18n="project.skillsHint"></span>
+      </div>
+      <div class="cp-field">
+        <span class="field-label"><span data-i18n="project.workspace"></span></span>
+        <div class="cp-ws-modes">
+          <label class="cp-ws-mode"><input type="radio" name="pc-ws-mode" value="none" checked> <span data-i18n="project.wsNone"></span></label>
+          <label class="cp-ws-mode"><input type="radio" name="pc-ws-mode" value="existing"> <span data-i18n="project.wsExisting"></span></label>
+          <label class="cp-ws-mode"><input type="radio" name="pc-ws-mode" value="new"> <span data-i18n="project.wsNew"></span></label>
+        </div>
+        <select class="cp-input" id="pc-ws-existing" disabled></select>
+        <input type="text" class="cp-input" id="pc-ws-path" placeholder="" data-i18n-ph="project.wsPathPh" disabled>
+        <span class="field-hint" data-i18n="project.wsHint"></span>
+      </div>
+      <div class="cp-error" id="pc-error" hidden></div>
+      <div class="cp-actions">
+        <button type="button" class="cp-btn" id="pc-cancel" data-close data-i18n="common.cancel"></button>
+        <button type="button" class="cp-btn cp-btn-primary" id="pc-save" data-i18n="project.createBtn"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="newtodo-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card newtodo-card" role="dialog" aria-modal="true">
+    <div class="modal-head newtodo-head">
+      <div class="modal-title newtodo-title">新建待办</div>
+      <button class="modal-x" data-close data-i18n-title="common.close" title="">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body newtodo-body">
+      <div class="nt-field">
+        <span class="nt-label">标题<span class="nt-req" aria-hidden="true">*</span></span>
+        <input type="text" class="nt-input" id="nt-title" placeholder="请输入待办标题" autocomplete="off">
+      </div>
+      <div class="nt-field">
+        <span class="nt-label">描述（可选）</span>
+        <textarea class="nt-textarea" id="nt-desc" rows="3" placeholder="请输入待办描述"></textarea>
+      </div>
+      <div class="nt-pills">
+        <button type="button" class="nt-pill" id="nt-assignee">处理人 <span class="nt-caret">▾</span></button>
+        <button type="button" class="nt-pill" id="nt-status">待开始 <span class="nt-caret">▾</span></button>
+        <button type="button" class="nt-pill" id="nt-due">📅 截止日期 <span class="nt-caret">▾</span></button>
+        <input type="text" id="nt-due-input" hidden>
+      </div>
+    </div>
+    <div class="newtodo-foot">
+      <div class="nt-foot-left">
+        <button type="button" class="nt-attach" title="附件">📎</button>
+      </div>
+      <div class="nt-foot-right">
+        <button type="button" class="nt-btn nt-btn-cancel" data-close>取消</button>
+        <button type="button" class="nt-btn nt-btn-create" id="nt-create" disabled>创建</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="addsource-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card addsource-card" role="dialog" aria-modal="true">
+    <div class="modal-head addsource-head">
+      <div class="modal-title">添加数据源</div>
+      <button class="modal-x" data-close data-i18n-title="common.close" title="">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body addsource-body">
+      <div class="as-view as-view-empty" id="as-view-empty">
+        <div class="as-empty-box">
+          <div class="as-empty-title">还没有外部数据源</div>
+          <div class="as-empty-desc">先添加一个数据源，把外部系统中的信息按规则同步到当前协作项目。</div>
+          <button type="button" class="as-add-btn" id="as-go-list">添加</button>
+        </div>
+        <div class="as-existing" id="as-existing" hidden>
+          <div class="as-existing-head">
+            <div class="as-existing-title">已添加的数据源</div>
+            <button type="button" class="as-link-btn" id="as-add-more">继续添加</button>
+          </div>
+          <div class="as-existing-list" id="as-existing-list"></div>
+        </div>
+      </div>
+      <div class="as-view as-view-list" id="as-view-list" hidden>
+        <div class="as-subtitle">选择一个外部系统作为数据来源</div>
+        <div class="as-cards" id="as-cards"></div>
+        <div class="as-foot">
+          <button type="button" class="as-back-btn" id="as-back">返回</button>
+        </div>
+      </div>
+      <div class="as-view as-view-config" id="as-view-config" hidden>
+        <div class="as-subtitle" id="as-config-subtitle">配置 GitLab Webhook</div>
+        <div class="as-form">
+          <label class="as-label">数据源名称
+            <input type="text" class="as-input" id="as-ds-name" placeholder="例如：我的 GitLab">
+          </label>
+          <div class="as-label">订阅事件</div>
+          <div class="as-checks" id="as-ds-events"></div>
+        </div>
+        <div class="as-foot">
+          <button type="button" class="as-back-btn" id="as-ds-back">返回</button>
+          <button type="button" class="as-add-btn" id="as-ds-generate">生成 Webhook</button>
+        </div>
+      </div>
+      <div class="as-view as-view-done" id="as-view-done" hidden>
+        <div class="as-subtitle" id="as-done-subtitle">Webhook 已创建</div>
+        <div class="as-done-box">
+          <div class="as-done-row"><span>推送地址</span><code id="as-ds-url"></code></div>
+          <div class="as-done-row"><span>密钥 (Secret)</span><code id="as-ds-secret"></code></div>
+          <div class="as-done-tip" id="as-done-tip">在 GitLab 项目 Settings → Webhooks 中，将上方地址填入 URL、密钥填入 Secret token，并勾选对应事件。</div>
+        </div>
+        <div class="as-foot">
+          <button type="button" class="as-back-btn" id="as-ds-copy">复制地址</button>
+          <button type="button" class="as-add-btn" id="as-ds-finish">完成</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="project-skills-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog">
+    <div class="modal-head">
+      <div class="modal-title" data-i18n="project.editSkills"></div>
+      <button class="modal-x" data-close data-i18n-title="common.close" title="">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body cp-body">
+      <div class="cp-field">
+        <span class="field-label"><span data-i18n="project.skills"></span></span>
+        <div class="cp-skills-list" id="ps-skills"></div>
+        <span class="field-hint" data-i18n="project.skillsHint"></span>
+      </div>
+      <div class="cp-error" id="ps-error" hidden></div>
+      <div class="cp-actions">
+        <button type="button" class="cp-btn" id="ps-cancel" data-close data-i18n="common.cancel"></button>
+        <button type="button" class="cp-btn cp-btn-primary" id="ps-save" data-i18n="common.save"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="todo-detail-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card todo-detail-card" role="dialog" aria-modal="true">
+    <div class="modal-head todo-detail-head">
+      <div class="todo-detail-head-main">
+        <div class="todo-detail-badge" id="td-status-badge"></div>
+        <div class="modal-title todo-detail-title">编辑待办</div>
+      </div>
+      <div class="todo-detail-head-actions">
+        <button type="button" class="nt-icon-btn" id="td-add-context" title="添加到输入框" aria-label="添加到输入框">
+          <span data-ga-icon="chatTeardropText"></span>
+        </button>
+        <button type="button" class="nt-icon-btn" id="td-more" title="更多操作" aria-label="更多操作">
+          <span data-ga-icon="dotsThree"></span>
+        </button>
+        <button class="modal-x" data-close data-i18n-title="common.close" title="">
+          <span data-ga-icon="x"></span>
+        </button>
+      </div>
+    </div>
+    <div class="modal-body todo-detail-body">
+      <div class="nt-field">
+        <span class="nt-label">标题<span class="nt-req" aria-hidden="true">*</span></span>
+        <input type="text" class="nt-input" id="td-title" placeholder="请输入待办标题" autocomplete="off">
+      </div>
+      <div class="nt-field">
+        <span class="nt-label">描述（可选）</span>
+        <textarea class="nt-textarea td-textarea" id="td-desc" rows="4" placeholder="请输入待办描述"></textarea>
+      </div>
+      <div class="todo-detail-section">
+        <div class="todo-detail-label">基本信息</div>
+        <div class="todo-detail-grid">
+          <div class="todo-detail-item">
+            <div class="todo-detail-item-label">状态</div>
+            <button type="button" class="nt-pill todo-detail-pill" id="td-status"></button>
+          </div>
+          <div class="todo-detail-item">
+            <div class="todo-detail-item-label">处理人</div>
+            <input type="text" class="nt-input todo-detail-input" id="td-assignee" placeholder="请输入处理人" autocomplete="off">
+          </div>
+          <div class="todo-detail-item">
+            <div class="todo-detail-item-label">截止日期</div>
+            <button type="button" class="nt-pill todo-detail-pill" id="td-due"></button>
+            <input type="text" id="td-due-input" hidden>
+          </div>
+          <div class="todo-detail-item">
+            <div class="todo-detail-item-label">来源</div>
+            <div class="todo-detail-item-value" id="td-source"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="newtodo-foot todo-detail-foot">
+      <div class="nt-foot-left"></div>
+      <div class="nt-foot-right">
+        <button type="button" class="nt-btn nt-btn-cancel" data-close>取消</button>
+        <button type="button" class="nt-btn nt-btn-create" id="td-save">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="project-workspace-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog">
+    <div class="modal-head">
+      <div class="modal-title" data-i18n="project.workspace"></div>
+      <button class="modal-x" data-close data-i18n-title="common.close" title="">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body cp-body">
+      <div class="cp-field">
+        <label class="cp-label"><span data-i18n="project.wsCurrent"></span>: <strong id="pw-current">—</strong></label>
+      </div>
+      <div class="cp-field">
+        <label class="cp-radio"><input type="radio" name="pw-ws-mode" value="none" checked><span data-i18n="project.wsNone"></span></label>
+        <label class="cp-radio"><input type="radio" name="pw-ws-mode" value="existing"><span data-i18n="project.wsExisting"></span></label>
+        <select class="cp-ws-select" id="pw-ws-existing" disabled></select>
+        <label class="cp-radio"><input type="radio" name="pw-ws-mode" value="new"><span data-i18n="project.wsNew"></span></label>
+        <input type="text" class="cp-input" id="pw-ws-path" data-i18n-ph="project.wsPathPh" placeholder="" disabled>
+        <span class="field-hint" data-i18n="project.wsHint"></span>
+      </div>
+      <div class="cp-error" id="pw-error" hidden></div>
+      <div class="cp-actions">
+        <button type="button" class="cp-btn" id="pw-cancel" data-close data-i18n="common.cancel"></button>
+        <button type="button" class="cp-btn cp-btn-primary" id="pw-save" data-i18n="common.save"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="toast-root" class="toast-root" aria-live="polite"></div>
 
 <script src="vendor/marked.min.js"></script>
@@ -884,7 +1443,7 @@
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
 <!-- highlight.js -->
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js" crossorigin="anonymous"></script>
-<script src="phosphor-icons.js?v=3"></script>
-<script src="app.js?v=218"></script>
+<script src="phosphor-icons.js?v=4"></script>
+<script src="app.js?v=257"></script>
 </body>
 </html>

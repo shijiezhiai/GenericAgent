@@ -20,6 +20,7 @@
     "allow-export-mykey",
     "allow-shortcut-should-ask",
     "allow-shortcut-decide",
-    "allow-pick-folder"
+    "allow-pick-folder",
+    "allow-notify"
   ]
 }

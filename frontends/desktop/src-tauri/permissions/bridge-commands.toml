@@ -32,3 +32,8 @@ commands.allow = ["shortcut_decide"]
 identifier = "allow-pick-folder"
 description = "Open a native folder picker dialog for workspace selection."
 commands.allow = ["pick_folder"]
+
+[[permission]]
+identifier = "allow-notify"
+description = "Show a native system notification with title and body (Tauri desktop; WKWebView cannot use Web Notification API)."
+commands.allow = ["notify"]

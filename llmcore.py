@@ -128,6 +128,7 @@ def _parse_claude_sse(resp_lines):
     """Parse Anthropic SSE stream. Yields text chunks, returns list[content_block]."""
     content_blocks = []; current_block = None; tool_json_buf = ""
     stop_reason = None; got_message_stop = False; warn = None
+    ms_cache_read = ms_cache_create = 0  # message_start 的 cache 基准, 用于 message_delta 差值补记(部分中转如glm把cache放delta)
     for line in resp_lines:
         if not line: continue
         line = line.decode('utf-8') if isinstance(line, bytes) else line
@@ -141,6 +142,8 @@ def _parse_claude_sse(resp_lines):
         evt_type = evt.get("type", "")
         if evt_type == "message_start":
             usage = evt.get("message", {}).get("usage", {})
+            ms_cache_read = int(usage.get("cache_read_input_tokens", 0) or 0)
+            ms_cache_create = int(usage.get("cache_creation_input_tokens", 0) or 0)
             _record_usage(usage, "messages")
         elif evt_type == "content_block_start":
             block = evt.get("content_block", {})
@@ -176,6 +179,14 @@ def _parse_claude_sse(resp_lines):
             out_usage = evt.get("usage", {})
             out_tokens = out_usage.get("output_tokens", 0)
             if out_tokens: print(f"[Output] tokens={out_tokens} stop_reason={stop_reason}")
+            # 部分中转(如glm-5.2)把cache_read/cache_creation放message_delta而非标准message_start;
+            # 用差值补记message_start缺失部分,避免命中率恒0。差值防重复累加,不传input/output防双计。
+            dr = int(out_usage.get("cache_read_input_tokens", 0) or 0)
+            dc = int(out_usage.get("cache_creation_input_tokens", 0) or 0)
+            extra_cr = max(0, dr - ms_cache_read)
+            extra_ci = max(0, dc - ms_cache_create)
+            if extra_cr or extra_ci:
+                _record_usage({"cache_read_input_tokens": extra_cr, "cache_creation_input_tokens": extra_ci}, "messages")
         elif evt_type == "message_stop": got_message_stop = True
         elif evt_type == "error":
             err = evt.get("error", {})

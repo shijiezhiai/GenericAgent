@@ -253,6 +253,43 @@ def build_hive_prompt(args_text: str = "") -> str:
     )
 
 
+def build_project_prompt(args_text: str = "") -> str:
+    """`/project [list|new <名>|<名>|status|archive <名>|close]` → 项目工作空间管理。
+
+    机制同 /goal：只注入 prompt，由主 agent 按 memory/project_mode_sop.md 用 file
+    工具执行。会话归档由 plugins/project_sessions.py 的 agent_after hook 自动完成，
+    此处不涉及。摘要时机=延后到 status 时现读现摘（prompt owns logic）。
+    """
+    args = (args_text or "").strip()
+    parts = args.split(None, 1)
+    sub = parts[0].lower() if parts else ""
+    name = parts[1].strip() if len(parts) > 1 else ""
+    if sub == "list":
+        body = ("列出 temp/projects/ 下所有项目目录，逐个读各自 project_meta.md，"
+                "输出表格：项目名 / 状态 / 目标(截断) / 最后活跃 / sessions 记录条数，"
+                "末尾标注当前激活项目。")
+    elif sub == "new":
+        nm = name or "未命名"
+        body = (f"新建项目「{nm}」：按 memory/project_mode_sop.md「新建项目」流程，"
+                f"建 temp/projects/{nm}/ 目录 + 写 project_meta.md(目标/状态=active/创建日期) "
+                f"+ 建 memory/project_{nm}.md 空项目记忆，随后进入该项目。")
+    elif sub == "status":
+        body = ("输出当前项目仪表盘：读 project_meta.md + sessions/index.md 最近 5 条时间线 "
+                "+ memory/project_<名>.md 摘要。未激活项目时提示先用 /project list 或 /project <名>。")
+    elif sub == "archive":
+        nm = name or "当前"
+        body = f"归档项目「{nm}」：把其 project_meta.md 的状态行改为 archived。"
+    elif sub == "close":
+        body = "离开当前项目（删 pid 锚，保留所有数据）：按 memory/project_mode_sop.md 离开流程。"
+    elif sub:  # sub 本身即项目名 → 切换
+        body = (f"切换到项目「{sub}」：按 memory/project_mode_sop.md 进入流程；"
+                f"该项目不存在则提示用 /project new {sub} 新建。")
+    else:  # 无参数 → 默认 status
+        body = ("默认动作 = 当前项目 status 仪表盘。未激活项目时，列 temp/projects/ 下可选项目并提示。")
+    return ("请按 memory/project_mode_sop.md 执行项目操作。\n" + body
+            + f"{_tail(args_text, '用户输入')}")
+
+
 def build_conductor_prompt(args_text: str = "") -> str:
     """`/conductor <task>` → run `frontends/conductor.py` on the task.
 
@@ -694,6 +731,7 @@ def prompt_for(cmd: str, args_text: str) -> Optional[str]:
         "/morphling": build_morphling_prompt,
         "/goal":      build_goal_prompt,
         "/hive":      build_hive_prompt,
+        "/project":   build_project_prompt,
         "/conductor": build_conductor_prompt,
         "/resume":    build_resume_prompt,
     }

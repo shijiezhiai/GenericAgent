@@ -153,3 +153,23 @@ frontends/conductor_im_plugins/*
 
 # 本地 bug / 局限报告草稿（交给维护者参考，不进仓库）
 /BUG_*.md
+
+# Vendored external Agent Skills (ponytail, etc.)
+skills_external/
+
+# Temp AI-generated scratch files (empty/ephemeral)
+tmp*.ai.py
+
+# Backup files
+*.bak
+
+# Build artifacts
+GenericAgent-Tauri.app/
+
+# Project exploration scratch
+plan_project/
+
+# Runtime temp data
+runtime_probe.json
+closure_before.json
+.datasource*.json

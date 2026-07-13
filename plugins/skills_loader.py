@@ -132,21 +132,49 @@ def _truncate(s, n=120):
     return s if len(s) <= n else s[:n] + "..."
 
 
-def _build_injection():
-    """构建注入文本。带缓存：配置文件 mtime 不变则复用。"""
+def _load_project_skills(project_name):
+    """读取项目绑定的 skill name 列表。返回 None=未绑定(全局), list=已过滤。"""
+    if not project_name:
+        return None
+    try:
+        import plugins.project_mode as _pm
+        pdir = _pm._project_dir(project_name)
+    except Exception:
+        return None
+    sp = os.path.join(pdir, '.skills.json')
+    if not os.path.isfile(sp):
+        return None
+    try:
+        import json as _json
+        data = _json.load(open(sp, encoding='utf-8'))
+        if isinstance(data, list) and data:
+            return [str(s).strip() for s in data if str(s).strip()]
+    except Exception:
+        pass
+    return None
+
+
+def _build_injection(project_name=None):
+    """构建注入文本。带缓存：配置文件 mtime 不变则复用。
+    若 project_name 指定且该项目有 .skills.json，则只注入该项目启用的 skill。"""
     global _injection_cache
     cfg_mtime = os.path.getmtime(_CONFIG_PATH) if os.path.isfile(_CONFIG_PATH) else 0
-    if _injection_cache and _injection_cache[0] == cfg_mtime:
+    allowed = _load_project_skills(project_name)
+    cache_key = (cfg_mtime, project_name, tuple(allowed) if allowed else None)
+    if _injection_cache and _injection_cache[0] == cache_key:
         return _injection_cache[1]
 
     roots = _load_config()
     if not roots:
-        _injection_cache = (cfg_mtime, None)
+        _injection_cache = (cache_key, None)
         return None
 
     skills = _discover_skills(roots)
+    if allowed is not None:
+        allowed_set = set(allowed)
+        skills = [sk for sk in skills if sk.get("name") in allowed_set]
     if not skills:
-        _injection_cache = (cfg_mtime, None)
+        _injection_cache = (cache_key, None)
         return None
 
     lines = [
@@ -168,7 +196,7 @@ def _build_injection():
         lines.append("")
     lines.append("---")
     text = "\n".join(lines)
-    _injection_cache = (cfg_mtime, text)
+    _injection_cache = (cache_key, text)
     return text
 
 
@@ -176,7 +204,13 @@ if hooks:
     @hooks.register("agent_before")
     def inject_skills_index(ctx):
         """每个用户轮起始时，把 skill 索引追加到 user message。"""
-        text = _build_injection()
+        project_name = None
+        try:
+            import plugins.project_mode as _pm
+            project_name = _pm._active_project(ctx)
+        except Exception:
+            pass
+        text = _build_injection(project_name)
         if not text:
             return
         um = next((m for m in reversed(ctx.get("messages") or [])

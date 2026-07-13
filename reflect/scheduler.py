@@ -122,9 +122,12 @@ def check():
         ts = now.strftime('%Y-%m-%d_%H%M')
         rpt = os.path.join(DONE, f'{ts}_{tid}.md')
         prompt = task.get('prompt', '')
+        model = task.get('model', '')
+        model_tag = f'[MODEL:{model}]\n' if model else ''
         return (f'[定时任务] {tid}\n'
                 f'[报告路径] {rpt}\n\n'
                 f'先读 scheduled_task_sop 了解执行流程，然后执行以下任务：\n\n'
+                f'{model_tag}'
                 f'{prompt}\n\n'
                 f'完成后将执行报告写入 {rpt}。')
 

@@ -189,6 +189,38 @@ def init():
 
 agent = init()
 
+# per-project 独立 agent 工厂：@st.cache_resource 按 name 缓存（不同 project 真并发，同 project 串行）。
+# 设 3 属性激活 GA 核心已预留的 project 机制，无需改 agentmain.py：
+#   _ga_project_mode_name          → project_mode.py:112 agent_before hook 每轮自动注入 _build_injection(name)
+#   _ga_project_mode_workspace_path → agentmain.py:167-169 handler.cwd 切到项目目录（code_run 在项目目录执行）
+#   log_path                       → agentmain.py:177 llmclient.log_path 写项目日志
+_PROJECTS_ROOT = os.path.join(script_dir, '..', 'temp', 'projects')  # 与 project_mode._project_dir 一致：GA根/temp/projects
+@st.cache_resource
+def get_project_agent(name):
+    """按 project name 缓存独立 GenericAgent 实例。各实例独立 history/queue/llmclient/run 线程，天然隔离+真并发。"""
+    ag = GeneraticAgent()
+    if ag.llmclient is None:
+        st.error("⚠️ Please set mykey.py!"); st.stop()
+    pdir = os.path.join(_PROJECTS_ROOT, name)
+    os.makedirs(os.path.join(pdir, 'sessions'), exist_ok=True)
+    mem = os.path.join(pdir, 'project_memory.md')
+    if not os.path.isfile(mem): open(mem, 'w', encoding='utf-8').close()
+    ag._ga_project_mode_name = name           # [?3]C hook 自动注入（覆盖续轮，stapp 零注入逻辑）
+    ag._ga_project_mode_workspace_path = pdir # [?2] workspace cwd 隔离
+    ag.log_path = os.path.join(pdir, 'sessions', f'{name}.log')  # [?2] 日志隔离
+    threading.Thread(target=ag.run, daemon=True).start()
+    return ag
+
+
+def _current_agent():
+    """返回当前会话应使用的 agent：project 模式返回对应 project agent，否则全局 agent。
+    session_state 是 per-tab 的，不同 tab 选不同 project → 不同 agent 实例 → 真并发隔离。"""
+    name = st.session_state.get('project_name')
+    if name:
+        return get_project_agent(name)
+    return agent
+
+
 def build_prompt(objective):
     return f"""读取 {agent.log_path} 尾部，获取 agent 的最新输出。
 用户的 loop 诉求：<objective>{objective}</objective>
@@ -351,6 +383,25 @@ st.session_state.setdefault('autonomous_enabled', False)
 @st.fragment
 def render_sidebar():
     st.session_state.setdefault('autonomous_enabled', False)
+    # ── 项目模式入口：扫描 temp/projects/ 子目录，"普通聊天"=None ──
+    st.session_state.setdefault('project_name', None)
+    _proj_dirs = []
+    if os.path.isdir(_PROJECTS_ROOT):
+        _proj_dirs = sorted(d for d in os.listdir(_PROJECTS_ROOT)
+                            if os.path.isdir(os.path.join(_PROJECTS_ROOT, d)))
+    _proj_opts = [None] + _proj_dirs
+    _proj_labels = {None: "💬 普通聊天"}
+    _proj_labels.update({d: f"📁 {d}" for d in _proj_dirs})
+    _sel = st.selectbox("会话模式", _proj_opts,
+                        index=_proj_opts.index(st.session_state.project_name) if st.session_state.project_name in _proj_opts else 0,
+                        format_func=_proj_labels.get, key="sidebar_project_select")
+    if _sel != st.session_state.project_name:
+        st.session_state.project_name = _sel
+        st.session_state.display_queue = None  # 切换会话：清空进行中的 dq，避免串台
+        st.rerun(scope="app")
+    st.divider()
+    # ── 局部遮蔽：project 模式下 sidebar 所有 agent.* 指向 project_agent ──
+    agent = _current_agent()
     llm_options = agent.list_llms()
     current_idx = agent.llm_no
     llm_labels = {idx: f"{idx}: {(name or '').strip()}" for idx, name, _ in llm_options}
@@ -472,7 +523,7 @@ def agent_backend_stream(prompt=None):
     Per-chunk progress is mirrored to session_state.partial_response so the rendered
     bubble survives reruns. No implicit agent.abort() — explicit stop is on the Stop button."""
     if prompt is not None:
-        st.session_state.display_queue = agent.put_task(prompt, source="user")
+        st.session_state.display_queue = _current_agent().put_task(prompt, source="user")
         st.session_state.partial_response = ''
     dq = st.session_state.get('display_queue')
     if dq is None: return
@@ -497,7 +548,7 @@ def agent_backend_stream(prompt=None):
                 st.session_state.partial_response = ''
                 yield item['done']; break
     finally:
-        agent.abort()
+        _current_agent().abort()
         try:
             st.session_state.display_queue = None
             st.session_state.partial_response = ''
@@ -572,8 +623,10 @@ if prompt:
         st.session_state.current_prompt = ""
         st.session_state.last_reply_time = int(time.time())
         st.rerun()
+    # project 模式分流：slash 命令作用于当前 project agent（而非全局 agent）
+    ag = _current_agent()
     if cmd == "/new":
-        st.session_state.messages = [{"role": "assistant", "content": reset_conversation(agent), "time": ts}]
+        st.session_state.messages = [{"role": "assistant", "content": reset_conversation(ag), "time": ts}]
         _reset_and_rerun()
     if cmd.startswith("/continue"):
         m = re.match(r'/continue\s+(\d+)\s*$', cmd.strip())
@@ -581,14 +634,14 @@ if prompt:
         idx = int(m.group(1)) - 1 if m else -1
         # Resolve target path BEFORE handle (which snapshots current log, shifting indices).
         target = sessions[idx][0] if 0 <= idx < len(sessions) else None
-        result = handle_frontend_command(agent, cmd)
+        result = handle_frontend_command(ag, cmd)
         history = extract_ui_messages(target) if target and result.startswith('✅') else None
         tail = [{"role": "assistant", "content": result, "time": ts}]
         if history: st.session_state.messages = history + tail
         else: st.session_state.messages = list(st.session_state.messages)+[{"role": "user", "content": cmd, "time": ts}]+tail
         _reset_and_rerun()
     if cmd.startswith("/btw"):
-        answer = btw_handle_frontend(agent, cmd)  # sync; bypasses put_task → main agent.run() untouched
+        answer = btw_handle_frontend(ag, cmd)  # sync; bypasses put_task → main agent.run() untouched
         st.session_state.messages = list(st.session_state.messages) + [
             {"role": "user", "content": prompt, "time": ts},
             {"role": "assistant", "content": answer, "time": ts},
@@ -606,11 +659,11 @@ if prompt:
                 "- `/export all` — 显示完整对话日志路径"
             )
         elif sub_lower == "all":
-            log = agent.log_path
+            log = ag.log_path
             result = (f"📂 完整对话日志:\n\n`{log}`" if os.path.isfile(log)
                       else f"❌ 当前会话尚无日志文件")
         else:
-            text = last_assistant_text(agent)
+            text = last_assistant_text(ag)
             if not text:
                 result = "❌ 还没有模型回复可导出"
             elif sub_lower in ("clip", "copy"):
@@ -629,7 +682,7 @@ if prompt:
     # Regular prompt: any in-flight task will be aborted by the finally block in
     # agent_backend_stream when StopException interrupts the prior generator.
     st.session_state.messages.append({"role": "user", "content": prompt})
-    if hasattr(agent, '_pet_req') and not prompt.startswith('/'): agent._pet_req('state=walk')
+    if hasattr(ag, '_pet_req') and not prompt.startswith('/'): ag._pet_req('state=walk')
     with st.chat_message("user"): st.markdown(prompt)
     render_main_stream(prompt)
 elif st.session_state.get('display_queue') is not None:

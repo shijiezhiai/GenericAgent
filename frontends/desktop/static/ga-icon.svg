@@ -1,0 +1,46 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 品牌暖橙渐变 -->
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFB35C"/>
+      <stop offset="55%" stop-color="#FF8E5C"/>
+      <stop offset="100%" stop-color="#FF7A59"/>
+    </linearGradient>
+    <!-- 高光渐变 -->
+    <linearGradient id="hl" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.25"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <!-- 裁剪 -->
+    <clipPath id="roundClip">
+      <rect x="0" y="0" width="512" height="512" rx="108" ry="108"/>
+    </clipPath>
+  </defs>
+  
+  <!-- 圆角方形背景 -->
+  <rect x="0" y="0" width="512" height="512" rx="108" ry="108" fill="url(#brandGrad)"/>
+  <!-- 顶部高光 -->
+  <rect x="0" y="0" width="512" height="512" rx="108" ry="108" fill="url(#hl)"/>
+  
+  <!-- 白色G字母 - 几何风 -->
+  <!-- G由弧形+横杠组成，居中偏左，右侧留空间给节点 -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round">
+    <!-- G的外弧: 从右上开始，顺时针绕到左下 -->
+    <path d="M 330 165 
+             A 100 100 0 1 0 330 347
+             L 330 256
+             L 282 256"/>
+  </g>
+  
+  <!-- 右侧"节点+连接"意象，代表Agent自主行动/技能树 -->
+  <g>
+    <!-- 中心节点 -->
+    <circle cx="372" cy="256" r="18" fill="#FFFFFF"/>
+    <!-- 连接线 -->
+    <line x1="372" y1="256" x2="420" y2="200" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" opacity="0.85"/>
+    <line x1="372" y1="256" x2="420" y2="312" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" opacity="0.85"/>
+    <!-- 分支节点 -->
+    <circle cx="420" cy="200" r="11" fill="#FFFFFF" opacity="0.9"/>
+    <circle cx="420" cy="312" r="11" fill="#FFFFFF" opacity="0.9"/>
+  </g>
+</svg>

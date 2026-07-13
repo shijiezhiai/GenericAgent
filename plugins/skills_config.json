@@ -1,5 +1,9 @@
 {
-  "skills_roots": ["/Users/mayangyang/code/bilibili/flink-skills"],
+  "skills_roots": [
+    "/Users/mayangyang/code/ai/GenericAgent/skills_external/ponytail",
+    "/Users/mayangyang/code/ai/GenericAgent/skills_external/open-codex-computer-use",
+    "/Users/mayangyang/code/ai/GenericAgent/skills_external/bili-gitlab-pipeline"
+  ],
   "plugin_dirs": [],
   "enabled": true
 }

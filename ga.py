@@ -22,13 +22,20 @@ def code_run(code, code_type="python", timeout=60, cwd=None, code_cwd=None, stop
     yield f"[Action] Running {code_type} in {os.path.basename(cwd)}: {preview}\n"
     cwd = cwd or os.path.join(script_dir, 'temp'); tmp_path = None
     if code_type in ["python", "py"]:
-        tmp_file = tempfile.NamedTemporaryFile(suffix=".ai.py", delete=False, mode='w', encoding='utf-8', dir=code_cwd)
+        tmp_dir = code_cwd
+        # FDA/TCC 写限制: workspace 可能不可写, 临时脚本文件 fallback 到 GA temp
+        try:
+            tmp_file = tempfile.NamedTemporaryFile(suffix=".ai.py", delete=False, mode='w', encoding='utf-8', dir=tmp_dir)
+            tmp_file.close()
+        except (PermissionError, OSError):
+            tmp_dir = os.path.join(script_dir, 'temp')
+            tmp_file = tempfile.NamedTemporaryFile(suffix=".ai.py", delete=False, mode='w', encoding='utf-8', dir=tmp_dir)
         cr_header = os.path.join(script_dir, 'assets', 'code_run_header.py')
         if os.path.exists(cr_header): tmp_file.write(open(cr_header, encoding='utf-8').read())
         tmp_file.write(code)
         tmp_path = tmp_file.name
         tmp_file.close()
-        cmd = [sys.executable, "-X", "utf8", "-u", tmp_path]   
+        cmd = [sys.executable, "-X", "utf8", "-u", tmp_path]
     elif code_type in ["powershell", "bash", "sh", "shell", "ps1", "pwsh"]:
         if os.name == 'nt':
             _ps = "pwsh" if shutil.which("pwsh") else "powershell"
@@ -515,7 +522,7 @@ class GenericAgentHandler(BaseHandler):
 - **复杂任务经验**（关键坑点/前置条件/重要步骤）→ L3 精简 SOP（只记你被坑得多次重试的核心要点）
 **禁止**：临时变量、具体推理过程、未验证信息、通用常识、你可以轻松复现的细节、只是做了但没有验证的信息
 **操作**：严格遵循提供的L0的记忆更新SOP。先 `file_read` 看现有 → 判断类型 → 最小化更新 → 无新内容跳过，保证对记忆库最小局部修改。\n
-''' + get_global_memory()
+''' + get_global_memory(getattr(self, 'cwd', None))
         yield "[Info] Start distilling good memory for long-term storage.\n"
         path = './memory/memory_management_sop.md'
         if os.path.exists(path): result = 'This is L0:\n' + file_read(path, show_linenos=False)
@@ -566,7 +573,7 @@ class GenericAgentHandler(BaseHandler):
             next_prompt += f"\n\n[SYSTEM] Turn {turn}. Call update_working_checkpoint to save key context. Stop ineffective retries; if no progress, switch strategy: 1) Probe physical boundaries 2) **Re-read relevant SOPs**"
         elif turn % 25 == 0:
             next_prompt += f"\n\n[SYSTEM] Turn {turn}. Write checkpoints/key findings/tried approaches to a **file** for future reference (not only working_checkpoint!). Avoid losing critical info."
-        elif turn % 10 == 0: next_prompt += get_global_memory()
+        elif turn % 10 == 0: next_prompt += get_global_memory(getattr(self, 'cwd', None))
 
         if _plan and turn >= 10 and turn % 5 == 0:
             next_prompt = f"[Plan Hint] 正在计划模式。必须 file_read({_plan}) 确认当前步骤，回复开头引用：📌 当前步骤：...\n\n" + next_prompt
@@ -580,13 +587,14 @@ class GenericAgentHandler(BaseHandler):
         for hook in list(getattr(self.parent, '_turn_end_hooks', {}).values()): hook(locals())  # current readonly
         return next_prompt
 
-def get_global_memory():
+def get_global_memory(cwd=None):
     prompt = "\n"
     try:
         suffix = '_en' if os.environ.get('GA_LANG', '') == 'en' else ''
         with open(os.path.join(script_dir, 'memory/global_mem_insight.txt'), 'r', encoding='utf-8', errors='replace') as f: insight = f.read()
         with open(os.path.join(script_dir, f'assets/insight_fixed_structure{suffix}.txt'), 'r', encoding='utf-8') as f: structure = f.read()
-        prompt += f'cwd = {os.path.join(script_dir, "temp")} (./)\n'
+        _cwd = cwd or os.path.join(script_dir, 'temp')
+        prompt += f'cwd = {_cwd} (./)\n'
         prompt += f"\n[Memory] (../memory)\n"
         prompt += structure + '\n../memory/global_mem_insight.txt:\n'
         prompt += insight + "\n"

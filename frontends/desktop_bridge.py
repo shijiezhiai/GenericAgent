@@ -39,7 +39,7 @@ from __future__ import annotations
 import asyncio, atexit, contextlib, importlib, json, os, re, subprocess, sys
 from datetime import datetime
 from collections import Counter, deque
-import threading, time, traceback, uuid
+import threading, time, traceback, uuid, hmac
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
@@ -101,6 +101,7 @@ class Session:
     plan_scan_baseline: int = 0
     plan_path: str = ""
     workspace: str = ""
+    project: str = ""
     llm_history: Optional[List[dict]] = None
 
 
@@ -156,6 +157,7 @@ class AgentManager:
                                 "plan_scan_baseline": s.plan_scan_baseline,
                                 "plan_path": s.plan_path or "",
                                 "workspace": s.workspace or "",
+                                "project": s.project or "",
                                 "llm_history": llm_hist})
             self._sessions_file.write_text(json.dumps(arr, ensure_ascii=False, default=str), encoding="utf-8")
         except Exception as e:
@@ -180,6 +182,7 @@ class AgentManager:
                                plan_path=_sanitize_desktop_plan_path(
                                    item["id"], item.get("plan_path") or ""),
                                workspace=item.get("workspace", ""),
+                               project=item.get("project", ""),
                                status="idle", agent=None,
                                llm_history=item.get("llm_history"))
                 self.sessions[sess.id] = sess
@@ -187,6 +190,247 @@ class AgentManager:
                 self.active_session_id = max(self.sessions.values(), key=lambda s: s.updated_at).id
         except Exception as e:
             print(f"[bridge] load sessions failed: {e}", file=sys.stderr)
+
+    def _datasources_file(self):
+        return Path(self.ga_root) / "temp" / "desktop_datasources.json"
+
+    def _project_dir(self, project_name: str) -> Path:
+        return Path(self.ga_root) / "temp" / "projects" / str(project_name or "")
+
+    def _project_datasources_file(self, project_name: str) -> Path:
+        return self._project_dir(project_name) / ".datasources.json"
+
+    def _project_events_file(self, project_name: str) -> Path:
+        return self._project_dir(project_name) / ".events.jsonl"
+
+    def _load_datasources(self) -> Dict[str, Any]:
+        try:
+            f = self._datasources_file()
+            if not f.exists():
+                return {}
+            return json.loads(f.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"[bridge] load datasources failed: {e}", file=sys.stderr)
+            return {}
+
+    def _save_datasources(self, d: Dict[str, Any]):
+        try:
+            f = self._datasources_file()
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(json.dumps(d, ensure_ascii=False, default=str), encoding="utf-8")
+        except Exception as e:
+            print(f"[bridge] save datasources failed: {e}", file=sys.stderr)
+
+    def _load_project_datasource_ids(self, project_name: str) -> list:
+        try:
+            f = self._project_datasources_file(project_name)
+            if not f.exists():
+                return []
+            data = json.loads(f.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                return [str(x).strip() for x in data if str(x).strip()]
+            return []
+        except Exception:
+            return []
+
+    def _save_project_datasource_ids(self, project_name: str, ids: list) -> None:
+        f = self._project_datasources_file(project_name)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        clean, seen = [], set()
+        for x in ids or []:
+            s = str(x).strip()
+            if s and s not in seen:
+                clean.append(s)
+                seen.add(s)
+        f.write_text(json.dumps(clean, ensure_ascii=False), encoding="utf-8")
+
+    # ── 项目待办 (todos) 持久化 ──────────────────────────────
+    def _project_todos_file(self, project_name: str) -> Path:
+        return self._project_dir(project_name) / ".todos.json"
+
+    def _load_todos(self, project_name: str) -> list:
+        try:
+            f = self._project_todos_file(project_name)
+            if not f.exists():
+                return []
+            data = json.loads(f.read_text(encoding="utf-8"))
+            return data if isinstance(data, list) else []
+        except Exception as e:
+            print(f"[bridge] load todos failed: {e}", file=sys.stderr)
+            return []
+
+    def _save_todos(self, project_name: str, items: list) -> None:
+        f = self._project_todos_file(project_name)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(items, ensure_ascii=False, default=str), encoding="utf-8")
+
+    def list_todos(self, project_name: str) -> list:
+        return self._load_todos(project_name)
+
+    def create_todo(self, project_name: str, data: dict) -> dict:
+        import time, secrets
+        items = self._load_todos(project_name)
+        now = int(time.time())
+        status = str(data.get("status") or "todo")
+        if status not in ("todo", "doing", "pause", "done"):
+            status = "todo"
+        item = {
+            "id": "td_" + str(now) + "_" + secrets.token_hex(3),
+            "title": str(data.get("title", "")).strip()[:500],
+            "desc": str(data.get("desc", "")).strip()[:8000],
+            "status": status,
+            "assignee": str(data.get("assignee", "")).strip()[:100],
+            "due": str(data.get("due", "")).strip()[:20],
+            "createdAt": now,
+            "updatedAt": now,
+        }
+        items.append(item)
+        self._save_todos(project_name, items)
+        return item
+
+    def update_todo(self, project_name: str, tid: str, data: dict) -> dict:
+        import time
+        items = self._load_todos(project_name)
+        for it in items:
+            if it.get("id") == tid:
+                if "title" in data:
+                    it["title"] = str(data["title"]).strip()[:500]
+                if "desc" in data:
+                    it["desc"] = str(data["desc"]).strip()[:8000]
+                if "status" in data:
+                    s = str(data["status"])
+                    if s in ("todo", "doing", "pause", "done"):
+                        it["status"] = s
+                if "assignee" in data:
+                    it["assignee"] = str(data["assignee"]).strip()[:100]
+                if "due" in data:
+                    it["due"] = str(data["due"]).strip()[:20]
+                it["updatedAt"] = int(time.time())
+                self._save_todos(project_name, items)
+                return it
+        return {}
+
+    def delete_todo(self, project_name: str, tid: str) -> bool:
+        items = self._load_todos(project_name)
+        before = len(items)
+        items = [it for it in items if it.get("id") != tid]
+        if len(items) < before:
+            self._save_todos(project_name, items)
+            return True
+        return False
+
+    def bind_project_datasource(self, project_name: str, dsid: str) -> list:
+        ids = self._load_project_datasource_ids(project_name)
+        if dsid not in ids:
+            ids.append(dsid)
+            self._save_project_datasource_ids(project_name, ids)
+        return ids
+
+    def unbind_datasource_from_projects(self, dsid: str) -> None:
+        base = Path(self.ga_root) / "temp" / "projects"
+        if not base.exists():
+            return
+        for pdir in base.iterdir():
+            if not pdir.is_dir():
+                continue
+            f = pdir / ".datasources.json"
+            if not f.exists():
+                continue
+            try:
+                ids = json.loads(f.read_text(encoding="utf-8"))
+                if not isinstance(ids, list) or dsid not in ids:
+                    continue
+                ids = [str(x).strip() for x in ids if str(x).strip() and str(x).strip() != dsid]
+                if ids:
+                    f.write_text(json.dumps(ids, ensure_ascii=False), encoding="utf-8")
+                else:
+                    f.unlink()
+            except Exception:
+                continue
+
+    def list_project_datasources(self, project_name: str) -> list:
+        ids = self._load_project_datasource_ids(project_name)
+        all_ds = self._load_datasources()
+        return [all_ds[dsid] for dsid in ids if dsid in all_ds]
+
+    def append_project_event(self, project_name: str, event: dict) -> Optional[dict]:
+        pdir = self._project_dir(project_name)
+        if not pdir.is_dir():
+            return None
+        out = dict(event)
+        out["project_name"] = project_name
+        f = self._project_events_file(project_name)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        with f.open("a", encoding="utf-8") as fp:
+            fp.write(json.dumps(out, ensure_ascii=False) + "\n")
+        return out
+
+    def create_datasource(self, data: dict) -> dict:
+        dsid = "ds_" + uuid.uuid4().hex[:12]
+        project = str(data.get("project") or "").strip()
+        dstype = str(data.get("type") or "gitlab").strip() or "gitlab"
+        default_names = {
+            "gitlab": "GitLab",
+            "github": "GitHub",
+            "cnb": "CNB",
+            "tapd": "TAPD",
+        }
+        default_events = {
+            "gitlab": ["issue_open", "issue_update", "merge_request_open", "merge_request_update"],
+            "github": ["issues_opened", "issues_edited", "pull_request_opened", "pull_request_edited"],
+            "cnb": [],
+            "tapd": [],
+        }
+        ds = {
+            "id": dsid,
+            "type": dstype,
+            "name": data.get("name", default_names.get(dstype, "Datasource")),
+            "events": data.get("events") or default_events.get(dstype, []),
+            "secret": (data.get("secret") or "").strip() or uuid.uuid4().hex,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "event_log": [],
+            "project": project,
+        }
+        with self.lock:
+            d = self._load_datasources()
+            d[dsid] = ds
+            self._save_datasources(d)
+            if project:
+                self.bind_project_datasource(project, dsid)
+        return ds
+
+    def list_datasources(self) -> list:
+        with self.lock:
+            return list(self._load_datasources().values())
+
+    def get_datasource(self, dsid: str) -> Optional[dict]:
+        with self.lock:
+            return self._load_datasources().get(dsid)
+
+    def delete_datasource(self, dsid: str) -> bool:
+        with self.lock:
+            d = self._load_datasources()
+            if dsid not in d:
+                return False
+            del d[dsid]
+            self._save_datasources(d)
+            self.unbind_datasource_from_projects(dsid)
+            return True
+
+    def append_datasource_event(self, dsid: str, event: dict) -> Optional[dict]:
+        with self.lock:
+            d = self._load_datasources()
+            ds = d.get(dsid)
+            if ds is None:
+                return None
+            ds.setdefault("event_log", []).append(event)
+            if len(ds["event_log"]) > 200:  # ponytail: keep last 200, split store if volume matters
+                ds["event_log"] = ds["event_log"][-200:]
+            self._save_datasources(d)
+            project = str(ds.get("project") or "").strip()
+            if project:
+                self.append_project_event(project, {**event, "datasource_id": dsid, "datasource_name": ds.get("name", "")})
+            return ds
 
     def _mykey_file(self) -> Path:
         p = Path(self.ga_root) / "mykey.py"
@@ -384,6 +628,19 @@ class AgentManager:
             agent = GA()
             agent.inc_out = True
             agent.verbose = True
+            # 桌面端 workspace 绑定在 sess.workspace(名字)，需把真实 path 同步到 agent，
+            # 供 agentmain 每轮创建 handler 时设 handler.cwd（code_run/bash 执行目录）
+            _ws_name = getattr(sess, 'workspace', '') or ''
+            if _ws_name:
+                try:
+                    _ws_ent = workspace_cmd.registry_load().get(_ws_name) or {}
+                    _ws_path = _ws_ent.get('path', '')
+                    if _ws_path and os.path.isdir(_ws_path):
+                        agent._ga_project_mode_workspace_path = _ws_path
+                except Exception:
+                    pass
+            if sess.project:
+                agent._ga_project_mode_name = sess.project
             threading.Thread(target=agent.run, daemon=True, name=f"GA-{sess.id}").start()
             return agent
         finally:
@@ -557,6 +814,7 @@ class AgentManager:
             "untitled": sess.untitled,
             "model": self._live_model(sess),
             "workspace": sess.workspace or "",
+            "project": sess.project or "",
             "branch": self._workspace_branch(sess.workspace) if sess.workspace else "",
         }
         if include_messages:
@@ -575,11 +833,11 @@ class AgentManager:
         self._persist()
         return msg
 
-    def create_session(self, cwd: Optional[str] = None) -> Session:
+    def create_session(self, cwd: Optional[str] = None, project: Optional[str] = None) -> Session:
         sid = "sess-" + uuid.uuid4().hex[:12]
         if not cwd:
             cwd = str(resolve_chat_files_dir(self.ga_root))
-        sess = Session(id=sid, cwd=str(cwd or self.ga_root))
+        sess = Session(id=sid, cwd=str(cwd or self.ga_root), project=project or "")
         with self.lock:
             self.sessions[sid] = sess
             self.active_session_id = sid
@@ -783,6 +1041,84 @@ class AgentManager:
                 "sessionId": sid,
                 "plan": plan_state.desktop_plan_payload_from_session(sess, self.ga_root),
             }
+
+    def suggest(self, sid: str) -> dict:
+        """根据最近对话生成 1-3 条下一步建议。在锁内取 agent 引用，锁外执行 LLM 调用。"""
+        with self.lock:
+            sess = self.sessions.get(sid)
+            if not sess:
+                raise web.HTTPNotFound(text=json.dumps({"error": f"session not found: {sid}"}, ensure_ascii=False), content_type="application/json")
+            agent = getattr(sess, "agent", None)
+            recent = [m for m in sess.messages[-12:] if m.get("role") in ("user", "assistant")]
+        # 会话结束后 agent 可能已被释放（从磁盘加载的会话 agent=None）。
+        # 临时创建一个 agent 用于生成建议，复用 restore_context 的 history 注入逻辑。
+        if not agent or not getattr(agent, "llmclient", None):
+            try:
+                agent = self.make_agent(sess)
+                if sess.llm_history:
+                    try: agent.llmclient.backend.history = sess.llm_history
+                    except Exception: pass
+                else:
+                    history = []
+                    for m in sess.messages:
+                        role = m.get("role"); content = m.get("content", "")
+                        if role == "user":
+                            history.append({"role": "user", "content": [{"type": "text", "text": content}]})
+                        elif role == "assistant":
+                            history.append({"role": "assistant", "content": [{"type": "text", "text": content}]})
+                    if history:
+                        try: agent.llmclient.backend.history = history
+                        except Exception: pass
+                sess.agent = agent
+            except Exception as e:
+                return {"suggestions": [], "error": f"failed to create agent: {e}"}
+        if len(recent) < 2:
+            return {"suggestions": []}
+        # 构建最近对话摘要
+        conv_snippets = []
+        for m in recent:
+            role = "用户" if m["role"] == "user" else "助手"
+            text = ""
+            content = m.get("content", "")
+            if isinstance(content, str):
+                text = content
+            elif isinstance(content, list):
+                text = " ".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+            text = text.strip()[:600]
+            if text:
+                conv_snippets.append(f"{role}: {text}")
+        conv = "\n".join(conv_snippets[-8:])
+        if not conv.strip():
+            return {"suggestions": []}
+        sys_prompt = (
+            "你是对话助手。根据以下最近对话，推测用户接下来可能想问的 1-3 个问题或指令。"
+            "要求：简短自然（中文，每条不超过 20 字）、与当前对话相关、是用户可能直接想做的事。"
+            "只输出建议，每行一条，不要编号，不要多余解释。\n\n"
+            f"最近对话:\n{conv}\n\n建议:"
+        )
+        try:
+            client = agent.llmclient
+            backend = client.backend
+            saved_history = list(getattr(backend, "history", []))
+            gen = client.chat([{"role": "user", "content": sys_prompt}])
+            resp = None
+            try:
+                while True:
+                    next(gen)
+            except StopIteration as e:
+                resp = e.value
+            result_text = (getattr(resp, "content", "") or "").strip()
+        except Exception as e:
+            import traceback as _tb
+            try: open("/tmp/suggest_debug.log","a").write("[ask] "+_tb.format_exc()+"\n\n")
+            except Exception: pass
+            return {"suggestions": [], "error": str(e)}
+        finally:
+            try: backend.history = saved_history
+            except Exception: pass
+        suggestions = [s.strip().lstrip("0123456789.-、） )").strip() for s in result_text.splitlines()]
+        suggestions = [s for s in suggestions if s and len(s) <= 60][:3]
+        return {"suggestions": suggestions}
 
     def cancel(self, sid: str) -> dict:
         with self.lock:
@@ -1393,6 +1729,111 @@ async def read_json(request) -> dict:
     return {}
 
 
+def webhook_base(request) -> str:
+    """webhook URL 的 host 部分。优先用环境变量 WEBHOOK_BASE_URL（对外可达地址，
+    如 http://10.23.230.9:14168），否则回退 request.host（本机访问时是 localhost）。
+    对外暴露(BRIDGE_HOST=0.0.0.0)时必须设 WEBHOOK_BASE_URL，否则界面显示 localhost 无法填入 GitLab。"""
+    base = os.environ.get("WEBHOOK_BASE_URL", "").strip().rstrip("/")
+    return base if base else request.host
+
+
+# ---- Data sources (webhook-based integrations, e.g. GitLab) ----
+
+async def datasources_handler(request):
+    if request.method == "GET":
+        project = (request.query.get("project") or "").strip()
+        items = manager.list_project_datasources(project) if project else manager.list_datasources()
+        for it in items:
+            it["webhook_url"] = f"http://{webhook_base(request)}/datasources/{it['id']}/webhook"
+        return json_ok({"datasources": items})
+    data = await read_json(request)
+    dstype = (data.get("type") or "").strip()
+    if dstype not in ("gitlab", "github", "cnb", "tapd"):
+        return web.json_response({"error": "invalid type"}, status=400, headers=cors_headers())
+    project = str(data.get("project") or "").strip()
+    if project and (not manager._project_dir(project).is_dir()):
+        return web.json_response({"error": "project not found", "project": project}, status=404, headers=cors_headers())
+    ds = manager.create_datasource(data)
+    ds["webhook_url"] = f"http://{webhook_base(request)}/datasources/{ds['id']}/webhook"
+    return json_ok({"datasource": ds}, status=201)
+
+
+async def datasource_detail_handler(request):
+    dsid = request.match_info.get("dsid", "")
+    if request.method == "DELETE":
+        return json_ok({"deleted": manager.delete_datasource(dsid)})
+    ds = manager.get_datasource(dsid)
+    if ds is None:
+        return web.json_response({"error": "not found"}, status=404, headers=cors_headers())
+    ds["webhook_url"] = f"http://{webhook_base(request)}/datasources/{ds['id']}/webhook"
+    return json_ok({"datasource": ds})
+
+
+async def datasource_webhook_handler(request):
+    dsid = request.match_info.get("dsid", "")
+    ds = manager.get_datasource(dsid)
+    if ds is None:
+        return web.json_response({"error": "not found"}, status=404, headers=cors_headers())
+    raw_body = await request.read()
+    secret = ds.get("secret", "")
+    dstype = str(ds.get("type") or "gitlab").strip() or "gitlab"
+    if secret:
+        if dstype == "github":
+            sig = request.headers.get("X-Hub-Signature-256", "")
+            expected = "sha256=" + hmac.new(secret.encode("utf-8"), raw_body, "sha256").hexdigest()
+            if not sig or not hmac.compare_digest(sig, expected):  # ponytail: constant-time compare at trust boundary
+                return web.json_response({"error": "invalid signature"}, status=403, headers=cors_headers())
+        else:
+            token = request.headers.get("X-Gitlab-Token", "")
+            if not hmac.compare_digest(token, secret):  # ponytail: constant-time compare at trust boundary
+                return web.json_response({"error": "invalid token"}, status=403, headers=cors_headers())
+    try:
+        payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+    except Exception:
+        payload = {}
+    monitored = set(ds.get("events", []))
+    kind = ""
+    action = ""
+    event = None
+    if dstype == "github":
+        kind = str(request.headers.get("X-GitHub-Event", "") or payload.get("hook", {}).get("type", "") or "")
+        action = str(payload.get("action", "") or "")
+        evt_key = f"{kind}_{action}" if kind and action else kind
+        repo = payload.get("repository") or {}
+        sender = payload.get("sender") or {}
+        item = payload.get("issue") or payload.get("pull_request") or {}
+        if evt_key and evt_key in monitored:
+            event = {
+                "ts": datetime.now().isoformat(timespec="seconds"),
+                "kind": kind,
+                "action": action,
+                "iid": item.get("number") or payload.get("number"),
+                "title": item.get("title", ""),
+                "url": item.get("html_url") or repo.get("html_url", ""),
+                "author": sender.get("login", ""),
+                "project": repo.get("html_url", ""),
+            }
+    else:
+        kind = str(payload.get("object_kind", "") or "")
+        obj = payload.get("object_attributes", {}) or {}
+        action = str(obj.get("action", "") or "")
+        evt_key = f"{kind}_{action}" if kind and action else ""
+        if evt_key and evt_key in monitored:
+            event = {
+                "ts": datetime.now().isoformat(timespec="seconds"),
+                "kind": kind,
+                "action": action,
+                "iid": obj.get("iid"),
+                "title": obj.get("title", ""),
+                "url": obj.get("url", ""),
+                "author": (payload.get("user") or {}).get("name", ""),
+                "project": (payload.get("project") or {}).get("web_url", ""),
+            }
+    if event:
+        manager.append_datasource_event(dsid, event)
+    return json_ok({"received": True, "kind": kind, "action": action})
+
+
 async def status_handler(request):
     return json_ok({
         "ok": True,
@@ -1516,7 +1957,7 @@ async def list_sessions_handler(request):
 
 async def new_session_handler(request):
     data = await read_json(request)
-    sess = manager.create_session(cwd=data.get("cwd") or data.get("path"))
+    sess = manager.create_session(cwd=data.get("cwd") or data.get("path"), project=data.get("project"))
     return json_ok({"ok": True, "sessionId": sess.id, "session": manager.snapshot(sess)}, status=201)
 
 
@@ -1581,9 +2022,344 @@ async def restore_handler(request):
     return json_ok(manager.restore_context(sid))
 
 
+def _apply_project_workspace(pdir, ws_name, ws_path):
+    """为项目绑定 workspace。
+    - ws_name 非空：使用已有 workspace（校验存在于 registry）
+    - ws_path 非空：新建 workspace（调用 workspace_cmd.prepare）
+    - 两者皆空：清除绑定（删除 .workspace.json）
+    返回 {"workspace": name} 或 {"error": msg}
+    """
+    ws_file = os.path.join(pdir, '.workspace.json')
+    # 新建 workspace
+    if ws_path:
+        try:
+            r = workspace_cmd.prepare(ws_path)
+        except Exception as e:
+            return {"error": f"workspace prepare 失败: {e}"}
+        if not r.get("ok"):
+            return {"error": r.get("error", "workspace prepare 失败")}
+        ws_name = r.get("name", "")
+    if ws_name:
+        try:
+            with open(ws_file, 'w', encoding='utf-8') as f:
+                json.dump({"workspace": ws_name}, f, ensure_ascii=False)
+        except OSError:
+            pass
+        return {"workspace": ws_name}
+    # 清除绑定
+    try:
+        if os.path.isfile(ws_file):
+            os.remove(ws_file)
+    except OSError:
+        pass
+    return {"workspace": ""}
+
+
+async def projects_list_handler(request):
+    """列出 temp/projects/ 下所有项目目录（路径与 project_mode._project_dir 一致）。"""
+    base = os.path.join(manager.ga_root, 'temp', 'projects')
+    items = []
+    if os.path.isdir(base):
+        for name in sorted(os.listdir(base)):
+            pdir = os.path.join(base, name)
+            if not os.path.isdir(pdir) or name.startswith('.'):
+                continue
+            mem = os.path.join(pdir, 'project_memory.md')
+            has_mem = os.path.isfile(mem)
+            mem_lines = 0
+            if has_mem:
+                try:
+                    with open(mem, encoding='utf-8') as f:
+                        mem_lines = len(f.read().splitlines())
+                except OSError:
+                    pass
+            try:
+                mtime = os.path.getmtime(pdir)
+            except OSError:
+                mtime = 0
+            # 读取项目绑定的 workspace 名称
+            ws_name = ""
+            ws_file = os.path.join(pdir, '.workspace.json')
+            if os.path.isfile(ws_file):
+                try:
+                    with open(ws_file, encoding='utf-8') as f:
+                        ws_data = json.load(f)
+                    if isinstance(ws_data, dict):
+                        ws_name = (ws_data.get("workspace") or "").strip()
+                except (OSError, json.JSONDecodeError):
+                    pass
+            items.append({"name": name, "hasMemory": has_mem, "memLines": mem_lines, "mtime": mtime, "workspace": ws_name})
+    return json_ok({"projects": items})
+
+
+async def project_create_handler(request):
+    """创建项目：mkdir temp/projects/<name>/ + 初始化 project_memory.md。"""
+    data = await read_json(request)
+    name = (data.get("name") or "").strip()
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    base = os.path.join(manager.ga_root, 'temp', 'projects')
+    pdir = os.path.join(base, name)
+    if os.path.exists(pdir):
+        return web.json_response({"error": "project already exists", "name": name}, status=409, headers=cors_headers())
+    os.makedirs(pdir, exist_ok=True)
+    mem = os.path.join(pdir, 'project_memory.md')
+    if not os.path.exists(mem):
+        with open(mem, 'w', encoding='utf-8') as f:
+            f.write(f"# {name} 项目记忆\n\n本文件由 GA 项目模式自动创建。每轮对话后，agent 会在此沉淀本项目值得长期复用的关键信息（决策、约束、踩坑、进度）。\n")
+    instruction = (data.get("instruction") or "").strip()
+    if instruction:
+        claude_md = os.path.join(pdir, 'CLAUDE.md')
+        try:
+            with open(claude_md, 'w', encoding='utf-8') as f:
+                f.write(instruction.rstrip() + "\n")
+        except OSError:
+            pass
+    # 项目级 skills 绑定：写入 .skills.json（选中 skill 的 name 列表）
+    skills = data.get("skills")
+    if isinstance(skills, list) and skills:
+        clean = [s for s in (str(s).strip() for s in skills) if s]
+        if clean:
+            try:
+                with open(os.path.join(pdir, '.skills.json'), 'w', encoding='utf-8') as f:
+                    json.dump(clean, f, ensure_ascii=False)
+            except OSError:
+                pass
+    # 项目级 workspace 绑定：可选已有 workspace name 或新建（需 path）
+    ws_name = (data.get("workspace") or "").strip()
+    ws_path = (data.get("workspacePath") or "").strip()
+    _ws_result = _apply_project_workspace(pdir, ws_name, ws_path)
+    return json_ok({"ok": True, "name": name, "path": pdir, "workspace": _ws_result.get("workspace", "")}, status=201)
+
+
+async def project_skills_get_handler(request):
+    """读取已建项目绑定的 skills 列表（GET /projects/{name}/skills）。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    skills_file = os.path.join(pdir, '.skills.json')
+    skills = []
+    if os.path.isfile(skills_file):
+        try:
+            with open(skills_file, encoding='utf-8') as f:
+                loaded = json.load(f)
+            if isinstance(loaded, list):
+                skills = [str(s) for s in loaded]
+        except (OSError, json.JSONDecodeError):
+            pass
+    return json_ok({"name": name, "skills": skills})
+
+
+async def project_skills_update_handler(request):
+    """更新已建项目绑定的 skills 列表（PUT /projects/{name}/skills）。
+    body: {"skills": ["ponytail", ...]}  空列表=删除绑定（恢复全局注入）。
+    """
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    data = await read_json(request)
+    skills = data.get("skills")
+    if not isinstance(skills, list):
+        return web.json_response({"error": "skills must be a list"}, status=400, headers=cors_headers())
+    clean = [s for s in (str(s).strip() for s in skills) if s]
+    skills_file = os.path.join(pdir, '.skills.json')
+    try:
+        if clean:
+            with open(skills_file, 'w', encoding='utf-8') as f:
+                json.dump(clean, f, ensure_ascii=False)
+        else:
+            # 空列表=删除绑定，恢复全局注入
+            if os.path.isfile(skills_file):
+                os.remove(skills_file)
+    except OSError as e:
+        return web.json_response({"error": f"write failed: {e}"}, status=500, headers=cors_headers())
+    return json_ok({"ok": True, "name": name, "skills": clean})
+
+
+async def project_workspace_update_handler(request):
+    """更新项目绑定的 workspace（PUT /projects/{name}/workspace）。
+    body: {"workspace": "已有name"} 或 {"workspacePath": "/abs/path"} 或 {}(清除)。
+    """
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    data = await read_json(request)
+    ws_name = (data.get("workspace") or "").strip()
+    ws_path = (data.get("workspacePath") or "").strip()
+    result = _apply_project_workspace(pdir, ws_name, ws_path)
+    if "error" in result:
+        return web.json_response(result, status=400, headers=cors_headers())
+    return json_ok({"ok": True, "name": name, "workspace": result.get("workspace", "")})
+
+
+async def project_datasources_handler(request):
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    items = manager.list_project_datasources(name)
+    for it in items:
+        it["webhook_url"] = f"http://{webhook_base(request)}/datasources/{it['id']}/webhook"
+    return json_ok({"name": name, "datasources": items})
+
+
+async def project_todos_handler(request):
+    """项目待办列表 / 新建待办（GET|POST /projects/{name}/todos）。
+    GET 返回 {name, todos}；POST body {title, desc?, status?, assignee?, due?} 返回 {todo}。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    if request.method == 'GET':
+        return json_ok({"name": name, "todos": manager.list_todos(name)})
+    data = await read_json(request)
+    if not str(data.get("title", "")).strip():
+        return web.json_response({"error": "title is required"}, status=400, headers=cors_headers())
+    todo = manager.create_todo(name, data)
+    return json_ok({"todo": todo}, status=201)
+
+
+async def project_todo_detail_handler(request):
+    """项目待办详情 / 更新 / 删除（GET|PATCH|DELETE /projects/{name}/todos/{tid}）。"""
+    name = request.match_info.get("name", "")
+    tid = request.match_info.get("tid", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    if request.method == 'GET':
+        for it in manager.list_todos(name):
+            if it.get("id") == tid:
+                return json_ok({"todo": it})
+        return web.json_response({"error": "todo not found"}, status=404, headers=cors_headers())
+    if request.method == 'DELETE':
+        ok = manager.delete_todo(name, tid)
+        if not ok:
+            return web.json_response({"error": "todo not found"}, status=404, headers=cors_headers())
+        return json_ok({"deleted": True, "id": tid})
+    data = await read_json(request)
+    it = manager.update_todo(name, tid, data)
+    if not it.get("id"):
+        return web.json_response({"error": "todo not found"}, status=404, headers=cors_headers())
+    return json_ok({"todo": it})
+
+
+async def project_rename_handler(request):
+    """重命名项目（PUT /projects/{name}/rename）。
+    body: {"newName": "..."}。支持目录和符号链接；符号链接只改链接名不改源目录。
+    """
+    old_name = request.match_info.get("name", "")
+    data = await read_json(request)
+    new_name = (data.get("newName") or "").strip()
+    invalid = lambda n: (not n or '/' in n or '\\' in n or '..' in n or n.startswith('.'))
+    if invalid(old_name) or invalid(new_name) or old_name == new_name:
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    base = os.path.join(manager.ga_root, 'temp', 'projects')
+    old_dir = os.path.join(base, old_name)
+    new_dir = os.path.join(base, new_name)
+    if not os.path.exists(old_dir):
+        return web.json_response({"error": "project not found", "name": old_name}, status=404, headers=cors_headers())
+    if os.path.exists(new_dir):
+        return web.json_response({"error": "project already exists", "name": new_name}, status=409, headers=cors_headers())
+    try:
+        os.rename(old_dir, new_dir)
+    except OSError as e:
+        return web.json_response({"error": f"rename failed: {e}"}, status=500, headers=cors_headers())
+    # 同步更新 project_memory.md 标题（仅普通文件，符号链接跳过）
+    if not os.path.islink(new_dir):
+        mem = os.path.join(new_dir, 'project_memory.md')
+        if os.path.isfile(mem):
+            try:
+                with open(mem, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                content = content.replace(f"# {old_name} 项目记忆", f"# {new_name} 项目记忆")
+                with open(mem, 'w', encoding='utf-8') as f:
+                    f.write(content)
+            except OSError:
+                pass
+    return json_ok({"ok": True, "oldName": old_name, "newName": new_name})
+
+
+async def project_delete_handler(request):
+    """删除项目（DELETE /projects/{name}）。
+    符号链接只删链接不删源目录；普通目录递归删除。
+    """
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.exists(pdir) and not os.path.islink(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    try:
+        if os.path.islink(pdir):
+            os.remove(pdir)  # 只删符号链接
+        elif os.path.isdir(pdir):
+            import shutil
+            shutil.rmtree(pdir)
+        else:
+            os.remove(pdir)
+    except OSError as e:
+        return web.json_response({"error": f"delete failed: {e}"}, status=500, headers=cors_headers())
+    return json_ok({"ok": True, "name": name})
+
+
+async def skills_list_handler(request):
+    """列出可用 skills（供前端弹窗渲染多选）。复用 skills_loader 的发现逻辑。"""
+    try:
+        import sys as _sys
+        _ga_root = manager.ga_root
+        if _ga_root not in _sys.path:
+            _sys.path.insert(0, _ga_root)
+        from plugins import skills_loader as _sl
+        roots = _sl._load_config()
+        if not roots:
+            return json_ok({"skills": []})
+        skills = _sl._discover_skills(roots)
+        items = []
+        for sk in skills:
+            items.append({
+                "name": sk.get("name", ""),
+                "description": sk.get("description", ""),
+                "has_scripts": bool(sk.get("has_scripts", False)),
+                "path": sk.get("path", ""),
+            })
+        return json_ok({"skills": items})
+    except Exception as e:
+        return json_ok({"skills": [], "error": str(e)})
+
+
 async def plan_handler(request):
     sid = request.match_info["sid"]
     return json_ok(manager.plan_snapshot(sid))
+
+
+async def suggest_handler(request):
+    """对话结束后自动推荐下一步动作。用当前会话的 llmclient 生成 1-3 条简短建议。
+    临时备份/恢复 backend.history，不污染主会话上下文。"""
+    sid = request.match_info["sid"]
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(None, manager.suggest, sid)
+        return json_ok(result)
+    except Exception as e:
+        import traceback as _tb
+        try: open("/tmp/suggest_debug.log","a").write("[handler] "+_tb.format_exc()+"\n\n")
+        except Exception: pass
+        return json_ok({"suggestions": [], "error": str(e)})
 
 
 async def path_open_handler(request):
@@ -2262,6 +3038,20 @@ def _is_local_peer(peer: str) -> bool:
     return p in ("127.0.0.1", "::1") or p.startswith("::ffff:127.0.0.1")
 
 
+@web.middleware
+async def local_only_guard(request, handler):
+    # ponytail: 监听 0.0.0.0 时, webhook 单路由对内网开放(已有 X-Gitlab-Token 验签);
+    # 其余路由(exec/files/read/delete/mykey/bridge-exit 等高危无认证)仅本机 127.0.0.1.
+    path = request.path
+    if path.startswith("/datasources/") and path.endswith("/webhook"):
+        return await handler(request)
+    if not _is_local_peer(request.remote or ""):
+        return web.json_response(
+            {"error": "forbidden: local only"}, status=403, headers=cors_headers()
+        )
+    return await handler(request)
+
+
 async def stop_extras_handler(request):
     if not _is_local_peer(request.remote or ""):
         return json_ok({"ok": False, "error": "forbidden"}, status=403)
@@ -2423,7 +3213,7 @@ async def session_workspace_off_handler(request):
 
 
 def create_app():
-    app = web.Application(middlewares=[cors_middleware], client_max_size=500 * 1024 * 1024)
+    app = web.Application(middlewares=[cors_middleware, local_only_guard], client_max_size=500 * 1024 * 1024)
     app.router.add_get("/ws", ws_handler)
     app.router.add_get("/status", status_handler)
     app.router.add_get("/config", get_config_handler)
@@ -2446,6 +3236,28 @@ def create_app():
     app.router.add_get("/session/{sid}/plan", plan_handler)
     app.router.add_post("/session/{sid}/cancel", cancel_handler)
     app.router.add_post("/session/{sid}/restore", restore_handler)
+    app.router.add_post("/session/{sid}/suggest", suggest_handler)
+    app.router.add_get("/projects", projects_list_handler)
+    app.router.add_post("/projects", project_create_handler)
+    app.router.add_get("/api/skills", skills_list_handler)
+    app.router.add_get("/projects/{name}/skills", project_skills_get_handler)
+    app.router.add_put("/projects/{name}/skills", project_skills_update_handler)
+    app.router.add_put("/projects/{name}/workspace", project_workspace_update_handler)
+    app.router.add_get("/projects/{name}/datasources", project_datasources_handler)
+    # 项目待办 (todos) CRUD —— /projects/{name}/todos 与 /projects/{name}/todos/{tid}
+    app.router.add_get("/projects/{name}/todos", project_todos_handler)
+    app.router.add_post("/projects/{name}/todos", project_todos_handler)
+    app.router.add_get("/projects/{name}/todos/{tid}", project_todo_detail_handler)
+    app.router.add_patch("/projects/{name}/todos/{tid}", project_todo_detail_handler)
+    app.router.add_delete("/projects/{name}/todos/{tid}", project_todo_detail_handler)
+    app.router.add_put("/projects/{name}/rename", project_rename_handler)
+    app.router.add_delete("/projects/{name}", project_delete_handler)
+    # Data sources (webhook-based, e.g. GitLab)
+    app.router.add_get("/datasources", datasources_handler)
+    app.router.add_post("/datasources", datasources_handler)
+    app.router.add_get("/datasources/{dsid}", datasource_detail_handler)
+    app.router.add_delete("/datasources/{dsid}", datasource_detail_handler)
+    app.router.add_post("/datasources/{dsid}/webhook", datasource_webhook_handler)
     app.router.add_post("/path/open", path_open_handler)
     app.router.add_post("/upload", upload_handler)
     app.router.add_delete("/upload", upload_delete_handler)
@@ -2498,6 +3310,7 @@ def create_app():
                             'schedule': task.get('schedule', ''),
                             'repeat': task.get('repeat', ''),
                             'enabled': task.get('enabled', False),
+                            'model': task.get('model', ''),
                             'status': 'healthy'
                         })
                     except Exception:
@@ -2543,6 +3356,38 @@ def create_app():
         except Exception as e:
             return web.json_response({'error': str(e)}, status=500)
 
+    async def tasks_get_handler(request):
+        tid = request.match_info.get('tid')
+        tasks_dir = APP_DIR.parent / "sche_tasks"
+        task_file = tasks_dir / f"{tid}.json"
+        if not task_file.exists():
+            return web.json_response({'error': 'task not found'}, status=404)
+        try:
+            with open(task_file, 'r', encoding='utf-8') as fp:
+                task = json.load(fp)
+            return web.json_response({'task': {**task, 'id': tid}})
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def tasks_update_handler(request):
+        tid = request.match_info.get('tid')
+        tasks_dir = APP_DIR.parent / "sche_tasks"
+        task_file = tasks_dir / f"{tid}.json"
+        if not task_file.exists():
+            return web.json_response({'error': 'task not found'}, status=404)
+        try:
+            body = await request.json()
+            with open(task_file, 'r', encoding='utf-8') as fp:
+                task = json.load(fp)
+            for k in ('name', 'schedule', 'repeat', 'enabled', 'model', 'prompt', 'max_delay_hours'):
+                if k in body:
+                    task[k] = body[k]
+            with open(task_file, 'w', encoding='utf-8') as fp:
+                json.dump(task, fp, ensure_ascii=False, indent=2)
+            return web.json_response({'ok': True})
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=500)
+
     async def tasks_delete_handler(request):
         tid = request.match_info.get('tid')
         tasks_dir = APP_DIR.parent / "sche_tasks"
@@ -2555,8 +3400,54 @@ def create_app():
         except Exception as e:
             return web.json_response({'error': str(e)}, status=500)
 
+    async def tasks_create_handler(request):
+        data = await request.json()
+        name = (data.get('name') or '').strip()
+        prompt = (data.get('prompt') or '').strip()
+        if not prompt:
+            return web.json_response({'error': 'prompt is required'}, status=400)
+        if not name:
+            name = prompt[:20]
+        schedule = (data.get('schedule') or '08:00').strip()
+        repeat = (data.get('repeat') or 'daily').strip()
+        # repeat Whitelist
+        valid_repeats = {'once', 'daily', 'weekday', 'weekly', 'monthly'}
+        if repeat not in valid_repeats and not repeat.startswith('every_'):
+            repeat = 'daily'
+        enabled = bool(data.get('enabled', True))
+        max_delay_hours = float(data.get('max_delay_hours', 6))
+        model = (data.get('model') or '').strip()
+        # generate tid: sanitize name + short random suffix
+        import re, uuid
+        safe = re.sub(r'[^A-Za-z0-9\u4e00-\u9fff_]', '_', name)[:30] or 'task'
+        tid = f"{safe}_{uuid.uuid4().hex[:6]}"
+        tasks_dir = APP_DIR.parent / "sche_tasks"
+        tasks_dir.mkdir(exist_ok=True)
+        task_file = tasks_dir / f"{tid}.json"
+        while task_file.exists():
+            tid = f"{safe}_{uuid.uuid4().hex[:6]}"
+            task_file = tasks_dir / f"{tid}.json"
+        task = {
+            'name': name,
+            'schedule': schedule,
+            'repeat': repeat,
+            'enabled': enabled,
+            'prompt': prompt,
+            'max_delay_hours': max_delay_hours,
+            'model': model
+        }
+        try:
+            with open(task_file, 'w', encoding='utf-8') as fp:
+                json.dump(task, fp, ensure_ascii=False, indent=2)
+            return web.json_response({'ok': True, 'id': tid})
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=500)
+
     app.router.add_get("/services/tasks/list", tasks_list_handler)
     app.router.add_get("/services/tasks/history", tasks_history_handler)
+    app.router.add_post("/services/tasks/create", tasks_create_handler)
+    app.router.add_get("/services/tasks/get/{tid}", tasks_get_handler)
+    app.router.add_post("/services/tasks/update/{tid}", tasks_update_handler)
     app.router.add_post("/services/tasks/toggle/{tid}", tasks_toggle_handler)
     app.router.add_delete("/services/tasks/delete/{tid}", tasks_delete_handler)
 

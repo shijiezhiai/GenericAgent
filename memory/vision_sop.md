@@ -16,6 +16,19 @@ result = ask_vision(image, prompt="描述图片内容", timeout=60, max_pixels=1
 # 返回 str：成功为模型回复，失败为 'Error: ...'
 ```
 
+## 在 code_run 中调用（输出回显）
+
+`ask_vision` 含网络 IO，在 `code_run` 用 `type=python` 执行时可能拿不到输出（不报错但无回显，多次踩坑）。可靠做法：用 `type=bash` + heredoc + `.venv/bin/python`，stdout 正常回显：
+
+```bash
+.venv/bin/python - <<'PY'
+from vision_api import ask_vision
+print(ask_vision("path/to/img.png", prompt="描述内容"))
+PY
+```
+
+> ⚠️ **code_run PYTHONPATH 陷阱**：`type=bash` 启动的子 python（`.venv/bin/python` 或 `/usr/bin/python3`）**不继承主会话 python 的 PYTHONPATH**，`memory` 不在 `sys.path` → 直接 `import vision_api` / `ocr_utils` 等 memory 模块会 `ModuleNotFoundError`（已实测确认）。heredoc 内须先补：`import sys; sys.path.insert(0, "memory")`（相对 GA 仓库根 cwd，已验证可行）。
+
 ## 如果没有 `vision_api.py`，初次构建vision能力
 
 1. 复制 `memory/vision_api.template.py` → `memory/vision_api.py`

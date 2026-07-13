@@ -731,6 +731,19 @@ fn pick_folder() -> Option<String> {
     rfd::FileDialog::new().pick_folder().map(|p| p.to_string_lossy().into_owned())
 }
 
+// 原生系统通知(Tauri桌面端):WKWebView不支持Web Notification API,由Rust端通过tauri-plugin-notification发出
+#[tauri::command]
+fn notify(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification()
+        .builder()
+        .title(&title)
+        .body(&body)
+        .show()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let args: Vec<String> = std::env::args().collect();
@@ -772,7 +785,8 @@ pub fn run() {
                 let _ = w.set_focus();
             }
         }))
-        .invoke_handler(tauri::generate_handler![start_bridge_with_config, start_bridge, get_config, export_mykey, shortcut_should_ask, shortcut_decide, pick_folder])
+        .plugin(tauri_plugin_notification::init())
+        .invoke_handler(tauri::generate_handler![start_bridge_with_config, start_bridge, get_config, export_mykey, shortcut_should_ask, shortcut_decide, pick_folder, notify])
         .setup(move |app| {
             // Show the loading window immediately so the first-run prepare isn't a blank screen.
             // The window starts on loading.html (a local page), so no "connection refused" flash.
