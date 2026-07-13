@@ -38,10 +38,13 @@ def __getattr__(name):  # once guard in PEP 562
     raise AttributeError(f"module 'llmcore' has no attribute {name}")
 
 def compress_history_tags(messages, keep_recent=10, max_len=800, force=False, interval=5):
-    """Compress <thinking>/<tool_use>/<tool_result> tags in older messages to save tokens."""
-    compress_history_tags._cd = getattr(compress_history_tags, '_cd', 0) + 1
-    if force: compress_history_tags._cd = 0
-    if compress_history_tags._cd % interval != 0: return messages
+    """Compress <thinking>/<tool_use>/<tool_result> tags in older messages to save tokens.
+
+    P0 cache-aware: only compress when force=True (i.e. context approaching cap).
+    Periodic interval-based compression removed — it mutated self.history every N turns,
+    permanently breaking prefix cache from that point on.
+    """
+    if not force: return messages  # 平时 append-only，不动旧消息，保 prefix cache
     _before = sum(len(json.dumps(m, ensure_ascii=False)) for m in messages)
     _pats = {tag: re.compile(rf'(<{tag}>)([\s\S]*?)(</{tag}>)') for tag in ('thinking', 'think', 'tool_use', 'tool_result')}
     _hist_pat = re.compile(r'<(history|key_info|earlier_context)>[\s\S]*?</\1>')
@@ -99,7 +102,6 @@ def trim_messages_history(history, sess):
     cap = sess.context_win * 3
     target = int(cap * getattr(sess, 'trim_keep_rate', 0.6))
     def cost(): return sum(len(json.dumps(m, ensure_ascii=False)) for m in history)
-    compress_history_tags(history, interval=getattr(sess, 'cut_msg_interval', 5))
     print(f'[Debug] Current context: {cost()} chars, {len(history)} messages.')
     if cost() <= cap: return
     compress_history_tags(history, keep_recent=4, force=True)
