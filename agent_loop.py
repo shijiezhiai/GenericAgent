@@ -134,6 +134,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
             if outcome.next_prompt.startswith('未知工具'): client.last_tools = ''
             if outcome.data is not None and tool_name != 'no_tool': 
                 datastr = json.dumps(outcome.data, ensure_ascii=False, default=json_default) if type(outcome.data) in [dict, list] else str(outcome.data) 
+                datastr = _truncate_tool_result(datastr, tool_name)
                 tool_results.append({'tool_use_id': tid, 'content': datastr})
             next_prompts.add(outcome.next_prompt)
         if len(next_prompts) == 0 or exit_reason:
@@ -176,3 +177,15 @@ def _compact_tool_args(name, args):
         if cs: q += '\ncandidates:\n' + '\n'.join(f'- {c}' for c in cs)
         return q
     s = json.dumps(a, ensure_ascii=False); return (s[:120]+'...') if len(s)>120 else s
+
+# ---- P2: truncate long tool results before storing in history (source-level prevention) ----
+_TOOL_TRUNCATE_LIMIT = 6000  # max chars per tool_result stored in history
+
+def _truncate_tool_result(datastr, tool_name):
+    """Truncate long tool result to prevent history bloat. Keeps head + tail with truncation marker.
+    Only affects what gets stored in history (tool_results), not the real-time yield to user."""
+    if len(datastr) <= _TOOL_TRUNCATE_LIMIT: return datastr
+    head_len = int(_TOOL_TRUNCATE_LIMIT * 0.6)
+    tail_len = _TOOL_TRUNCATE_LIMIT - head_len
+    skipped = len(datastr) - head_len - tail_len
+    return (datastr[:head_len] + f'\n[... truncated {skipped} chars ...]\n' + datastr[-tail_len:])
