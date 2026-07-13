@@ -218,7 +218,7 @@ def _scan_files(base, depth=2):
             if e.is_file(): yield (e.name, e.path)
             elif depth > 0 and e.is_dir(follow_symlinks=False): yield from _scan_files(e.path, depth - 1)
     except (PermissionError, OSError): pass
-def file_read(path, start=1, keyword=None, count=200, show_linenos=True):
+def file_read(path, start=1, keyword=None, count=100, show_linenos=True):
     try:
         with open(path, 'r', encoding='utf-8', errors='replace') as f:
             stream = ((i, l.rstrip('\r\n')) for i, l in enumerate(f, 1))
@@ -417,7 +417,7 @@ class GenericAgentHandler(BaseHandler):
         path = self._get_abs_path(args.get("path", ""))
         yield f"\n[Action] Reading file: {path}\n"
         start = args.get("start", 1)
-        count = args.get("count", 200)
+        count = args.get("count", 100)  # P6: default 100 (was 200) to reduce token cost
         keyword = args.get("keyword")
         show_linenos = args.get("show_linenos", True)
         result = file_read(path, start=start, keyword=keyword,
@@ -545,7 +545,7 @@ class GenericAgentHandler(BaseHandler):
 
     def _get_anchor_prompt(self, skip=False):
         if skip: return "\n"
-        h = self.history_info; W = 30
+        h = self.history_info; W = 15  # P3: reduced from 30 to cut working memory token cost
         earlier = f'<earlier_context>\n{self._fold_earlier(h[:-W])}\n</earlier_context>\n' if len(h) > W else ""
         h_str = "\n".join(h[-W:])
         prompt = f"\n### [WORKING MEMORY]\n{earlier}<history>\n{h_str}\n</history>"
@@ -573,7 +573,7 @@ class GenericAgentHandler(BaseHandler):
             next_prompt += f"\n\n[SYSTEM] Turn {turn}. Call update_working_checkpoint to save key context. Stop ineffective retries; if no progress, switch strategy: 1) Probe physical boundaries 2) **Re-read relevant SOPs**"
         elif turn % 25 == 0:
             next_prompt += f"\n\n[SYSTEM] Turn {turn}. Write checkpoints/key findings/tried approaches to a **file** for future reference (not only working_checkpoint!). Avoid losing critical info."
-        elif turn % 10 == 0: next_prompt += get_global_memory(getattr(self, 'cwd', None))
+        elif turn % 20 == 0: next_prompt += get_global_memory(getattr(self, 'cwd', None))  # P4: inject every 20 turns (was 10)
 
         if _plan and turn >= 10 and turn % 5 == 0:
             next_prompt = f"[Plan Hint] 正在计划模式。必须 file_read({_plan}) 确认当前步骤，回复开头引用：📌 当前步骤：...\n\n" + next_prompt
