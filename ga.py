@@ -19,17 +19,19 @@ def code_run(code, code_type="python", timeout=60, cwd=None, code_cwd=None, stop
     powershell/bash: 运行单行指令（命令模式）
     优先使用python，仅在必要系统操作时使用powershell"""
     preview = (code[:60].replace('\n', ' ') + '...') if len(code) > 60 else code.strip()
-    yield f"[Action] Running {code_type} in {os.path.basename(cwd)}: {preview}\n"
     cwd = cwd or os.path.join(script_dir, 'temp'); tmp_path = None
+    yield f"[Action] Running {code_type} in {os.path.basename(cwd)}: {preview}\n"
     if code_type in ["python", "py"]:
         tmp_dir = code_cwd
-        # FDA/TCC 写限制: workspace 可能不可写, 临时脚本文件 fallback 到 GA temp
+        # FDA/TCC 写限制: workspace 可能不可写, 先探测可写性, 不可写则 fallback 到 GA temp
         try:
-            tmp_file = tempfile.NamedTemporaryFile(suffix=".ai.py", delete=False, mode='w', encoding='utf-8', dir=tmp_dir)
-            tmp_file.close()
+            with tempfile.NamedTemporaryFile(suffix=".ai.py", dir=tmp_dir):
+                pass  # 出 with 自动关闭并删除, 仅探测 tmp_dir 可写性
         except (PermissionError, OSError):
             tmp_dir = os.path.join(script_dir, 'temp')
-            tmp_file = tempfile.NamedTemporaryFile(suffix=".ai.py", delete=False, mode='w', encoding='utf-8', dir=tmp_dir)
+            os.makedirs(tmp_dir, exist_ok=True)
+        # 正式创建脚本文件: 保持打开以便写入 header+code, 写完再 close
+        tmp_file = tempfile.NamedTemporaryFile(suffix=".ai.py", delete=False, mode='w', encoding='utf-8', dir=tmp_dir)
         cr_header = os.path.join(script_dir, 'assets', 'code_run_header.py')
         if os.path.exists(cr_header): tmp_file.write(open(cr_header, encoding='utf-8').read())
         tmp_file.write(code)

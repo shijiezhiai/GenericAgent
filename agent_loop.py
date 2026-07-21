@@ -126,6 +126,12 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                 outcome = (yield from proxy()) if verbose else exhaust(proxy())
                 if verbose: yield '`````\n'
             except StopIteration as e: outcome = e.value
+            except Exception as e:
+                # 工具 generator 抛出的非 StopIteration 异常(如 code_run 的 ValueError)在此兜底,
+                # 转成 error 结果反馈给 LLM, 避免异常逃出 agent_loop 导致整个 agent 崩溃退出
+                import traceback as _tb
+                outcome = StepOutcome({'error': f'{type(e).__name__}: {e}', 'traceback': _tb.format_exc()},
+                                      next_prompt=f"工具 {tool_name} 执行异常: {type(e).__name__}: {e}。请根据异常信息调整后重试。", should_exit=False)
             
             if outcome.should_exit: 
                 exit_reason = {'result': 'EXITED', 'data': outcome.data}; break
