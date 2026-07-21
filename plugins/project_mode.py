@@ -68,6 +68,11 @@ def _mem_path(name):
     return os.path.join(_project_dir(name), 'project_memory.md')
 
 
+def _inst_path(name):
+    """项目指令文件路径（独立维护，不写 CLAUDE.md）。"""
+    return os.path.join(_project_dir(name), 'instruction.md')
+
+
 def _memory_stat(name):
     """返回 project_memory.md 的 (存在, 行数, 字节数)，供 L1 指针给模型判断依据。"""
     path = _mem_path(name)
@@ -85,6 +90,7 @@ def _build_injection(name):
     """
     pdir = _project_dir(name)
     mem_path = _mem_path(name)
+    inst_path = _inst_path(name)
     exists, lines, nbytes = _memory_stat(name)
     if exists and nbytes > 0:
         mem_hint = (
@@ -94,13 +100,26 @@ def _build_injection(name):
         )
     else:
         mem_hint = f"项目记忆 {mem_path} 暂为空（本项目尚无沉淀），无需读取。"
+    # 读取项目指令（用户在配置页设定的背景与规范），全量注入每轮对话
+    inst_block = ""
+    if os.path.isfile(inst_path):
+        try:
+            inst_text = open(inst_path, encoding='utf-8').read().strip()
+            if inst_text:
+                inst_block = (
+                    f"\n## 项目指令（用户设定，请严格遵守）\n"
+                    f"{inst_text}\n"
+                )
+        except OSError:
+            pass
     return (
         f"\n\n---\n"
         f"[PROJECT MODE: {name}]\n"
         f"你正在「{name}」项目模式中。\n\n"
         f"## 规则\n"
         f"- 项目私域目录：{pdir}（todo、草稿、产物一律放这里，勿放 temp 根目录）\n"
-        f"- {mem_hint}\n\n"
+        f"- {mem_hint}\n"
+        f"{inst_block}\n"
         f"## 收尾纪律\n"
         f"干完本轮活后自问一个问题：「记忆归零、重新接手本项目的我，缺了本轮哪条信息会重复付出认知代价"
         f"——再踩一次坑、再摸索一次、再问一次用户？」会的，就用 file 工具把那条追加进 {mem_path}，"

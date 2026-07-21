@@ -36,7 +36,7 @@ WS API (state sync):
 """
 from __future__ import annotations
 
-import asyncio, atexit, contextlib, importlib, json, os, re, subprocess, sys
+import asyncio, atexit, contextlib, gzip, importlib, json, os, re, subprocess, sys
 from datetime import datetime
 from collections import Counter, deque
 import threading, time, traceback, uuid, hmac
@@ -70,6 +70,64 @@ _FINAL_INFO_RE = re.compile(r'\n*`{5}\n*\[Info\] Final response to user\.\n*`{5}
 
 def strip_final_info_marker(text: Any) -> str:
     return _FINAL_INFO_RE.sub('', str(text or ''))
+
+
+# ---------------------------------------------------------------------------
+# 产出文件检测: 执行前后快照diff
+# ---------------------------------------------------------------------------
+_SNAP_SKIP_DIRS = {'.git', '__pycache__', 'node_modules', '.venv', 'venv',
+                   '.DS_Store', '.mypy_cache', '.pytest_cache', 'dist', 'build',
+                   '.idea', '.vscode', 'target'}
+_SNAP_SKIP_SUFFIX = ('.pyc', '.pyo', '.log', '.tmp')
+_SNAP_MAX_DEPTH = 5
+_SNAP_MAX_FILES = 2000
+
+
+def _snapshot_cwd(cwd: str) -> dict:
+    """遍历cwd,返回 {相对路径: mtime} 快照。忽略常见噪音目录,限制深度/数量防爆。"""
+    snap = {}
+    base = os.path.abspath(cwd)
+    if not os.path.isdir(base):
+        return snap
+    try:
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = [d for d in dirnames if d not in _SNAP_SKIP_DIRS and not d.startswith('.')]
+            rel_dp = os.path.relpath(dirpath, base)
+            depth = 0 if rel_dp == '.' else rel_dp.count(os.sep) + 1
+            if depth >= _SNAP_MAX_DEPTH:
+                dirnames[:] = []
+                continue
+            for fn in filenames:
+                if fn in _SNAP_SKIP_DIRS or fn.startswith('.'):
+                    continue
+                if any(fn.endswith(s) for s in _SNAP_SKIP_SUFFIX):
+                    continue
+                rel = os.path.join(rel_dp, fn) if rel_dp != '.' else fn
+                fp = os.path.join(dirpath, fn)
+                try:
+                    snap[rel] = os.path.getmtime(fp)
+                except OSError:
+                    pass
+                if len(snap) >= _SNAP_MAX_FILES:
+                    return snap
+    except Exception:
+        pass
+    return snap
+
+
+def _diff_cwd(before: dict, cwd: str) -> list:
+    """对比执行前后快照,返回新增/修改文件列表 [{name,path,type}]。path为绝对路径。"""
+    after = _snapshot_cwd(cwd)
+    base = os.path.abspath(cwd)
+    out = []
+    for rel, mtime in after.items():
+        if rel not in before or before[rel] < mtime:
+            ext = os.path.splitext(rel)[1].lstrip('.').lower()
+            abs_path = os.path.join(base, rel)
+            out.append({"name": os.path.basename(rel), "path": abs_path, "type": ext})
+    # 排序: 按名字
+    out.sort(key=lambda x: x["name"])
+    return out
 
 
 for _s in (sys.stdout, sys.stderr):
@@ -283,6 +341,10 @@ class AgentManager:
             "due": str(data.get("due", "")).strip()[:20],
             "createdAt": now,
             "updatedAt": now,
+            "datasourceId": str(data.get("datasourceId", "")).strip(),
+            "originId": str(data.get("originId", "")).strip(),
+            "originUrl": str(data.get("originUrl", "")).strip(),
+            "originStatus": str(data.get("originStatus", "")).strip(),
         }
         items.append(item)
         self._save_todos(project_name, items)
@@ -305,10 +367,102 @@ class AgentManager:
                     it["assignee"] = str(data["assignee"]).strip()[:100]
                 if "due" in data:
                     it["due"] = str(data["due"]).strip()[:20]
+                if "datasourceId" in data:
+                    it["datasourceId"] = str(data["datasourceId"]).strip()
+                if "originId" in data:
+                    it["originId"] = str(data["originId"]).strip()
+                if "originUrl" in data:
+                    it["originUrl"] = str(data["originUrl"]).strip()
+                if "originStatus" in data:
+                    it["originStatus"] = str(data["originStatus"]).strip()
                 it["updatedAt"] = int(time.time())
                 self._save_todos(project_name, items)
                 return it
         return {}
+
+    async def sync_todo_to_gitlab(self, project_name: str, todo: dict, changed_keys: list) -> dict:
+        """将 todo 变更同步回 GitLab issue（改状态/指派成员）。
+        仅当 todo 来自 gitlab 同步（有 datasourceId+originId）且改了 status/assignee 时触发。
+        成员按姓名匹配 gitlab 项目成员（GET /members, name 字段）。
+        失败不抛异常，返回 {ok, error?} 供调用方记录日志。
+        """
+        import urllib.parse
+        from aiohttp import ClientSession, ClientTimeout
+        dsid = str(todo.get("datasourceId") or "").strip()
+        origin_id = str(todo.get("originId") or "").strip()
+        if not dsid or not origin_id:
+            return {"ok": False, "skipped": True, "reason": "not a gitlab-synced todo"}
+        # originId 格式 {dsid}:{iid}
+        if ":" not in origin_id:
+            return {"ok": False, "skipped": True, "reason": "invalid originId"}
+        iid = origin_id.split(":", 1)[1].strip()
+        if not iid:
+            return {"ok": False, "skipped": True, "reason": "no iid in originId"}
+        ds = self.get_datasource(dsid)
+        if not ds:
+            return {"ok": False, "error": "datasource not found", "dsid": dsid}
+        host = str(ds.get("gitlab_host") or "").strip()
+        proj = str(ds.get("gitlab_project") or "").strip()
+        token = str(ds.get("api_token") or "").strip()
+        if not host or not proj or not token:
+            return {"ok": False, "error": "missing gitlab config"}
+        base = host.rstrip("/")
+        if not base.startswith("http://") and not base.startswith("https://"):
+            base = "https://" + base
+        headers = {"PRIVATE-TOKEN": token}
+        issue_url = f"{base}/api/v4/projects/{urllib.parse.quote(proj, safe='')}/issues/{iid}"
+        put_body = {}
+        # —— 状态同步：done→close, 其它(todo/doing/pause)→reopen ——
+        if "status" in changed_keys:
+            new_status = str(todo.get("status") or "")
+            if new_status == "done":
+                put_body["state_event"] = "close"
+            else:
+                put_body["state_event"] = "reopen"
+        # —— 指派成员同步：按姓名匹配 gitlab member id ——
+        if "assignee" in changed_keys:
+            assignee_name = str(todo.get("assignee") or "").strip()
+            if not assignee_name:
+                put_body["assignee_ids"] = []
+            else:
+                member_url = f"{base}/api/v4/projects/{urllib.parse.quote(proj, safe='')}/members"
+                matched_id = None
+                try:
+                    async with ClientSession() as sess:
+                        async with sess.get(member_url, params={"per_page": "100"},
+                                            headers=headers, timeout=ClientTimeout(total=30)) as resp:
+                            if resp.status == 200:
+                                members = await resp.json()
+                                # 精确匹配 name（姓名），其次 username
+                                for m in members:
+                                    if str(m.get("name") or "").strip() == assignee_name:
+                                        matched_id = m.get("id")
+                                        break
+                                if matched_id is None:
+                                    for m in members:
+                                        if str(m.get("username") or "").strip() == assignee_name:
+                                            matched_id = m.get("id")
+                                            break
+                except Exception as e:
+                    return {"ok": False, "error": f"gitlab members request failed: {e}"}
+                if matched_id is None:
+                    return {"ok": False, "error": f"no gitlab member matched name '{assignee_name}'"}
+                put_body["assignee_ids"] = [matched_id]
+        if not put_body:
+            return {"ok": True, "skipped": True, "reason": "no syncable changes"}
+        # —— PUT issue ——
+        try:
+            async with ClientSession() as sess:
+                async with sess.put(issue_url, json=put_body, headers=headers,
+                                    timeout=ClientTimeout(total=30)) as resp:
+                    body = await resp.text()
+                    if resp.status not in (200, 201):
+                        return {"ok": False, "error": f"gitlab put issue {resp.status}: {body[:300]}"}
+                    result = await resp.json() if body else {}
+                    return {"ok": True, "gitlab_state": result.get("state"),
+                            "gitlab_iid": result.get("iid")}
+        except Exception as e:
+            return {"ok": False, "error": f"gitlab put issue failed: {e}"}
 
     def delete_todo(self, project_name: str, tid: str) -> bool:
         items = self._load_todos(project_name)
@@ -316,6 +470,75 @@ class AgentManager:
         items = [it for it in items if it.get("id") != tid]
         if len(items) < before:
             self._save_todos(project_name, items)
+            return True
+        return False
+
+    # ── 项目成员 (members) 持久化 ──────────────────────────────
+    def _members_file(self, project_name: str) -> Path:
+        return Path(self.ga_root) / "temp" / "projects" / project_name / ".members.json"
+
+    def _load_members(self, project_name: str) -> list:
+        f = self._members_file(project_name)
+        if not f.exists():
+            return []
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def _save_members(self, project_name: str, items: list) -> None:
+        f = self._members_file(project_name)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(items, ensure_ascii=False), encoding="utf-8")
+
+    def list_members(self, project_name: str) -> list:
+        return self._load_members(project_name)
+
+    def create_member(self, project_name: str, data: dict) -> dict | None:
+        nick = str(data.get("nick", "")).strip()
+        if not nick:
+            return None
+        items = self._load_members(project_name)
+        if any(m.get("nick") == nick for m in items):
+            return None  # 昵称全局唯一（项目内唯一）
+        import secrets, time
+        mid = "mb_" + str(int(time.time())) + "_" + secrets.token_hex(3)
+        m = {
+            "id": mid,
+            "nick": nick[:64],
+            "name": str(data.get("name", "")).strip()[:64],
+            "phone": str(data.get("phone", "")).strip()[:32],
+            "email": str(data.get("email", "")).strip()[:128],
+            "role": str(data.get("role", "")).strip()[:64],
+        }
+        items.append(m)
+        self._save_members(project_name, items)
+        return m
+
+    def update_member(self, project_name: str, mid: str, data: dict) -> dict:
+        items = self._load_members(project_name)
+        # 昵称唯一校验（若改昵称，不能与他人重复）
+        new_nick = str(data.get("nick", "")).strip()
+        if new_nick:
+            for m in items:
+                if m.get("id") != mid and m.get("nick") == new_nick:
+                    return {}  # 昵称冲突
+        for it in items:
+            if it.get("id") == mid:
+                for k in ("nick", "name", "phone", "email", "role"):
+                    if k in data:
+                        it[k] = str(data.get(k, "")).strip()[: (64 if k != "email" else 128)]
+                self._save_members(project_name, items)
+                return it
+        return {}
+
+    def delete_member(self, project_name: str, mid: str) -> bool:
+        items = self._load_members(project_name)
+        before = len(items)
+        items = [it for it in items if it.get("id") != mid]
+        if len(items) < before:
+            self._save_members(project_name, items)
             return True
         return False
 
@@ -390,6 +613,11 @@ class AgentManager:
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "event_log": [],
             "project": project,
+            "gitlab_host": str(data.get("gitlab_host", "")).strip(),
+            "gitlab_project": str(data.get("gitlab_project", "")).strip(),
+            "api_token": str(data.get("api_token", "")).strip(),
+            "auto_sync": bool(data.get("auto_sync", False)),
+            "last_synced_at": None,
         }
         with self.lock:
             d = self._load_datasources()
@@ -416,6 +644,139 @@ class AgentManager:
             self._save_datasources(d)
             self.unbind_datasource_from_projects(dsid)
             return True
+
+    def update_datasource(self, dsid: str, data: dict) -> Optional[dict]:
+        with self.lock:
+            d = self._load_datasources()
+            ds = d.get(dsid)
+            if ds is None:
+                return None
+            if "name" in data:
+                ds["name"] = str(data["name"]).strip()
+            if "gitlab_host" in data:
+                ds["gitlab_host"] = str(data["gitlab_host"]).strip()
+            if "gitlab_project" in data:
+                ds["gitlab_project"] = str(data["gitlab_project"]).strip()
+            if "api_token" in data:
+                ds["api_token"] = str(data["api_token"]).strip()
+            if "auto_sync" in data:
+                ds["auto_sync"] = bool(data["auto_sync"])
+            if "events" in data and isinstance(data["events"], list):
+                ds["events"] = data["events"]
+            self._save_datasources(d)
+            return ds
+
+    async def sync_gitlab_issues(self, dsid: str) -> dict:
+        """从 GitLab 拉取 issues 增量同步到项目待办（手动/自动通用）。
+        originId={dsid}:{iid} 去重；有 last_synced_at 则传 updated_after 增量。
+        状态映射：closed→done，opened/reopened→todo（doing/pause 不被覆盖）。"""
+        import secrets, urllib.parse
+        from aiohttp import ClientSession, ClientTimeout
+        ds = self.get_datasource(dsid)
+        if not ds:
+            return {"error": "datasource not found", "dsid": dsid}
+        host = str(ds.get("gitlab_host") or "").strip()
+        proj = str(ds.get("gitlab_project") or "").strip()
+        token = str(ds.get("api_token") or "").strip()
+        if not host or not proj or not token:
+            return {"error": "missing gitlab config (gitlab_host/gitlab_project/api_token)"}
+        project = str(ds.get("project") or "").strip()
+        if not project:
+            return {"error": "datasource not bound to a project"}
+        base = host.rstrip("/")
+        if not base.startswith("http://") and not base.startswith("https://"):
+            base = "https://" + base
+        url = f"{base}/api/v4/projects/{urllib.parse.quote(proj, safe='')}/issues"
+        last = str(ds.get("last_synced_at") or "").strip()
+        params = {"per_page": "100", "order_by": "updated_at", "sort": "desc"}
+        if last:
+            params["updated_after"] = last
+        headers = {"PRIVATE-TOKEN": token}
+        issues = []
+        page = 1
+        try:
+            async with ClientSession() as sess:
+                while page <= 10:  # cap at 1000 issues
+                    qp = dict(params, page=str(page))
+                    async with sess.get(url, params=qp, headers=headers, timeout=ClientTimeout(total=30)) as resp:
+                        if resp.status != 200:
+                            body = await resp.text()
+                            return {"error": f"gitlab api {resp.status}: {body[:300]}"}
+                        chunk = await resp.json()
+                        if not chunk:
+                            break
+                        issues.extend(chunk)
+                        nxt = str(resp.headers.get("X-Next-Page", "")).strip()
+                        if not nxt or nxt == "0":
+                            break
+                        page = int(nxt)
+        except Exception as e:
+            return {"error": f"gitlab request failed: {e}"}
+
+        def _map_status(state: str) -> str:
+            return "done" if state == "closed" else "todo"
+
+        items = self._load_todos(project)
+        by_origin = {str(it.get("originId") or ""): it for it in items if it.get("originId")}
+        now = int(time.time())
+        created = updated = skipped = 0
+        for issue in issues:
+            iid = str(issue.get("iid", "")).strip()
+            if not iid:
+                continue
+            origin_id = f"{dsid}:{iid}"
+            state = str(issue.get("state") or "").strip()
+            title = str(issue.get("title") or "").strip()
+            desc = str(issue.get("description") or "").strip()
+            url_i = str(issue.get("web_url") or "").strip()
+            new_status = _map_status(state)
+            existing = by_origin.get(origin_id)
+            if existing:
+                changed = False
+                cur = str(existing.get("status") or "")
+                if existing.get("originStatus") != state:
+                    existing["originStatus"] = state
+                    changed = True
+                if url_i and existing.get("originUrl") != url_i:
+                    existing["originUrl"] = url_i
+                    changed = True
+                if title and existing.get("title") != title:
+                    existing["title"] = title[:500]
+                    changed = True
+                if cur not in ("doing", "pause") and cur != new_status:
+                    existing["status"] = new_status
+                    changed = True
+                if changed:
+                    existing["updatedAt"] = now
+                    updated += 1
+                else:
+                    skipped += 1
+            else:
+                item = {
+                    "id": "td_" + str(now) + "_" + secrets.token_hex(3),
+                    "title": title[:500] or f"#{iid}",
+                    "desc": desc[:8000],
+                    "status": new_status,
+                    "assignee": "",
+                    "due": "",
+                    "createdAt": now,
+                    "updatedAt": now,
+                    "datasourceId": dsid,
+                    "originId": origin_id,
+                    "originUrl": url_i,
+                    "originStatus": state,
+                }
+                items.append(item)
+                by_origin[origin_id] = item
+                created += 1
+        self._save_todos(project, items)
+        sync_time = datetime.now().isoformat(timespec="seconds")
+        with self.lock:
+            d = self._load_datasources()
+            if dsid in d:
+                d[dsid]["last_synced_at"] = sync_time
+                self._save_datasources(d)
+        return {"created": created, "updated": updated, "skipped": skipped, "total_fetched": len(issues), "synced_at": sync_time}
 
     def append_datasource_event(self, dsid: str, event: dict) -> Optional[dict]:
         with self.lock:
@@ -778,15 +1139,15 @@ class AgentManager:
         except Exception:
             return None
 
-    def _workspace_branch(self, ws_name: str) -> str:
-        """Current git branch of a workspace (by registry name), or '' if not a git repo."""
+    # ---- branch 缓存: 避免每次 /sessions 对每个 session 各跑一次 git subprocess ----
+    _branch_cache: Dict[str, str] = {}      # ws_name -> branch
+    _branch_cache_ts: float = 0.0
+    _BRANCH_CACHE_TTL: float = 10.0         # 秒
+
+    @staticmethod
+    def _git_branch_for_path(path: str) -> str:
+        """对单个路径执行 git 查询, 返回 branch 名或 ''。"""
         try:
-            if not ws_name:
-                return ""
-            entry = workspace_cmd.registry_load().get(ws_name)
-            path = entry.get("path") if entry else None
-            if not path:
-                return ""
             r = subprocess.run(
                 ["git", "-C", path, "symbolic-ref", "--short", "HEAD"],
                 capture_output=True, text=True, timeout=2)
@@ -796,6 +1157,57 @@ class AgentManager:
                 ["git", "-C", path, "rev-parse", "--abbrev-ref", "HEAD"],
                 capture_output=True, text=True, timeout=2)
             return r2.stdout.strip() if r2.returncode == 0 else ""
+        except Exception:
+            return ""
+
+    def _prefetch_branches(self, ws_names):
+        """并发预取多个 workspace 的 git branch 并填入缓存。
+        ws_names: 可迭代 workspace 名集合(已去重)。"""
+        unique = set(n for n in ws_names if n)
+        now = time.time()
+        if now - AgentManager._branch_cache_ts > AgentManager._BRANCH_CACHE_TTL:
+            AgentManager._branch_cache.clear()
+            AgentManager._branch_cache_ts = now
+        # 只预取缓存里还没有的
+        todo = [n for n in unique if n not in AgentManager._branch_cache]
+        if not todo:
+            return
+        try:
+            reg = workspace_cmd.registry_load()
+        except Exception:
+            reg = {}
+        from concurrent.futures import ThreadPoolExecutor
+        def _fetch(name):
+            entry = reg.get(name)
+            path = entry.get("path") if entry else None
+            return name, (AgentManager._git_branch_for_path(path) if path else "")
+        with ThreadPoolExecutor(max_workers=min(8, len(todo))) as ex:
+            for name, branch in ex.map(_fetch, todo):
+                AgentManager._branch_cache[name] = branch
+
+    def _workspace_branch(self, ws_name: str) -> str:
+        """Current git branch of a workspace (by registry name), or '' if not a git repo.
+
+        带 TTL 缓存：多次刷新页面 / 多个 session 共用同一 workspace 时，
+        只在缓存过期后才重新执行 git 子进程。
+        """
+        try:
+            if not ws_name:
+                return ""
+            now = time.time()
+            if now - AgentManager._branch_cache_ts > AgentManager._BRANCH_CACHE_TTL:
+                AgentManager._branch_cache.clear()
+                AgentManager._branch_cache_ts = now
+            if ws_name in AgentManager._branch_cache:
+                return AgentManager._branch_cache[ws_name]
+            entry = workspace_cmd.registry_load().get(ws_name)
+            path = entry.get("path") if entry else None
+            if not path:
+                AgentManager._branch_cache[ws_name] = ""
+                return ""
+            branch = AgentManager._git_branch_for_path(path)
+            AgentManager._branch_cache[ws_name] = branch
+            return branch
         except Exception:
             return ""
 
@@ -838,6 +1250,18 @@ class AgentManager:
         if not cwd:
             cwd = str(resolve_chat_files_dir(self.ga_root))
         sess = Session(id=sid, cwd=str(cwd or self.ga_root), project=project or "")
+        # 项目会话自动绑定项目的 workspace（不可变）
+        if project:
+            try:
+                import json as _json
+                ws_file = self._project_dir(project) / ".workspace.json"
+                if ws_file.is_file():
+                    ws_data = _json.loads(ws_file.read_text(encoding="utf-8"))
+                    ws_name = (ws_data.get("workspace") or "").strip()
+                    if ws_name:
+                        sess.workspace = ws_name
+            except Exception:
+                pass
         with self.lock:
             self.sessions[sid] = sess
             self.active_session_id = sid
@@ -849,10 +1273,16 @@ class AgentManager:
         with self.lock:
             sess = self.sessions.get(sid)
             if not sess:
+                import traceback as _tb
+                print(f"[DEBUG-GET] session not found: {sid} | sessions keys: {list(self.sessions.keys())[:10]}", file=sys.stderr)
+                print(f"[DEBUG-GET] stack:\n" + "".join(_tb.format_stack()), file=sys.stderr)
                 raise web.HTTPNotFound(text=json.dumps({"error": f"session not found: {sid}"}, ensure_ascii=False), content_type="application/json")
             return sess
 
     def delete_session(self, sid: str) -> dict:
+        import traceback as _tb
+        print(f"[DEBUG-DELETE] delete_session called for {sid} | sessions keys before: {list(self.sessions.keys())[:10]}", file=sys.stderr)
+        print(f"[DEBUG-DELETE] stack:\n" + "".join(_tb.format_stack()), file=sys.stderr)
         with self.lock:
             sess = self.sessions.pop(sid, None)
             if not sess:
@@ -914,6 +1344,7 @@ class AgentManager:
                     agent.next_llm(int(no))
             full = ""
             done_outputs = None  # done时agent给的全量轮文本(turn_resps.copy())
+            _file_snap = _snapshot_cwd(sess.cwd or str(self.ga_root))  # 产出文件检测: 执行前快照
             if hasattr(agent, "put_task"):
                 display_q = agent.put_task(prompt, images=images or [])
                 pieces = []
@@ -991,10 +1422,13 @@ class AgentManager:
                 plan_state.sync_plan_path_from_text(sess, full, sess.cwd or self.ga_root)
                 # 轨道2: 落库时带结构化全量轮(权威turn_segs),前端按轮渲染;content保留兜底
                 _final_segs = [str(s) for s in done_outputs] if done_outputs else None
+                # 产出文件检测: diff执行前后快照,找出新增/修改文件
+                _produced = _diff_cwd(_file_snap, sess.cwd or str(self.ga_root))
+                _extra = {"produced_files": _produced} if _produced else {}
                 if _final_segs:
-                    self.add_message(sess, "assistant", full, turn_segs=_final_segs)
+                    self.add_message(sess, "assistant", full, turn_segs=_final_segs, **_extra)
                 else:
-                    self.add_message(sess, "assistant", full)
+                    self.add_message(sess, "assistant", full, **_extra)
                 try: sess.llm_history = json.loads(json.dumps(agent.llmclient.backend.history, ensure_ascii=False, default=str))
                 except Exception: pass
                 sess.status = "idle"
@@ -1715,6 +2149,41 @@ async def cors_middleware(request, handler):
     return resp
 
 
+@web.middleware
+async def gzip_middleware(request, handler):
+    """gzip compress large JSON/text responses when client accepts encoding."""
+    resp = await handler(request)
+    accept_enc = request.headers.get("Accept-Encoding", "")
+    if "gzip" not in accept_enc:
+        return resp
+    # skip non-compressible / already-encoded / streaming responses
+    ctype = resp.headers.get("Content-Type", "")
+    if "text/event-stream" in ctype or "websocket" in ctype:
+        return resp
+    if resp.headers.get("Content-Encoding"):
+        return resp
+    try:
+        body = resp.body
+        if body is None:
+            return resp
+        if (isinstance(body, (bytes, bytearray)) and len(body) < 1024):
+            return resp
+        if isinstance(body, str):
+            body = body.encode("utf-8")
+        elif not isinstance(body, (bytes, bytearray)):
+            return resp  # Payload-style body (streaming); skip
+        compressed = gzip.compress(bytes(body), compresslevel=5)
+        if len(compressed) >= len(body):
+            return resp  # no gain
+        resp.body = compressed
+        resp.headers["Content-Encoding"] = "gzip"
+        resp.headers["Content-Length"] = str(len(compressed))
+        resp.headers["Vary"] = "Accept-Encoding"
+    except Exception:
+        pass
+    return resp
+
+
 def json_ok(data: dict, status: int = 200):
     return web.json_response(data, status=status, headers=cors_headers(), dumps=lambda x: json.dumps(x, ensure_ascii=False, default=str))
 
@@ -1748,7 +2217,7 @@ async def datasources_handler(request):
         return json_ok({"datasources": items})
     data = await read_json(request)
     dstype = (data.get("type") or "").strip()
-    if dstype not in ("gitlab", "github", "cnb", "tapd"):
+    if dstype not in ("gitlab", "github", "cnb", "tapd", "gitlab_sync"):
         return web.json_response({"error": "invalid type"}, status=400, headers=cors_headers())
     project = str(data.get("project") or "").strip()
     if project and (not manager._project_dir(project).is_dir()):
@@ -1762,6 +2231,13 @@ async def datasource_detail_handler(request):
     dsid = request.match_info.get("dsid", "")
     if request.method == "DELETE":
         return json_ok({"deleted": manager.delete_datasource(dsid)})
+    if request.method == "PATCH":
+        data = await read_json(request)
+        ds = manager.update_datasource(dsid, data)
+        if ds is None:
+            return web.json_response({"error": "not found"}, status=404, headers=cors_headers())
+        ds["webhook_url"] = f"http://{webhook_base(request)}/datasources/{ds['id']}/webhook"
+        return json_ok({"datasource": ds})
     ds = manager.get_datasource(dsid)
     if ds is None:
         return web.json_response({"error": "not found"}, status=404, headers=cors_headers())
@@ -1832,6 +2308,21 @@ async def datasource_webhook_handler(request):
     if event:
         manager.append_datasource_event(dsid, event)
     return json_ok({"received": True, "kind": kind, "action": action})
+
+
+async def datasource_sync_handler(request):
+    """手动触发数据源同步（POST /datasources/{dsid}/sync）。当前仅支持 gitlab。"""
+    dsid = request.match_info.get("dsid", "")
+    ds = manager.get_datasource(dsid)
+    if ds is None:
+        return web.json_response({"error": "not found"}, status=404, headers=cors_headers())
+    dstype = str(ds.get("type") or "").strip()
+    if dstype not in ("gitlab", "gitlab_sync"):
+        return web.json_response({"error": "sync not supported for type", "type": dstype}, status=400, headers=cors_headers())
+    result = await manager.sync_gitlab_issues(dsid)
+    if "error" in result:
+        return web.json_response(result, status=502, headers=cors_headers())
+    return json_ok({"datasource_id": dsid, **result})
 
 
 async def status_handler(request):
@@ -1951,8 +2442,13 @@ async def mixin_order_handler(request):
 
 async def list_sessions_handler(request):
     with manager.lock:
-        sessions = [manager.snapshot(s, include_messages=False) for s in manager.sessions.values()]
-    return json_ok({"sessions": sessions, "activeSessionId": manager.active_session_id})
+        sessions = [s for s in manager.sessions.values()]
+    # 并发预取所有 workspace 的 git branch 填入缓存,
+    # 使后续 snapshot 中 _workspace_branch 全部命中缓存(并发 ~20ms vs 串行 32 次 ~220ms)
+    manager._prefetch_branches(s.workspace for s in sessions)
+    with manager.lock:
+        snapshots = [manager.snapshot(s, include_messages=False) for s in sessions]
+    return json_ok({"sessions": snapshots, "activeSessionId": manager.active_session_id})
 
 
 async def new_session_handler(request):
@@ -2132,6 +2628,48 @@ async def project_create_handler(request):
     return json_ok({"ok": True, "name": name, "path": pdir, "workspace": _ws_result.get("workspace", "")}, status=201)
 
 
+async def project_instruction_get_handler(request):
+    """读取项目指令（GET /projects/{name}/instruction）—— 读取 instruction.md 全文。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    inst_file = os.path.join(pdir, 'instruction.md')
+    instruction = ""
+    if os.path.isfile(inst_file):
+        try:
+            with open(inst_file, encoding='utf-8') as f:
+                instruction = f.read()
+        except OSError:
+            pass
+    return json_ok({"name": name, "instruction": instruction})
+
+
+async def project_instruction_update_handler(request):
+    """更新项目指令（PUT /projects/{name}/instruction）—— 写入 instruction.md。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    data = await read_json(request)
+    instruction = (data.get("instruction") or "")
+    inst_file = os.path.join(pdir, 'instruction.md')
+    try:
+        text = instruction.rstrip()
+        if text:
+            with open(inst_file, 'w', encoding='utf-8') as f:
+                f.write(text + "\n")
+        elif os.path.isfile(inst_file):
+            os.remove(inst_file)
+    except OSError as e:
+        return web.json_response({"error": str(e)}, status=500, headers=cors_headers())
+    return json_ok({"ok": True, "name": name, "instruction": instruction.rstrip()})
+
+
 async def project_skills_get_handler(request):
     """读取已建项目绑定的 skills 列表（GET /projects/{name}/skills）。"""
     name = request.match_info.get("name", "")
@@ -2182,6 +2720,55 @@ async def project_skills_update_handler(request):
     return json_ok({"ok": True, "name": name, "skills": clean})
 
 
+async def project_experts_get_handler(request):
+    """读取已建项目绑定的 experts 列表（GET /projects/{name}/experts）。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    experts_file = os.path.join(pdir, '.experts.json')
+    experts = []
+    if os.path.isfile(experts_file):
+        try:
+            with open(experts_file, encoding='utf-8') as f:
+                loaded = json.load(f)
+            if isinstance(loaded, list):
+                experts = [str(e) for e in loaded]
+        except (OSError, json.JSONDecodeError):
+            pass
+    return json_ok({"name": name, "experts": experts})
+
+
+async def project_experts_update_handler(request):
+    """更新已建项目绑定的 experts 列表（PUT /projects/{name}/experts）。
+    body: {"experts": ["name", ...]}  空列表=删除绑定（恢复全部启用）。
+    """
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    data = await read_json(request)
+    experts = data.get("experts")
+    if not isinstance(experts, list):
+        return web.json_response({"error": "experts must be a list"}, status=400, headers=cors_headers())
+    clean = [e for e in (str(e).strip() for e in experts) if e]
+    experts_file = os.path.join(pdir, '.experts.json')
+    try:
+        if clean:
+            with open(experts_file, 'w', encoding='utf-8') as f:
+                json.dump(clean, f, ensure_ascii=False)
+        else:
+            if os.path.isfile(experts_file):
+                os.remove(experts_file)
+    except OSError as e:
+        return web.json_response({"error": f"write failed: {e}"}, status=500, headers=cors_headers())
+    return json_ok({"ok": True, "name": name, "experts": clean})
+
+
 async def project_workspace_update_handler(request):
     """更新项目绑定的 workspace（PUT /projects/{name}/workspace）。
     body: {"workspace": "已有name"} 或 {"workspacePath": "/abs/path"} 或 {}(清除)。
@@ -2212,6 +2799,56 @@ async def project_datasources_handler(request):
     for it in items:
         it["webhook_url"] = f"http://{webhook_base(request)}/datasources/{it['id']}/webhook"
     return json_ok({"name": name, "datasources": items})
+
+
+async def project_members_handler(request):
+    """项目成员列表 / 新建成员（GET|POST /projects/{name}/members）。
+    GET 返回 {name, members}；POST body {nick, name?, phone?, email?, role?} 返回 {member}。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    if request.method == 'GET':
+        return json_ok({"name": name, "members": manager.list_members(name)})
+    data = await read_json(request)
+    if not str(data.get("nick", "")).strip():
+        return web.json_response({"error": "nick is required"}, status=400, headers=cors_headers())
+    try:
+        member = manager.create_member(name, data)
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=409, headers=cors_headers())
+    return json_ok({"member": member}, status=201)
+
+
+async def project_member_detail_handler(request):
+    """项目成员详情 / 更新 / 删除（GET|PATCH|DELETE /projects/{name}/members/{mid}）。"""
+    name = request.match_info.get("name", "")
+    mid = request.match_info.get("mid", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    if request.method == 'GET':
+        for it in manager.list_members(name):
+            if it.get("id") == mid:
+                return json_ok({"member": it})
+        return web.json_response({"error": "member not found"}, status=404, headers=cors_headers())
+    if request.method == 'DELETE':
+        ok = manager.delete_member(name, mid)
+        if not ok:
+            return web.json_response({"error": "member not found"}, status=404, headers=cors_headers())
+        return json_ok({"deleted": mid})
+    data = await read_json(request)
+    try:
+        member = manager.update_member(name, mid, data)
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=409, headers=cors_headers())
+    if member is None:
+        return web.json_response({"error": "member not found"}, status=404, headers=cors_headers())
+    return json_ok({"member": member})
 
 
 async def project_todos_handler(request):
@@ -2255,7 +2892,13 @@ async def project_todo_detail_handler(request):
     it = manager.update_todo(name, tid, data)
     if not it.get("id"):
         return web.json_response({"error": "todo not found"}, status=404, headers=cors_headers())
-    return json_ok({"todo": it})
+    # —— 同步变更回 GitLab issue（改状态/指派成员），失败不阻断返回 ——
+    sync_result = {"ok": False, "skipped": True}
+    try:
+        sync_result = await manager.sync_todo_to_gitlab(name, it, list(data.keys()))
+    except Exception as e:
+        sync_result = {"ok": False, "error": str(e)}
+    return json_ok({"todo": it, "gitlab_sync": sync_result})
 
 
 async def project_rename_handler(request):
@@ -2317,8 +2960,146 @@ async def project_delete_handler(request):
     return json_ok({"ok": True, "name": name})
 
 
+# ── 项目资产 ──────────────────────────────────────────────────────────
+_ASSET_IGNORED = {'.git', 'node_modules', '__pycache__', 'venv', '.venv',
+                  '.DS_Store', '.idea', '.vscode', 'dist', 'build', '.next',
+                  '.nuxt', 'target', 'egg-info', '.eggs', 'sessions'}
+# 项目元数据文件，不作为资产展示
+_ASSET_HIDDEN_FILES = {'.workspace.json', '.datasources.json', '.events.jsonl', '.todos.json'}
+
+
+async def project_assets_handler(request):
+    """GET /projects/{name}/assets — 聚合项目资产。
+    返回:
+      - workspace: {name, path} 或 null（关联的 workspace，只读特殊资产）
+      - files: [{name, type, path, size, mtime, source}] 项目目录下的文件
+      - uploads: [{name, type, path, size, mtime, source, sid}] 会话上传文件
+    """
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return json_ok({"error": "invalid project name"}, status=400)
+    pdir = manager._project_dir(name)
+    if not pdir.is_dir():
+        return json_ok({"error": "project not found", "name": name}, status=404)
+
+    files: list[dict] = []
+    uploads: list[dict] = []
+
+    # 1) 项目目录下的文件（顶层，非隐藏元数据）
+    try:
+        for child in sorted(pdir.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+            cname = child.name
+            if cname in _ASSET_IGNORED:
+                continue
+            if cname in _ASSET_HIDDEN_FILES:
+                continue
+            if cname.startswith('.') and cname not in ('.env', '.env.local', '.gitignore'):
+                continue
+            try:
+                st = child.stat()
+            except OSError:
+                continue
+            files.append({
+                "name": cname,
+                "type": "dir" if child.is_dir() else "file",
+                "path": str(child),
+                "size": st.st_size if child.is_file() else 0,
+                "mtime": st.st_mtime,
+                "source": "project",
+            })
+    except (PermissionError, OSError):
+        pass
+
+    # 2) workspace 信息（只读特殊资产）
+    ws_info = None
+    ws_file = pdir / ".workspace.json"
+    if ws_file.exists():
+        try:
+            import json as _json
+            ws_data = _json.loads(ws_file.read_text(encoding="utf-8"))
+            ws_name = ws_data.get("workspace") or ""
+            if ws_name:
+                ws_path = ""
+                try:
+                    from frontends import workspace_cmd as _wsc
+                    for ent in _wsc.registry_list():
+                        if ent.get("name") == ws_name:
+                            ws_path = ent.get("path") or ""
+                            break
+                except Exception:
+                    pass
+                ws_info = {"name": ws_name, "path": ws_path}
+        except Exception:
+            pass
+
+    # 3) 会话上传文件（属于该项目的 session 的 uploads）
+    uploads_root = Path(DEFAULT_GA_ROOT) / "temp" / "desktop_uploads"
+    if uploads_root.is_dir():
+        # 找到属于该项目的 session id
+        project_sids = set()
+        for s in manager.sessions.values():
+            if (s.project or "") == name:
+                project_sids.add(s.id)
+        for sess_dir in sorted(uploads_root.iterdir()):
+            if not sess_dir.is_dir():
+                continue
+            sid = sess_dir.name
+            # 仅包含属于该项目的 session uploads
+            if sid not in project_sids:
+                continue
+            try:
+                for f in sorted(sess_dir.iterdir(), key=lambda x: x.name.lower()):
+                    if not f.is_file():
+                        continue
+                    try:
+                        st = f.stat()
+                    except OSError:
+                        continue
+                    uploads.append({
+                        "name": f.name,
+                        "type": "file",
+                        "path": str(f),
+                        "size": st.st_size,
+                        "mtime": st.st_mtime,
+                        "source": "upload",
+                        "sid": sid,
+                    })
+            except (PermissionError, OSError):
+                pass
+
+    return json_ok({
+        "name": name,
+        "workspace": ws_info,
+        "files": files,
+        "uploads": uploads,
+    })
+
+
+async def project_asset_mkdir_handler(request):
+    """POST /projects/{name}/assets/mkdir — 在项目目录下新建文件夹。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return json_ok({"error": "invalid project name"}, status=400)
+    data = await read_json(request)
+    folder = (data.get("name") or "").strip()
+    if not folder or '/' in folder or '\\' in folder or '..' in folder or folder.startswith('.'):
+        return json_ok({"error": "invalid folder name"})
+    pdir = manager._project_dir(name)
+    if not pdir.is_dir():
+        return json_ok({"error": "project not found"}, status=404)
+    target = pdir / folder
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        return json_ok({"ok": True, "path": str(target)})
+    except Exception as e:
+        return json_ok({"ok": False, "error": str(e)})
+
+
 async def skills_list_handler(request):
-    """列出可用 skills（供前端弹窗渲染多选）。复用 skills_loader 的发现逻辑。"""
+    """列出可用 skills（供前端 Skill Hub 渲染）。复用 skills_loader 的发现逻辑。
+    返回完整字段：name/description/version/tags/category/permission_level/argument_hint/
+    license/has_scripts/path/dir/source/installed/enabled
+    """
     try:
         import sys as _sys
         _ga_root = manager.ga_root
@@ -2329,17 +3110,620 @@ async def skills_list_handler(request):
         if not roots:
             return json_ok({"skills": []})
         skills = _sl._discover_skills(roots)
+        # per-skill 启用/禁用：config 中 disabled_skills 数组（向后兼容，缺失=全部启用）
+        full_cfg = _skills_read_full_config()
+        disabled = set(full_cfg.get("disabled_skills", []))
+        ext_dir = _skills_external_dir()
+        # 本地分类映射：不侵入上游 SKILL.md，避免 git pull 丢失。
+        # 读取 skills_categories.json，构建 name→category 查找表。
+        cat_map = {}
+        cat_order = []  # 保留分类定义顺序，前端按此顺序分组
+        cat_file = os.path.join(_ga_root, "skills_categories.json")
+        if os.path.isfile(cat_file):
+            try:
+                with open(cat_file, "r", encoding="utf-8") as _cf:
+                    _catdata = json.loads(_cf.read())
+                for _cat, _names in (_catdata.get("categories") or {}).items():
+                    cat_order.append(_cat)
+                    for _n in (_names or []):
+                        cat_map[_n] = _cat
+            except Exception:
+                pass
+        if "其他" not in cat_order:
+            cat_order.append("其他")
         items = []
         for sk in skills:
+            sk_dir = sk.get("dir", "")
+            is_installed = sk_dir.startswith(ext_dir) if sk_dir else False
+            # category 优先级：SKILL.md frontmatter > 本地映射 > "其他"
+            _name = sk.get("name", "")
+            _cat = sk.get("category") or cat_map.get(_name) or "其他"
             items.append({
                 "name": sk.get("name", ""),
                 "description": sk.get("description", ""),
+                "version": sk.get("version"),
+                "tags": sk.get("tags", []),
+                "category": _cat,
+                "permission_level": sk.get("permission_level"),
+                "argument_hint": sk.get("argument_hint"),
+                "license": sk.get("license"),
                 "has_scripts": bool(sk.get("has_scripts", False)),
                 "path": sk.get("path", ""),
+                "dir": sk.get("dir", ""),
+                "source": "external" if is_installed else "builtin",
+                "installed": is_installed,
+                "enabled": sk.get("name", "") not in disabled,
             })
-        return json_ok({"skills": items})
+        return json_ok({"skills": items, "cat_order": cat_order})
     except Exception as e:
         return json_ok({"skills": [], "error": str(e)})
+
+
+def _do_skills_check_update() -> dict:
+    """检查已安装（external）skills 是否有可用更新。
+    对每个 skills_external/<name> 目录执行 git fetch origin + 对比本地 HEAD 与 FETCH_HEAD。
+    返回 {updates:[{name, current, latest}], checked:[name], errors:[...]}
+    """
+    import subprocess as _sp
+    ext_dir = _skills_external_dir()
+    result = {"updates": [], "checked": [], "errors": []}
+    if not os.path.isdir(ext_dir):
+        result["error"] = "no external skills dir"
+        return result
+    for name in sorted(os.listdir(ext_dir)):
+        target = os.path.join(ext_dir, name)
+        if not os.path.isdir(target) or not os.path.isdir(os.path.join(target, ".git")):
+            continue
+        result["checked"].append(name)
+        try:
+            # fetch 远程默认分支（单 ref，避免多分支导致 FETCH_HEAD 歧义）
+            fr = _sp.run(
+                ["git", "fetch", "origin", "HEAD", "--depth=1"], capture_output=True, text=True,
+                timeout=60, cwd=target
+            )
+            # 本地 HEAD
+            lr = _sp.run(
+                ["git", "rev-parse", "HEAD"], capture_output=True, text=True,
+                timeout=10, cwd=target
+            )
+            # 远程最新（FETCH_HEAD 在 fetch 后指向远程分支顶）
+            rr = _sp.run(
+                ["git", "rev-parse", "FETCH_HEAD"], capture_output=True, text=True,
+                timeout=10, cwd=target
+            )
+            if lr.returncode != 0 or rr.returncode != 0:
+                result["errors"].append(f"{name}: git rev-parse failed")
+                continue
+            local_sha = lr.stdout.strip()
+            remote_sha = rr.stdout.strip()
+            if local_sha != remote_sha:
+                result["updates"].append({
+                    "name": name, "current": local_sha[:8], "latest": remote_sha[:8]
+                })
+        except _sp.TimeoutExpired:
+            result["errors"].append(f"{name}: fetch timeout")
+        except Exception as e:
+            result["errors"].append(f"{name}: {e}")
+    return result
+
+
+async def skills_check_update_handler(request):
+    """POST /api/skills/check_update — 检查已安装 skills 的更新（线程池执行）"""
+    loop = asyncio.get_event_loop()
+    try:
+        data = await loop.run_in_executor(None, _do_skills_check_update)
+        return json_ok(data)
+    except Exception as e:
+        return json_ok({"error": str(e), "updates": [], "checked": [], "errors": []})
+
+
+def _do_skills_pull_update(name: str) -> dict:
+    """对指定已安装 skill 执行 git pull 更新。"""
+    import subprocess as _sp
+    if not name or "/" in name or "\\" in name or ".." in name:
+        return {"success": False, "error": "invalid name", "status": 400}
+    ext_dir = _skills_external_dir()
+    target = os.path.join(ext_dir, name)
+    if not os.path.isdir(target):
+        return {"success": False, "error": f"skill not found: {name}", "status": 404}
+    try:
+        # 仅 fetch 远程默认分支（单 ref，避免 "Cannot fast-forward to multiple branches"）
+        fr = _sp.run(
+            ["git", "fetch", "origin", "HEAD", "--depth=1"], capture_output=True, text=True,
+            timeout=120, cwd=target
+        )
+        if fr.returncode != 0:
+            return {"success": False, "error": f"git fetch failed: {fr.stderr.strip()}", "status": 500}
+        # 重置到远程最新（已安装 skill 视为可整体更新的快照）
+        r = _sp.run(
+            ["git", "reset", "--hard", "FETCH_HEAD"], capture_output=True, text=True,
+            timeout=30, cwd=target
+        )
+        if r.returncode != 0:
+            return {"success": False, "error": f"git reset failed: {r.stderr.strip()}", "status": 500}
+        # touch config 刷新 skills_loader 缓存
+        cfg = _skills_read_full_config()
+        _skills_write_full_config(cfg)
+        return {"success": True, "name": name, "output": r.stdout.strip()}
+    except _sp.TimeoutExpired:
+        return {"success": False, "error": "git pull timeout (120s)", "status": 500}
+    except Exception as e:
+        return {"success": False, "error": str(e), "status": 500}
+
+
+async def skills_pull_update_handler(request):
+    """POST /api/skills/pull_update — 更新指定 skill（name 参数）"""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    name = (body or {}).get("name", "")
+    loop = asyncio.get_event_loop()
+    try:
+        data = await loop.run_in_executor(None, _do_skills_pull_update, name)
+        status = data.pop("status", 200) if "status" in data else 200
+        return json_ok(data)
+    except Exception as e:
+        return json_ok({"success": False, "error": str(e)})
+
+
+def _skills_external_dir():
+    """skills_external 目录（所有安装的 skill 仓库都放这里）"""
+    return os.path.join(manager.ga_root, "skills_external")
+
+
+def _skills_read_full_config():
+    """读取完整 config dict（保留 plugin_dirs/enabled 等字段）"""
+    import sys as _sys
+    _ga_root = manager.ga_root
+    if _ga_root not in _sys.path:
+        _sys.path.insert(0, _ga_root)
+    from plugins.skills_loader import _CONFIG_PATH
+    if os.path.isfile(_CONFIG_PATH):
+        try:
+            with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"skills_roots": [], "plugin_dirs": [], "enabled": True}
+
+
+def _skills_write_full_config(cfg: dict):
+    """写回 config 并 touch 刷新 skills_loader 缓存"""
+    import sys as _sys
+    _ga_root = manager.ga_root
+    if _ga_root not in _sys.path:
+        _sys.path.insert(0, _ga_root)
+    from plugins.skills_loader import _CONFIG_PATH
+    with open(_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+    os.utime(_CONFIG_PATH, None)
+
+
+def _do_skills_install(name: str, url: str) -> dict:
+    """阻塞式安装 skill（在线程池中执行）：git clone + 验证 SKILL.md + 写回 config"""
+    import sys as _sys
+    import shutil
+    _ga_root = manager.ga_root
+    if _ga_root not in _sys.path:
+        _sys.path.insert(0, _ga_root)
+    from plugins.skills_loader import _discover_skills
+
+    if not name or not url:
+        return {"success": False, "error": "name and url are required", "status": 400}
+    if "/" in name or "\\" in name or ".." in name:
+        return {"success": False, "error": "invalid name", "status": 400}
+    ext_dir = _skills_external_dir()
+    os.makedirs(ext_dir, exist_ok=True)
+    target = os.path.join(ext_dir, name)
+    if os.path.exists(target):
+        return {"success": False, "error": f"directory already exists: {name}", "status": 409}
+    try:
+        result = subprocess.run(
+            ["git", "clone", "--depth", "1", url, target],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode != 0:
+            if os.path.isdir(target):
+                shutil.rmtree(target, ignore_errors=True)
+            return {"success": False, "error": f"git clone failed: {result.stderr.strip()}", "status": 500}
+    except subprocess.TimeoutExpired:
+        if os.path.isdir(target):
+            shutil.rmtree(target, ignore_errors=True)
+        return {"success": False, "error": "git clone timeout (120s)", "status": 500}
+    # 验证 SKILL.md 存在（兼容两种目录结构）
+    skill_md = os.path.join(target, "SKILL.md")
+    if not os.path.isfile(skill_md):
+        skills_sub = os.path.join(target, "skills")
+        found = False
+        if os.path.isdir(skills_sub):
+            for entry in os.listdir(skills_sub):
+                if os.path.isfile(os.path.join(skills_sub, entry, "SKILL.md")):
+                    found = True
+                    break
+        if not found:
+            shutil.rmtree(target, ignore_errors=True)
+            return {"success": False, "error": "no SKILL.md found in repo", "status": 400}
+    # 更新 config：追加 root 路径
+    cfg = _skills_read_full_config()
+    if target not in cfg.get("skills_roots", []):
+        cfg.setdefault("skills_roots", []).append(target)
+        _skills_write_full_config(cfg)
+    else:
+        _skills_write_full_config(cfg)
+    new_skills = _discover_skills([target])
+    return {"success": True, "skills": new_skills}
+
+
+def _do_skills_uninstall(name: str) -> dict:
+    """阻塞式卸载 skill（在线程池中执行）：删除目录 + 移除 config 条目 + touch 刷新"""
+    import sys as _sys
+    import shutil
+    _ga_root = manager.ga_root
+    if _ga_root not in _sys.path:
+        _sys.path.insert(0, _ga_root)
+    from plugins.skills_loader import _load_config
+
+    if not name:
+        return {"success": False, "error": "name is required", "status": 400}
+    roots = _load_config() or []
+    target_root = None
+    skill_dir = None
+    # 1) 精确匹配：root 目录名 == name
+    for root in roots:
+        if os.path.basename(root) == name and os.path.isdir(root):
+            target_root = root
+            skill_dir = root
+            break
+    # 2) 降级：按 skill 内部名搜索（root/<name> 或 root/skills/<name>）
+    if not target_root:
+        for root in roots:
+            if not os.path.isdir(root):
+                continue
+            for scan_dir in [root, os.path.join(root, "skills")]:
+                candidate = os.path.join(scan_dir, name)
+                if os.path.isdir(candidate) and os.path.isfile(os.path.join(candidate, "SKILL.md")):
+                    target_root = root
+                    skill_dir = candidate
+                    break
+            if target_root:
+                break
+    if not target_root or not skill_dir:
+        return {"success": False, "error": f"skill not found: {name}", "status": 404}
+    shutil.rmtree(skill_dir, ignore_errors=True)
+    # 检查 root 目录是否为空，若空则移除 root + 删除 root 目录
+    cfg = _skills_read_full_config()
+    remaining_roots = []
+    for root in cfg.get("skills_roots", []):
+        if root == target_root:
+            has_skill = False
+            for scan_dir in [root, os.path.join(root, "skills")]:
+                if os.path.isdir(scan_dir):
+                    for entry in os.listdir(scan_dir):
+                        if os.path.isfile(os.path.join(scan_dir, entry, "SKILL.md")):
+                            has_skill = True
+                            break
+                if has_skill:
+                    break
+            if has_skill:
+                remaining_roots.append(root)
+            else:
+                if os.path.isdir(root):
+                    shutil.rmtree(root, ignore_errors=True)
+        else:
+            remaining_roots.append(root)
+    cfg["skills_roots"] = remaining_roots
+    _skills_write_full_config(cfg)
+    return {"success": True, "name": name}
+
+
+async def skills_install_handler(request):
+    """从 git URL 安装 skill 到 skills_external/<name>"""
+    data = await read_json(request)
+    name = (data.get("name") or "").strip()
+    url = (data.get("url") or "").strip()
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(None, _do_skills_install, name, url)
+    except Exception as e:
+        return json_ok({"success": False, "error": str(e)}, status=500)
+    status = result.pop("status", 200)
+    return json_ok(result, status=status)
+
+
+async def skills_uninstall_handler(request):
+    """卸载 skill：删除目录 + 移除 config 条目 + touch 刷新"""
+    data = await read_json(request)
+    name = (data.get("name") or "").strip()
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(None, _do_skills_uninstall, name)
+    except Exception as e:
+        return json_ok({"success": False, "error": str(e)}, status=500)
+    status = result.pop("status", 200)
+    return json_ok(result, status=status)
+
+
+def _do_plugins_list():
+    """列出内置 plugins/*.py 与外部 Claude plugins"""
+    ga_root = str(DEFAULT_GA_ROOT)
+    result = {"builtin": [], "external": [], "plugin_dirs": [], "external_error": None}
+    plugins_dir = os.path.join(ga_root, "plugins")
+    if os.path.isdir(plugins_dir):
+        skip = {"plugin_loader", "__init__"}
+        for fn in sorted(os.listdir(plugins_dir)):
+            if not fn.endswith(".py"):
+                continue
+            mod_name = fn[:-3]
+            if mod_name in skip:
+                continue
+            disabled = mod_name.startswith("_")
+            info = {
+                "name": mod_name,
+                "file": fn,
+                "description": "",
+                "enabled": not disabled,
+                "error": None,
+            }
+            try:
+                mod = importlib.import_module("plugins." + mod_name)
+                doc = (mod.__doc__ or "").strip()
+                if doc:
+                    info["description"] = doc.split("\n")[0].strip()
+            except Exception as e:
+                info["error"] = str(e)
+            result["builtin"].append(info)
+    try:
+        from plugins import plugin_loader
+        ext = plugin_loader._discover_plugins()
+        result["external"] = list(ext or [])
+    except Exception as e:
+        result["external_error"] = str(e)
+    try:
+        cfg = _skills_read_full_config()
+        result["plugin_dirs"] = list(cfg.get("plugin_dirs", []))
+    except Exception:
+        pass
+    return result
+
+
+def _do_plugins_dir_update(action, path):
+    """添加/移除 plugin_dir（写回 skills_config.json）"""
+    path = (path or "").strip()
+    if not path:
+        return {"success": False, "error": "path 不能为空", "status": 400}
+    cfg = _skills_read_full_config()
+    dirs = list(cfg.get("plugin_dirs", []))
+    if action == "add":
+        import subprocess as _sp
+        import shutil as _shutil
+        # git URL 识别：以 .git 结尾或含 :// 且非本地路径
+        is_git_url = path.endswith(".git") or ("://" in path and not os.path.exists(path))
+        if is_git_url:
+            # 从 URL 推导仓库名：取最后一段，去掉 .git
+            repo_name = path.rstrip("/").split("/")[-1]
+            if repo_name.endswith(".git"):
+                repo_name = repo_name[:-4]
+            if not repo_name or "/" in repo_name or "\\" in repo_name or ".." in repo_name:
+                return {"success": False, "error": "无法从 URL 解析仓库名", "status": 400}
+            ext_dir = _skills_external_dir()
+            os.makedirs(ext_dir, exist_ok=True)
+            target = os.path.join(ext_dir, repo_name)
+            if os.path.exists(target):
+                return {"success": False, "error": "目录已存在: " + repo_name + "（请先删除同名仓库）", "status": 409}
+            try:
+                result = _sp.run(
+                    ["git", "clone", "--depth", "1", path, target],
+                    capture_output=True, text=True, timeout=120
+                )
+                if result.returncode != 0:
+                    if os.path.isdir(target):
+                        _shutil.rmtree(target, ignore_errors=True)
+                    return {"success": False, "error": "git clone 失败: " + result.stderr.strip(), "status": 500}
+            except _sp.TimeoutExpired:
+                if os.path.isdir(target):
+                    _shutil.rmtree(target, ignore_errors=True)
+                return {"success": False, "error": "git clone 超时（120s）", "status": 500}
+            path = target
+        else:
+            if not os.path.isabs(path):
+                path = os.path.abspath(os.path.join(str(DEFAULT_GA_ROOT), path))
+            if not os.path.isdir(path):
+                return {"success": False, "error": "目录不存在: " + path, "status": 400}
+        if path in dirs:
+            return {"success": False, "error": "该目录已存在", "status": 400}
+        dirs.append(path)
+    elif action == "remove":
+        if path not in dirs:
+            return {"success": False, "error": "该目录不在配置中", "status": 404}
+        dirs = [d for d in dirs if d != path]
+    else:
+        return {"success": False, "error": "unknown action: " + str(action), "status": 400}
+    cfg["plugin_dirs"] = dirs
+    _skills_write_full_config(cfg)
+    return {"success": True, "plugin_dirs": dirs}
+
+
+async def plugins_list_handler(request):
+    """GET /api/plugins/list — 内置 + 外部 plugins"""
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(None, _do_plugins_list)
+    except Exception as e:
+        return json_ok({"builtin": [], "external": [], "plugin_dirs": [], "external_error": str(e)}, status=500)
+    return json_ok(result)
+
+
+async def plugins_dir_handler(request):
+    """POST /api/plugins/dir — 添加/移除 plugin 仓库目录
+    body: {action: 'add'|'remove', path: '/path/to/plugin/repo'}
+    """
+    data = await read_json(request)
+    action = (data.get("action") or "").strip()
+    path = data.get("path") or ""
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(None, _do_plugins_dir_update, action, path)
+    except Exception as e:
+        return json_ok({"success": False, "error": str(e)}, status=500)
+    status = result.pop("status", 200)
+    return json_ok(result, status=status)
+
+
+def _do_skills_toggle(name: str, enabled: bool) -> dict:
+    """启用/禁用 skill：操作 config 的 disabled_skills 数组。"""
+    if not name:
+        return {"success": False, "error": "name is required", "status": 400}
+    cfg = _skills_read_full_config()
+    disabled = cfg.setdefault("disabled_skills", [])
+    disabled = [s for s in disabled if s != name]
+    if not enabled:
+        disabled.append(name)
+    cfg["disabled_skills"] = disabled
+    _skills_write_full_config(cfg)
+    return {"success": True, "name": name, "enabled": enabled}
+
+
+async def skills_toggle_handler(request):
+    """启用/禁用 skill"""
+    data = await read_json(request)
+    name = (data.get("name") or "").strip()
+    enabled = bool(data.get("enabled", True))
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(None, _do_skills_toggle, name, enabled)
+    except Exception as e:
+        return json_ok({"success": False, "error": str(e)}, status=500)
+    status = result.pop("status", 200)
+    return json_ok(result, status=status)
+
+
+async def experts_list_handler(request):
+    """列出可用专家（experts/<name>/expert.md），返回列表 + 当前激活状态。
+    复用 expert_mode 的 _parse_persona / list_experts；激活态直接读 pid 锚文件。"""
+    try:
+        import sys as _sys
+        _ga_root = manager.ga_root
+        if _ga_root not in _sys.path:
+            _sys.path.insert(0, _ga_root)
+        from plugins import expert_mode as _em
+        names = _em.list_experts()
+        active = None
+        anchor = _em._ANCHOR
+        if os.path.isfile(anchor):
+            active = open(anchor, encoding='utf-8').read().strip() or None
+        items = []
+        for nm in names:
+            meta, body = _em._parse_persona(nm)
+            if meta is None:
+                continue
+            items.append({
+                "name": nm,
+                "role": meta.get("role", ""),
+                "goal": meta.get("goal", ""),
+                "backstory": meta.get("backstory", ""),
+                "model": meta.get("model", ""),
+                "tools": meta.get("tools", ""),
+                "description": (body[:160] + "…") if len(body) > 160 else body,
+                "body": body,
+                "has_knowledge": os.path.isfile(_em._knowledge_path(nm)),
+                "enabled": (active == nm),
+            })
+        return json_ok({"experts": items, "active": active})
+    except Exception as e:
+        return json_ok({"experts": [], "error": str(e)})
+
+
+def _do_experts_toggle(name, enabled):
+    """激活/失活专家：直接操作 pid 锚文件（与 expert_mode 机制一致）。"""
+    if not name:
+        return {"success": False, "error": "name is required", "status": 400}
+    import sys as _sys
+    _ga_root = manager.ga_root
+    if _ga_root not in _sys.path:
+        _sys.path.insert(0, _ga_root)
+    from plugins import expert_mode as _em
+    anchor = _em._ANCHOR
+    if enabled:
+        if not os.path.isfile(_em._persona_path(name)):
+            return {"success": False, "error": "expert not found: " + name, "status": 404}
+        os.makedirs(_em._TEMP, exist_ok=True)
+        open(anchor, 'w', encoding='utf-8').write(name)
+    else:
+        try:
+            os.remove(anchor)
+        except OSError:
+            pass
+    return {"success": True, "name": name, "enabled": enabled}
+
+
+async def experts_toggle_handler(request):
+    """激活/失活专家"""
+    data = await read_json(request)
+    name = (data.get("name") or "").strip()
+    enabled = bool(data.get("enabled", True))
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(None, _do_experts_toggle, name, enabled)
+    except Exception as e:
+        return json_ok({"success": False, "error": str(e)}, status=500)
+    status = result.pop("status", 200)
+    return json_ok(result, status=status)
+
+
+async def skills_detail_handler(request):
+    """返回单个 skill 的详情：frontmatter 字段 + SKILL.md 正文"""
+    name = request.query.get("name", "").strip()
+    if not name:
+        return json_ok({"success": False, "error": "name is required"}, status=400)
+    import sys as _sys
+    _ga_root = manager.ga_root
+    if _ga_root not in _sys.path:
+        _sys.path.insert(0, _ga_root)
+    from plugins import skills_loader as _sl
+    roots = _sl._load_config()
+    skills = _sl._discover_skills(roots) if roots else []
+    sk = next((s for s in skills if s.get("name") == name), None)
+    if not sk:
+        return json_ok({"success": False, "error": f"skill not found: {name}"}, status=404)
+    # 读取 SKILL.md 正文
+    body = ""
+    skill_md = sk.get("path", "")
+    if skill_md and os.path.isfile(skill_md):
+        try:
+            with open(skill_md, "r", encoding="utf-8") as f:
+                raw = f.read()
+            # 去掉 frontmatter（--- ... ---）
+            import re as _re
+            m = _re.match(r"^---\n.*?\n---\n?", raw, _re.DOTALL)
+            body = raw[m.end():].strip() if m else raw.strip()
+        except Exception:
+            body = ""
+    full_cfg = _skills_read_full_config()
+    disabled = set(full_cfg.get("disabled_skills", []))
+    ext_dir = _skills_external_dir()
+    sk_dir = sk.get("dir", "")
+    is_installed = sk_dir.startswith(ext_dir) if sk_dir else False
+    return json_ok({
+        "success": True,
+        "skill": {
+            "name": sk.get("name", ""),
+            "description": sk.get("description", ""),
+            "version": sk.get("version"),
+            "tags": sk.get("tags", []),
+            "category": sk.get("category"),
+            "permission_level": sk.get("permission_level"),
+            "argument_hint": sk.get("argument_hint"),
+            "license": sk.get("license"),
+            "has_scripts": bool(sk.get("has_scripts", False)),
+            "path": sk.get("path", ""),
+            "dir": sk.get("dir", ""),
+            "source": "external" if is_installed else "builtin",
+            "installed": is_installed,
+            "enabled": sk.get("name", "") not in disabled,
+            "body": body,
+        }
+    })
 
 
 async def plan_handler(request):
@@ -2592,6 +3976,10 @@ async def files_browse_handler(request):
                 "referencedBy": None,
             })
 
+    fav_set = _load_file_favorites()
+    for f in files:
+        f["favorite"] = f.get("path") in fav_set
+
     counts = {
         "total": len(files),
         "chat": sum(1 for x in files if x["source"] == "chat"),
@@ -2599,8 +3987,50 @@ async def files_browse_handler(request):
         "config": sum(1 for x in files if x["source"] == "config"),
         "generated": sum(1 for x in files if x["source"] == "generated"),
         "session": len({x.get("session") for x in files if x.get("session")}),
+        "favorites": sum(1 for x in files if x.get("favorite")),
     }
     return json_ok({"ok": True, "files": files, "counts": counts})
+
+
+# ── 文件收藏 ──
+_FILE_FAV_PATH = Path(DEFAULT_GA_ROOT) / ".file_favorites.json"
+
+
+def _load_file_favorites() -> set:
+    try:
+        if _FILE_FAV_PATH.exists():
+            import json as _j
+            return set(_j.loads(_FILE_FAV_PATH.read_text("utf-8")))
+    except Exception:
+        pass
+    return set()
+
+
+def _save_file_favorites(favs: set):
+    import json as _j
+    _FILE_FAV_PATH.write_text(_j.dumps(sorted(favs), ensure_ascii=False, indent=2), "utf-8")
+
+
+async def files_favorite_handler(request):
+    """POST /api/files/favorite {path} — toggle favorite status, returns new state."""
+    data = await read_json(request)
+    raw = data.get("path") or ""
+    if not raw:
+        return json_ok({"ok": False, "error": "path required"}, status=400)
+    favs = _load_file_favorites()
+    if raw in favs:
+        favs.discard(raw)
+        fav = False
+    else:
+        favs.add(raw)
+        fav = True
+    _save_file_favorites(favs)
+    return json_ok({"ok": True, "favorite": fav, "path": raw})
+
+
+async def files_favorites_handler(request):
+    """GET /api/files/favorites — return list of favorite paths."""
+    return json_ok({"ok": True, "favorites": sorted(_load_file_favorites())})
 
 
 async def files_delete_handler(request):
@@ -2664,6 +4094,31 @@ async def files_copy_handler(request):
         return json_ok({"ok": False, "error": str(e)})
 
 
+_PREVIEW_DENY_SUFFIX = _SNAP_SKIP_SUFFIX + (
+    ".env", ".key", ".pem", ".pfx", ".p12", ".crt", ".cer",
+    ".jks", ".keystore", ".secret", ".credentials", ".token", ".ovpn",
+)
+_PREVIEW_DENY_DIRS = _SNAP_SKIP_DIRS | {"memory"}
+
+
+def _preview_allowed_under_ga_root(target, ga_root) -> bool:
+    """target 是否在 ga_root 下且非敏感(produced_files 预览白名单)。
+    排除: dotfile/目录(.env/.git/.venv...)、memory等敏感目录、敏感后缀(.key/.pem...)。
+    用于让 agent 在 sess.cwd(ga_root) 下生成的 produced_files 可预览,同时防止泄露密钥/记忆。"""
+    try:
+        rel = Path(target).relative_to(ga_root)
+    except ValueError:
+        return False
+    for part in rel.parts:
+        if part.startswith("."):
+            return False
+        if part in _PREVIEW_DENY_DIRS:
+            return False
+    if Path(target).suffix.lower() in _PREVIEW_DENY_SUFFIX:
+        return False
+    return True
+
+
 async def files_read_handler(request):
     """GET /api/files/read?path=... - read a text file for preview within allowed directories."""
     from urllib.parse import unquote
@@ -2677,9 +4132,13 @@ async def files_read_handler(request):
         target = p.resolve()
         upload_root = (ga_root / "temp" / "desktop_uploads").resolve()
         sche_root = (ga_root / "sche_tasks").resolve()
+        # 对话生成文件目录(chatFilesDir, 默认 ga_root/temp) — produced_files 预览需要
+        chat_files_root = resolve_chat_files_dir(ga_root).resolve()
         in_upload = upload_root in target.parents or target == upload_root
         in_sche = sche_root in target.parents or target == sche_root
-        if not (in_upload or in_sche):
+        in_chat = chat_files_root in target.parents or target == chat_files_root
+        in_ga = _preview_allowed_under_ga_root(target, ga_root)
+        if not (in_upload or in_sche or in_chat or in_ga):
             return json_ok({"ok": False, "error": "path outside allowed directories"}, status=403)
         if not target.exists() or not target.is_file():
             return json_ok({"ok": False, "error": "file not found"}, status=404)
@@ -3040,8 +4499,9 @@ def _is_local_peer(peer: str) -> bool:
 
 @web.middleware
 async def local_only_guard(request, handler):
-    # ponytail: 监听 0.0.0.0 时, webhook 单路由对内网开放(已有 X-Gitlab-Token 验签);
-    # 其余路由(exec/files/read/delete/mykey/bridge-exit 等高危无认证)仅本机 127.0.0.1.
+    # 用户显式设置 BRIDGE_HOST 时(如BRIDGE_HOST=0.0.0.0)，说明意在对外服务，跳过限制。
+    if os.environ.get("BRIDGE_HOST"):
+        return await handler(request)
     path = request.path
     if path.startswith("/datasources/") and path.endswith("/webhook"):
         return await handler(request)
@@ -3213,7 +4673,7 @@ async def session_workspace_off_handler(request):
 
 
 def create_app():
-    app = web.Application(middlewares=[cors_middleware, local_only_guard], client_max_size=500 * 1024 * 1024)
+    app = web.Application(middlewares=[cors_middleware, gzip_middleware, local_only_guard], client_max_size=500 * 1024 * 1024)
     app.router.add_get("/ws", ws_handler)
     app.router.add_get("/status", status_handler)
     app.router.add_get("/config", get_config_handler)
@@ -3239,9 +4699,23 @@ def create_app():
     app.router.add_post("/session/{sid}/suggest", suggest_handler)
     app.router.add_get("/projects", projects_list_handler)
     app.router.add_post("/projects", project_create_handler)
+    app.router.add_get("/projects/{name}/instruction", project_instruction_get_handler)
+    app.router.add_put("/projects/{name}/instruction", project_instruction_update_handler)
     app.router.add_get("/api/skills", skills_list_handler)
+    app.router.add_post("/api/skills/install", skills_install_handler)
+    app.router.add_post("/api/skills/uninstall", skills_uninstall_handler)
+    app.router.add_post("/api/skills/toggle", skills_toggle_handler)
+    app.router.add_get("/api/skills/detail", skills_detail_handler)
+    app.router.add_get("/api/experts", experts_list_handler)
+    app.router.add_post("/api/experts/toggle", experts_toggle_handler)
+    app.router.add_post("/api/skills/check_update", skills_check_update_handler)
+    app.router.add_post("/api/skills/pull_update", skills_pull_update_handler)
+    app.router.add_get("/api/plugins", plugins_list_handler)
+    app.router.add_post("/api/plugins/dir", plugins_dir_handler)
     app.router.add_get("/projects/{name}/skills", project_skills_get_handler)
     app.router.add_put("/projects/{name}/skills", project_skills_update_handler)
+    app.router.add_get("/projects/{name}/experts", project_experts_get_handler)
+    app.router.add_put("/projects/{name}/experts", project_experts_update_handler)
     app.router.add_put("/projects/{name}/workspace", project_workspace_update_handler)
     app.router.add_get("/projects/{name}/datasources", project_datasources_handler)
     # 项目待办 (todos) CRUD —— /projects/{name}/todos 与 /projects/{name}/todos/{tid}
@@ -3250,13 +4724,23 @@ def create_app():
     app.router.add_get("/projects/{name}/todos/{tid}", project_todo_detail_handler)
     app.router.add_patch("/projects/{name}/todos/{tid}", project_todo_detail_handler)
     app.router.add_delete("/projects/{name}/todos/{tid}", project_todo_detail_handler)
+    # 项目成员 (members) CRUD —— /projects/{name}/members 与 /projects/{name}/members/{mid}
+    app.router.add_get("/projects/{name}/members", project_members_handler)
+    app.router.add_post("/projects/{name}/members", project_members_handler)
+    app.router.add_get("/projects/{name}/members/{mid}", project_member_detail_handler)
+    app.router.add_patch("/projects/{name}/members/{mid}", project_member_detail_handler)
+    app.router.add_delete("/projects/{name}/members/{mid}", project_member_detail_handler)
     app.router.add_put("/projects/{name}/rename", project_rename_handler)
     app.router.add_delete("/projects/{name}", project_delete_handler)
+    app.router.add_get("/projects/{name}/assets", project_assets_handler)
+    app.router.add_post("/projects/{name}/assets/mkdir", project_asset_mkdir_handler)
     # Data sources (webhook-based, e.g. GitLab)
     app.router.add_get("/datasources", datasources_handler)
     app.router.add_post("/datasources", datasources_handler)
     app.router.add_get("/datasources/{dsid}", datasource_detail_handler)
     app.router.add_delete("/datasources/{dsid}", datasource_detail_handler)
+    app.router.add_patch("/datasources/{dsid}", datasource_detail_handler)
+    app.router.add_post("/datasources/{dsid}/sync", datasource_sync_handler)
     app.router.add_post("/datasources/{dsid}/webhook", datasource_webhook_handler)
     app.router.add_post("/path/open", path_open_handler)
     app.router.add_post("/upload", upload_handler)
@@ -3268,6 +4752,8 @@ def create_app():
     app.router.add_delete("/api/files/delete", files_delete_handler)
     app.router.add_post("/api/files/copy", files_copy_handler)
     app.router.add_get("/api/files/read", files_read_handler)
+    app.router.add_post("/api/files/favorite", files_favorite_handler)
+    app.router.add_get("/api/files/favorites", files_favorites_handler)
     app.router.add_get("/api/commands", commands_list_handler)
     app.router.add_post("/session/{sid}/slash", slash_handler)
     app.router.add_post("/session/{sid}/exec", exec_handler)
@@ -3311,6 +4797,8 @@ def create_app():
                             'repeat': task.get('repeat', ''),
                             'enabled': task.get('enabled', False),
                             'model': task.get('model', ''),
+                            'workspace': task.get('workspace', ''),
+                            'prompt': task.get('prompt', ''),
                             'status': 'healthy'
                         })
                     except Exception:
@@ -3379,7 +4867,7 @@ def create_app():
             body = await request.json()
             with open(task_file, 'r', encoding='utf-8') as fp:
                 task = json.load(fp)
-            for k in ('name', 'schedule', 'repeat', 'enabled', 'model', 'prompt', 'max_delay_hours'):
+            for k in ('name', 'schedule', 'repeat', 'enabled', 'model', 'prompt', 'max_delay_hours', 'workspace', 'date_range'):
                 if k in body:
                     task[k] = body[k]
             with open(task_file, 'w', encoding='utf-8') as fp:
@@ -3417,6 +4905,8 @@ def create_app():
         enabled = bool(data.get('enabled', True))
         max_delay_hours = float(data.get('max_delay_hours', 6))
         model = (data.get('model') or '').strip()
+        workspace = (data.get('workspace') or '').strip()
+        date_range = data.get('date_range')
         # generate tid: sanitize name + short random suffix
         import re, uuid
         safe = re.sub(r'[^A-Za-z0-9\u4e00-\u9fff_]', '_', name)[:30] or 'task'
@@ -3434,8 +4924,11 @@ def create_app():
             'enabled': enabled,
             'prompt': prompt,
             'max_delay_hours': max_delay_hours,
-            'model': model
+            'model': model,
+            'workspace': workspace
         }
+        if date_range:
+            task['date_range'] = date_range
         try:
             with open(task_file, 'w', encoding='utf-8') as fp:
                 json.dump(task, fp, ensure_ascii=False, indent=2)
@@ -3463,12 +4956,36 @@ def create_app():
     app.router.add_get("/", index_handler)
     app.router.add_static("/", static_dir, show_index=False)
 
+    async def datasource_autosync_loop():
+        """后台每5分钟增量同步所有 auto_sync=true 的 gitlab 数据源（含状态变更）。"""
+        await asyncio.sleep(60)
+        while True:
+            try:
+                for ds in manager.list_datasources():
+                    if ds.get("type") != "gitlab_sync" or not ds.get("auto_sync"):
+                        continue
+                    try:
+                        r = await manager.sync_gitlab_issues(ds["id"])
+                        if isinstance(r, dict) and r.get("error"):
+                            print(f"[autosync] {ds.get('id')} error: {r.get('error')}", file=sys.stderr)
+                    except Exception as e:
+                        print(f"[autosync] {ds.get('id')} exception: {e}", file=sys.stderr)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"[autosync] loop error: {e}", file=sys.stderr)
+            await asyncio.sleep(300)
+
     async def on_startup(app):
         hub.loop = asyncio.get_running_loop()
         services.autostart_extras()
+        app["datasource_autosync"] = asyncio.create_task(datasource_autosync_loop())
 
     async def on_shutdown(app):
         services.stop_all_extras()
+        t = app.get("datasource_autosync")
+        if t:
+            t.cancel()
 
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)

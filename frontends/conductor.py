@@ -16,6 +16,10 @@ for p in (ROOT, FRONTENDS_DIR):
 
 from agentmain import GenericAgent
 
+# --- Skill Hub: 复用 skills_loader 的发现/配置机制 ---
+import shutil, subprocess
+from plugins.skills_loader import _discover_skills, _load_config, _CONFIG_PATH
+
 HOST = "127.0.0.1"
 PORT = 8900
 HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conductor.html")
@@ -435,6 +439,12 @@ def conductor_token_stats():
 @app.get("/")
 def index(): return FileResponse(HTML_PATH)
 
+@app.get("/skills")
+def skill_hub():
+    """Skill Hub 独立页面"""
+    skills_html = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skills.html")
+    return FileResponse(skills_html)
+
 @app.get("/readme")
 def readme(): return PlainTextResponse(READMES["api"])
 
@@ -507,6 +517,163 @@ def api_chat(body: ChatIn):
 def api_approval(body: ApprovalIn):
     schedule_broadcast({"type": "approval", "item": {"id": short_id(), "prompt": body.prompt, "source": body.source}})
     return {"ok": True}
+
+# ===================== Skill Hub API =====================
+import shlex
+
+class SkillInstallIn(BaseModel):
+    url: str
+    name: str
+
+class SkillUninstallIn(BaseModel):
+    name: str
+
+def _skills_external_dir():
+    """skills_external 目录（所有安装的 skill 仓库都放这里）"""
+    return os.path.join(ROOT, "skills_external")
+
+def _read_full_config():
+    """读取完整 config dict（保留 plugin_dirs/enabled 等字段）"""
+    if os.path.isfile(_CONFIG_PATH):
+        try:
+            with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"skills_roots": [], "plugin_dirs": [], "enabled": True}
+
+def _write_full_config(cfg: dict):
+    """写回 config 并 touch 刷新 skills_loader 缓存"""
+    with open(_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+    # touch 刷新缓存（os.utime 更新 mtime）
+    os.utime(_CONFIG_PATH, None)
+
+@app.get("/api/skills")
+def api_list_skills():
+    """列出所有已安装的 skill"""
+    roots = _load_config()
+    if not roots:
+        return {"skills": []}
+    skills = _discover_skills(roots)
+    for s in skills:
+        s["installed"] = True
+    return {"skills": skills}
+
+@app.post("/api/skills/install")
+def api_install_skill(body: SkillInstallIn):
+    """从 git URL 安装 skill 到 skills_external/<name>"""
+    name = body.name.strip()
+    url = body.url.strip()
+    if not name or not url:
+        return JSONResponse({"success": False, "error": "name and url are required"}, status_code=400)
+    # 安全：name 不含路径分隔符
+    if "/" in name or "\\" in name or ".." in name:
+        return JSONResponse({"success": False, "error": "invalid name"}, status_code=400)
+    ext_dir = _skills_external_dir()
+    os.makedirs(ext_dir, exist_ok=True)
+    target = os.path.join(ext_dir, name)
+    if os.path.exists(target):
+        return JSONResponse({"success": False, "error": f"directory already exists: {name}"}, status_code=409)
+    # git clone
+    try:
+        result = subprocess.run(
+            ["git", "clone", "--depth", "1", url, target],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode != 0:
+            # clone 失败，清理残留
+            if os.path.isdir(target):
+                shutil.rmtree(target, ignore_errors=True)
+            return JSONResponse({"success": False, "error": f"git clone failed: {result.stderr.strip()}"}, status_code=500)
+    except subprocess.TimeoutExpired:
+        if os.path.isdir(target):
+            shutil.rmtree(target, ignore_errors=True)
+        return JSONResponse({"success": False, "error": "git clone timeout (120s)"}, status_code=500)
+    # 验证 SKILL.md 存在（兼容两种目录结构）
+    skill_md = os.path.join(target, "SKILL.md")
+    if not os.path.isfile(skill_md):
+        skills_sub = os.path.join(target, "skills")
+        found = False
+        if os.path.isdir(skills_sub):
+            for entry in os.listdir(skills_sub):
+                if os.path.isfile(os.path.join(skills_sub, entry, "SKILL.md")):
+                    found = True
+                    break
+        if not found:
+            shutil.rmtree(target, ignore_errors=True)
+            return JSONResponse({"success": False, "error": "no SKILL.md found in repo"}, status_code=400)
+    # 更新 config：追加 root 路径
+    cfg = _read_full_config()
+    if target not in cfg.get("skills_roots", []):
+        cfg.setdefault("skills_roots", []).append(target)
+        _write_full_config(cfg)
+    else:
+        _write_full_config(cfg)  # 仍然 touch 刷新
+    # 返回新安装的 skill 列表
+    new_skills = _discover_skills([target])
+    return {"success": True, "skills": new_skills}
+
+@app.post("/api/skills/uninstall")
+def api_uninstall_skill(body: SkillUninstallIn):
+    """卸载 skill：删除目录 + 移除 config 条目 + touch 刷新"""
+    name = body.name.strip()
+    if not name:
+        return JSONResponse({"success": False, "error": "name is required"}, status_code=400)
+    # 找到 skill 所在的 root 目录
+    # 策略：先按 root 目录名（=安装时的 name）直接匹配，找不到再按 skill 内部名降级搜索
+    roots = _load_config() or []
+    target_root = None
+    skill_dir = None
+    # 1) 精确匹配：root 目录名 == name（安装时 name 即 root 目录名）
+    for root in roots:
+        if os.path.basename(root) == name and os.path.isdir(root):
+            target_root = root
+            skill_dir = root  # 整个 root 就是该 skill 的目录
+            break
+    # 2) 降级：按 skill 内部名搜索（root/<name> 或 root/skills/<name>）
+    if not target_root:
+        for root in roots:
+            for scan_dir in [root, os.path.join(root, "skills")]:
+                if os.path.isdir(scan_dir):
+                    candidate = os.path.join(scan_dir, name)
+                    if os.path.isdir(candidate):
+                        target_root = root
+                        skill_dir = candidate
+                        break
+            if target_root:
+                break
+    if not target_root:
+        return JSONResponse({"success": False, "error": f"skill not found: {name}"}, status_code=404)
+    # 删除 skill 目录
+    if skill_dir and os.path.isdir(skill_dir):
+        shutil.rmtree(skill_dir, ignore_errors=True)
+    # 检查 root 目录是否为空（只含已删的 skill），若空则移除 root + 删除 root 目录
+    cfg = _read_full_config()
+    remaining_roots = []
+    for root in cfg.get("skills_roots", []):
+        if root == target_root:
+            # 检查该 root 下是否还有其他 skill
+            has_skill = False
+            for scan_dir in [root, os.path.join(root, "skills")]:
+                if os.path.isdir(scan_dir):
+                    for entry in os.listdir(scan_dir):
+                        if os.path.isfile(os.path.join(scan_dir, entry, "SKILL.md")):
+                            has_skill = True
+                            break
+                if has_skill:
+                    break
+            if has_skill:
+                remaining_roots.append(root)
+            else:
+                # root 已无 skill，删除 root 目录
+                if os.path.isdir(root):
+                    shutil.rmtree(root, ignore_errors=True)
+        else:
+            remaining_roots.append(root)
+    cfg["skills_roots"] = remaining_roots
+    _write_full_config(cfg)
+    return {"success": True, "name": name}
 
 @app.websocket("/ws")
 async def websocket(ws: WebSocket):

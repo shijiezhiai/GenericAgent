@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="ga-icon.svg">
 <link rel="apple-touch-icon" href="ga-icon.svg">
 <link rel="stylesheet" href="assets/fonts/fonts.css?v=2">
-<link rel="stylesheet" href="styles.css?v=199">
+<link rel="stylesheet" href="styles.css?v=228">
 <!-- KaTeX: LaTeX 公式渲染 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
 <!-- highlight.js: 代码高亮 -->
@@ -92,6 +92,14 @@
         <a class="nav-item" data-page="files">
           <span class="ic" data-ga-icon="fileText"></span>
           <span data-i18n="nav.files"></span>
+        </a>
+        <a class="nav-item" id="nav-skillhub" data-page="skillhub" title="Skill Hub">
+          <span class="ic" data-ga-icon="puzzlePiece"></span>
+          <span>Skills</span>
+        </a>
+        <a class="nav-item" id="nav-experts" data-page="experts" title="专家">
+          <span class="ic" data-ga-icon="graduationCap"></span>
+          <span>专家</span>
         </a>
       </nav>
 
@@ -193,6 +201,19 @@
                 <div class="slash-groups" id="slash-groups"></div>
               </div>
             </div>
+            <!-- skill picker panel -->
+            <div class="slash-panel skill-picker-panel" id="skill-picker-panel" hidden>
+              <div class="slash-panel-inner">
+                <div class="slash-search"><input type="text" id="skill-picker-search" placeholder="搜索技能..." autocomplete="off"></div>
+                <div class="slash-groups" id="skill-picker-groups"></div>
+              </div>
+            </div>
+            <!-- expert picker panel (无搜索框，单选) -->
+            <div class="slash-panel expert-picker-panel" id="expert-picker-panel" hidden>
+              <div class="slash-panel-inner">
+                <div class="slash-groups" id="expert-picker-groups"></div>
+              </div>
+            </div>
             <div class="resume-panel" id="resume-panel" hidden>
               <div class="resume-panel-inner">
                 <div class="resume-list" id="resume-list"></div>
@@ -217,6 +238,14 @@
                     </button>
                   </div>
                 </div>
+                <button type="button" class="chip skill-chip" id="chat-skill-chip" title="选择技能">
+                  <span class="skill-chip-ic" data-ga-icon="sparkle"></span>
+                  <span class="skill-chip-label">技能</span>
+                </button>
+                <button type="button" class="chip expert-chip" id="chat-expert-chip" title="选择专家">
+                  <span class="expert-chip-ic" data-ga-icon="usersThree"></span>
+                  <span class="expert-chip-label">专家</span>
+                </button>
                 <span class="spacer"></span>
                 <button type="button" class="chip ws-chip" id="workspace-chip" data-i18n-title="workspace.selectTitle" title="">
                   <span class="ws-chip-icon" data-ga-icon="folderSimple"></span>
@@ -396,6 +425,10 @@
                     </button>
                   </div>
                 </div>
+                <button type="button" class="chip skill-chip" id="cdb-skill-chip" title="选择技能">
+                  <span class="skill-chip-ic" data-ga-icon="sparkle"></span>
+                  <span class="skill-chip-label">技能</span>
+                </button>
                 <span class="spacer"></span>
                 <button type="button" class="chip" id="cdb-model-chip" data-i18n-title="model.menuLabel" title="">
                   <span class="model-name"></span>
@@ -448,6 +481,119 @@
             <div class="task-panel" data-task-panel="history">
               <div class="task-history-list" id="task-history-list"></div>
               <div class="task-history-empty" id="task-history-empty" hidden data-i18n="page.tasks.historyEmpty"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 定时任务编辑子页面 -->
+        <section class="page page--task-edit" data-page="task-edit">
+          <div class="page-top">
+            <button type="button" class="pt-icon" id="tc-back" aria-label="back">
+              <span data-ga-icon="caretLeft"></span>
+            </button>
+            <span class="page-title" id="tc-page-title" data-i18n="page.tasks.create"></span>
+            <span class="pt-spacer"></span>
+            <button type="button" class="tc2-btn tc2-btn-solid" id="tc-save" data-i18n="common.save"></button>
+          </div>
+          <div class="tc2-page-body">
+            <div class="tc2-card">
+              <!-- 名称 -->
+              <div class="tc2-field">
+                <label class="tc2-label" for="tc-name"><span data-i18n="taskForm.name"></span><span class="tc2-req" aria-hidden="true">*</span></label>
+                <input type="text" class="tc2-input" id="tc-name" placeholder="" data-i18n-ph="taskForm.namePh">
+              </div>
+              <!-- Workspace -->
+              <div class="tc2-field">
+                <label class="tc2-label" for="tc-workspace"><span data-i18n="taskForm.workspace"></span></label>
+                <select class="tc2-select" id="tc-workspace"></select>
+              </div>
+              <!-- 提示词 -->
+              <div class="tc2-field">
+                <label class="tc2-label" for="tc-prompt"><span data-i18n="taskForm.prompt"></span><span class="tc2-req" aria-hidden="true">*</span></label>
+                <div class="tc2-prompt-wrap">
+                  <textarea class="tc2-textarea" id="tc-prompt" placeholder="" data-i18n-ph="taskForm.promptPh"></textarea>
+                </div>
+              </div>
+              <!-- 执行频率 -->
+              <div class="tc2-field">
+                <label class="tc2-label"><span data-i18n="taskForm.frequency"></span></label>
+                <div class="tc2-freq">
+                  <div class="tc2-tabs" id="tc-freq-tabs">
+                    <button type="button" class="tc2-tab active" data-freq-mode="cycle" data-i18n="taskForm.freqCycle"></button>
+                    <button type="button" class="tc2-tab" data-freq-mode="interval" data-i18n="taskForm.freqInterval"></button>
+                    <button type="button" class="tc2-tab" data-freq-mode="once" data-i18n="taskForm.freqOnce"></button>
+                  </div>
+                  <div class="tc2-freq-controls">
+                    <!-- 周期模式：重复 + 时间 -->
+                    <div class="tc2-freq-row" id="tc-freq-cycle" >
+                      <select class="tc2-input tc2-freq-select" id="tc-repeat">
+                        <option value="daily" data-i18n="taskForm.repeatDaily"></option>
+                        <option value="weekday" data-i18n="taskForm.repeatWeekday"></option>
+                        <option value="weekly" data-i18n="taskForm.repeatWeekly"></option>
+                        <option value="monthly" data-i18n="taskForm.repeatMonthly"></option>
+                        <option value="every_1d" data-i18n="taskForm.repeat1d"></option>
+                      </select>
+                      <div class="tc2-time-picker">
+                        <input type="time" class="tc2-input tc2-time" id="tc-schedule" value="09:00">
+                        <span data-ga-icon="clock" class="tc2-time-icon"></span>
+                      </div>
+                    </div>
+                    <!-- 按间隔模式：间隔选择 -->
+                    <div class="tc2-freq-row" id="tc-freq-interval" hidden>
+                      <select class="tc2-input tc2-freq-select" id="tc-interval">
+                        <option value="every_1h" data-i18n="taskForm.repeat1h"></option>
+                        <option value="every_2h" data-i18n="taskForm.repeat2h"></option>
+                        <option value="every_3h" data-i18n="taskForm.repeat3h"></option>
+                        <option value="every_6h" data-i18n="taskForm.repeat6h"></option>
+                      </select>
+                    </div>
+                    <!-- 一次性模式：日期 + 时间 -->
+                    <div class="tc2-freq-row" id="tc-freq-once" hidden>
+                      <input type="date" class="tc2-input tc2-date" id="tc-once-date">
+                      <div class="tc2-time-picker">
+                        <input type="time" class="tc2-input tc2-time" id="tc-once-time" value="09:00">
+                        <span data-ga-icon="clock" class="tc2-time-icon"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- 生效日期区间 -->
+              <div class="tc2-field">
+                <label class="tc2-label tc2-label-opt"><span data-i18n="taskForm.dateRange"></span><span class="tc2-opt-hint" data-i18n="taskForm.dateRangeHint"></span></label>
+                <div class="tc2-daterange">
+                  <input type="date" class="tc2-input tc2-date" id="tc-date-start">
+                  <span class="tc2-daterange-sep">—</span>
+                  <input type="date" class="tc2-input tc2-date" id="tc-date-end">
+                </div>
+              </div>
+              <!-- 高级设置折叠 -->
+              <div class="tc2-adv-toggle" id="tc-adv-toggle">
+                <span data-ga-icon="caretRight" class="tc2-adv-caret"></span>
+                <span data-i18n="taskForm.advanced"></span>
+              </div>
+              <div class="tc2-adv" id="tc-adv" hidden>
+                <div class="tc2-field">
+                  <label class="tc2-label" for="tc-max-delay"><span data-i18n="taskForm.maxDelay"></span></label>
+                  <div class="tc2-inline-row">
+                    <input type="number" class="tc2-input tc2-num" id="tc-max-delay" value="6" min="0" step="1">
+                    <span class="tc2-field-hint" data-i18n="taskForm.maxDelayHint"></span>
+                  </div>
+                </div>
+                <div class="tc2-field tc2-switch-field">
+                  <span class="tc2-label tc2-label-nomark"><span data-i18n="taskForm.enabled"></span></span>
+                  <button class="set-switch" type="button" id="tc-enabled-switch" role="switch" aria-checked="true">
+                    <span class="set-switch-knob" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <div class="tc2-field">
+                  <label class="tc2-label" for="tc-model"><span data-i18n="taskForm.model"></span></label>
+                  <select class="tc2-input tc2-model-sel" id="tc-model">
+                    <option value="" data-i18n="taskForm.modelDefault"></option>
+                  </select>
+                </div>
+              </div>
+              <div class="tc2-error" id="tc-error" hidden></div>
             </div>
           </div>
         </section>
@@ -561,6 +707,61 @@
                   </div>
                 </div>
               </div>
+              <!-- 聊天视图：点击任务后展开，内嵌完整 composer，复用全局消息渲染 -->
+              <div class="ph-chat-view" id="ph-chat-view" hidden>
+                <div class="ph-chat-head">
+                  <button type="button" class="ph-chat-back" id="ph-chat-back" aria-label="back to tasks">
+                    <span data-ga-icon="arrowLeft"></span>
+                  </button>
+                  <span class="ph-chat-title" id="ph-chat-title">—</span>
+                </div>
+                <div class="ph-chat-body msg-area" id="ph-msg-area">
+                  <div class="chat-start" id="ph-chat-start"></div>
+                  <div class="msgs" id="ph-msgs-box"></div>
+                  <div class="msg-loading" id="ph-msg-loading" hidden></div>
+                </div>
+                <div class="composer-anchor" id="ph-composer-anchor">
+                  <div class="composer" id="ph-composer" data-composer-ctx="project">
+                  <div class="composer-slot">
+                  <div class="composer-inset">
+                    <div class="thumb-strip" id="ph-thumb-strip" hidden></div>
+                    <div class="input" id="ph-input" contenteditable="true" role="textbox" aria-multiline="true" data-i18n-ph="composer.placeholder"></div>
+                    <div class="composer-bot">
+                      <div class="composer-plus-wrap">
+                        <button type="button" class="ic-btn composer-plus" id="ph-plus-btn" aria-haspopup="menu" aria-expanded="false" data-i18n-title="composer.plusMenu" title="">
+                          <span data-ga-icon="plus"></span>
+                        </button>
+                        <div class="ga-menu composer-menu" id="ph-menu" hidden role="menu">
+                          <button type="button" class="ga-menu-item" data-composer-action="upload" role="menuitem">
+                            <span data-ga-icon="paperclip"></span>
+                            <span data-i18n="upload.button"></span>
+                          </button>
+                        </div>
+                      </div>
+                      <button type="button" class="chip skill-chip" id="ph-skill-chip" title="选择技能">
+                        <span class="skill-chip-ic" data-ga-icon="sparkle"></span>
+                        <span class="skill-chip-label">技能</span>
+                      </button>
+                      <button type="button" class="chip ws-chip-static" id="ph-workspace-chip" title="">
+                        <span class="ws-chip-icon" data-ga-icon="folderSimple"></span>
+                        <span class="ws-chip-name">—</span>
+                      </button>
+                      <span class="spacer"></span>
+                      <button type="button" class="chip" id="ph-model-chip" data-i18n-title="model.menuLabel" title="">
+                        <span class="model-name"></span>
+                        <span class="chip-ic" data-ga-icon="caretDown"></span>
+                      </button>
+                      <button type="button" class="send" id="ph-send" aria-label="send">
+                        <span data-ga-icon="paperPlaneTilt"></span>
+                      </button>
+                    </div>
+                  </div>
+                  </div>
+                  <div class="ga-menu" id="ph-model-menu" hidden></div>
+                  <input type="file" id="ph-file-input" multiple hidden>
+                  </div>
+                </div>
+              </div>
             </div>
             <!-- 右侧项目配置边栏 -->
             <aside class="ph-sidebar">
@@ -600,6 +801,13 @@
                   <button class="ph-cfg-add" aria-label="add"><span data-ga-icon="plus"></span></button>
                 </div>
                 <div class="ph-cfg-desc" data-i18n="ph.cfg.automation.d"></div>
+              </div>
+              <div class="ph-cfg-card" data-ph-cfg="member">
+                <div class="ph-cfg-head">
+                  <span class="ph-cfg-label" data-i18n="ph.cfg.member"></span>
+                  <button class="ph-cfg-add" aria-label="add"><span data-ga-icon="plus"></span></button>
+                </div>
+                <div class="ph-cfg-desc" data-i18n="ph.cfg.member.d"></div>
               </div>
             </aside>
           </div>
@@ -685,6 +893,88 @@
                 <div class="files-list" id="filesList"></div>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section class="page page--skillhub" data-page="skillhub">
+          <div class="page-top">
+            <button type="button" class="pt-icon pt-sb-toggle" aria-label="toggle sidebar">
+              <span data-ga-icon="caretLeft"></span>
+            </button>
+            <span class="pt-spacer"></span>
+            <button type="button" class="pt-icon pt-rp-toggle" aria-label="toggle conversations">
+              <span data-ga-icon="caretRight"></span>
+            </button>
+          </div>
+          <div class="page-pad">
+            <div class="page-title">
+              <span class="ic sh-page-icon" data-ga-icon="puzzlePiece"></span>
+              Skill Hub
+            </div>
+            <div class="page-sub">安装、管理外部 Skills</div>
+            <!-- tab 切换 -->
+            <div class="sh-tabbar">
+              <button type="button" class="sh-tab-btn active" id="sh-tab-skills" data-shtab="skills">Skills</button>
+              <button type="button" class="sh-tab-btn" id="sh-tab-plugins" data-shtab="plugins">Plugins</button>
+            </div>
+            <!-- Skills 面板 -->
+            <div class="sh-pane" id="sh-skills-pane">
+            <!-- 安装区 -->
+            <div class="sh-install-row">
+              <input type="text" id="sh-install-url" class="sh-input" placeholder="Git 仓库 URL (如 https://github.com/anthropics/skills)">
+              <input type="text" id="sh-install-name" class="sh-input sh-input-name" placeholder="名称(可选)">
+              <button type="button" class="cp-btn cp-btn-primary" id="sh-install-btn">安装</button>
+            </div>
+            <!-- 搜索+筛选栏 -->
+            <div class="sh-toolbar">
+              <input type="text" id="sh-search" class="sh-input sh-search-input" placeholder="搜索 skill 名称/描述/标签..." autocomplete="off">
+              <button type="button" class="cp-btn" id="sh-check-update-btn" title="检查已安装 skill 的更新">检查更新</button>
+              <div class="sh-categories" id="sh-categories"></div>
+            </div>
+            <!-- skill 列表 -->
+            <div class="sh-list" id="sh-list"></div>
+            </div><!-- /sh-skills-pane -->
+            <!-- Plugins 面板 -->
+            <div class="sh-pane" id="sh-plugins-pane" hidden>
+              <div class="sh-pg-sec">
+                <div class="sh-pg-sec-title">外部 Plugin 仓库（Claude 风格）</div>
+                <div class="sh-pg-dir-row">
+                  <input type="text" id="sh-pg-dir-input" class="sh-input" placeholder="plugin 仓库本地路径或 Git URL">
+                  <button type="button" class="cp-btn cp-btn-primary" id="sh-pg-dir-add">添加</button>
+                </div>
+                <div id="sh-pg-dir-list" class="sh-pg-list"></div>
+                <div class="sh-pg-sec-hint">配置的仓库将在下次 session 启动时加载其内 plugin（含 skills/agents/hooks/mcp）。</div>
+              </div>
+              <div class="sh-pg-sec">
+                <div class="sh-pg-sec-title">已发现的外部 Plugin</div>
+                <div id="sh-pg-ext-list" class="sh-pg-grid"></div>
+              </div>
+              <div class="sh-pg-sec">
+                <div class="sh-pg-sec-title">内置 Plugins（只读）</div>
+                <div class="sh-pg-sec-hint">内置 plugin 随进程启动自动加载，无启停开关（加下划线前缀可禁用）。</div>
+                <div id="sh-pg-builtin-list" class="sh-pg-grid"></div>
+              </div>
+            </div><!-- /sh-plugins-pane -->
+          </div>
+        </section>
+
+        <section class="page page--experts" data-page="experts">
+          <div class="page-top">
+            <button type="button" class="pt-icon pt-sb-toggle" aria-label="toggle sidebar">
+              <span data-ga-icon="caretLeft"></span>
+            </button>
+            <span class="pt-spacer"></span>
+            <button type="button" class="pt-icon pt-rp-toggle" aria-label="toggle conversations">
+              <span data-ga-icon="caretRight"></span>
+            </button>
+          </div>
+          <div class="page-pad">
+            <div class="page-title">
+              <span class="ic sh-page-icon" data-ga-icon="graduationCap"></span>
+              专家
+            </div>
+            <div class="page-sub">激活专家后，专家人设将在每轮对话自动注入</div>
+            <div id="experts-list" class="sh-list"></div>
           </div>
         </section>
 
@@ -942,6 +1232,145 @@
     </div>
   </div>
 
+  <!-- 自动化任务 弹窗 -->
+  <div class="modal" id="automation-modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card automation-card" role="dialog" aria-modal="true">
+      <!-- 视图1: 列表视图 -->
+      <div class="auto-view auto-view-list" id="auto-view-list">
+        <div class="modal-head">
+          <div class="modal-title">自动化任务</div>
+          <button class="modal-x" data-close data-i18n-title="common.close" title="">
+            <span data-ga-icon="x"></span>
+          </button>
+        </div>
+        <div class="modal-body auto-body">
+          <div class="auto-header-row">
+            <div class="auto-hint">配置自动化任务，GenericAgent 将按计划定时执行任务</div>
+            <button type="button" class="set-btn primary auto-add-btn" id="auto-add-btn">添加</button>
+          </div>
+          <div class="auto-task-list" id="auto-task-list"></div>
+          <div class="auto-empty" id="auto-empty" hidden><span class="auto-empty-icon" data-ga-icon="calendar"></span><span>暂无自动化任务，点击「添加」创建第一个任务</span></div>
+        </div>
+        <div class="auto-actions">
+          <button type="button" class="set-btn ghost" data-close>取消</button>
+          <button type="button" class="set-btn primary" id="auto-confirm-btn">确认</button>
+        </div>
+      </div>
+      <!-- 视图2: 表单视图 -->
+      <div class="auto-view auto-view-form" id="auto-view-form" hidden>
+        <div class="modal-head">
+          <button type="button" class="modal-x auto-back-btn" id="auto-back-btn" aria-label="back" style="font-size:14px;">
+            <span data-ga-icon="caretLeft"></span>
+          </button>
+          <div class="modal-title" id="auto-form-title">添加自动化任务</div>
+          <button class="modal-x" data-close data-i18n-title="common.close" title="">
+            <span data-ga-icon="x"></span>
+          </button>
+        </div>
+        <div class="modal-body auto-body">
+          <div class="tc2-card">
+            <!-- 名称 -->
+            <div class="tc2-field">
+              <label class="tc2-label" for="auto-name"><span data-i18n="taskForm.name"></span><span class="tc2-req" aria-hidden="true">*</span></label>
+              <input type="text" class="tc2-input" id="auto-name" placeholder="" data-i18n-ph="taskForm.namePh">
+            </div>
+            <!-- 提示词 -->
+            <div class="tc2-field">
+              <label class="tc2-label" for="auto-prompt"><span data-i18n="taskForm.prompt"></span><span class="tc2-req" aria-hidden="true">*</span></label>
+              <div class="tc2-prompt-wrap">
+                <textarea class="tc2-textarea" id="auto-prompt" placeholder="" data-i18n-ph="taskForm.promptPh"></textarea>
+              </div>
+            </div>
+            <!-- 执行频率 -->
+            <div class="tc2-field">
+              <label class="tc2-label"><span data-i18n="taskForm.frequency"></span></label>
+              <div class="tc2-freq">
+                <div class="tc2-tabs" id="auto-freq-tabs">
+                  <button type="button" class="tc2-tab active" data-freq-mode="cycle" data-i18n="taskForm.freqCycle"></button>
+                  <button type="button" class="tc2-tab" data-freq-mode="interval" data-i18n="taskForm.freqInterval"></button>
+                  <button type="button" class="tc2-tab" data-freq-mode="once" data-i18n="taskForm.freqOnce"></button>
+                </div>
+                <div class="tc2-freq-controls">
+                  <div class="tc2-freq-row" id="auto-freq-cycle">
+                    <select class="tc2-input tc2-freq-select" id="auto-repeat">
+                      <option value="daily" data-i18n="taskForm.repeatDaily"></option>
+                      <option value="weekday" data-i18n="taskForm.repeatWeekday"></option>
+                      <option value="weekly" data-i18n="taskForm.repeatWeekly"></option>
+                      <option value="monthly" data-i18n="taskForm.repeatMonthly"></option>
+                      <option value="every_1d" data-i18n="taskForm.repeat1d"></option>
+                    </select>
+                    <div class="tc2-time-picker">
+                      <input type="time" class="tc2-input tc2-time" id="auto-schedule" value="09:00">
+                      <span data-ga-icon="clock" class="tc2-time-icon"></span>
+                    </div>
+                  </div>
+                  <div class="tc2-freq-row" id="auto-freq-interval" hidden>
+                    <select class="tc2-input tc2-freq-select" id="auto-interval">
+                      <option value="every_1h" data-i18n="taskForm.repeat1h"></option>
+                      <option value="every_2h" data-i18n="taskForm.repeat2h"></option>
+                      <option value="every_3h" data-i18n="taskForm.repeat3h"></option>
+                      <option value="every_6h" data-i18n="taskForm.repeat6h"></option>
+                    </select>
+                  </div>
+                  <div class="tc2-freq-row" id="auto-freq-once" hidden>
+                    <input type="date" class="tc2-input tc2-date" id="auto-once-date">
+                    <div class="tc2-time-picker">
+                      <input type="time" class="tc2-input tc2-time" id="auto-once-time" value="09:00">
+                      <span data-ga-icon="clock" class="tc2-time-icon"></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 生效日期区间 -->
+            <div class="tc2-field">
+              <label class="tc2-label tc2-label-opt"><span data-i18n="taskForm.dateRange"></span><span class="tc2-opt-hint" data-i18n="taskForm.dateRangeHint"></span></label>
+              <div class="tc2-daterange">
+                <input type="date" class="tc2-input tc2-date" id="auto-date-start">
+                <span class="tc2-daterange-sep">—</span>
+                <input type="date" class="tc2-input tc2-date" id="auto-date-end">
+              </div>
+            </div>
+            <!-- 高级设置折叠 -->
+            <div class="tc2-adv-toggle" id="auto-adv-toggle">
+              <span data-ga-icon="caretRight" class="tc2-adv-caret"></span>
+              <span data-i18n="taskForm.advanced"></span>
+            </div>
+            <div class="tc2-adv" id="auto-adv" hidden>
+              <div class="tc2-field">
+                <label class="tc2-label" for="auto-max-delay"><span data-i18n="taskForm.maxDelay"></span></label>
+                <div class="tc2-inline-row">
+                  <input type="number" class="tc2-input tc2-num" id="auto-max-delay" value="6" min="0" step="1">
+                  <span class="tc2-field-hint" data-i18n="taskForm.maxDelayHint"></span>
+                </div>
+              </div>
+              <div class="tc2-field tc2-switch-field">
+                <span class="tc2-label tc2-label-nomark"><span data-i18n="taskForm.enabled"></span></span>
+                <button class="set-switch" type="button" id="auto-enabled-switch" role="switch" aria-checked="true">
+                  <span class="set-switch-knob" aria-hidden="true"></span>
+                </button>
+              </div>
+              <div class="tc2-field">
+                <label class="tc2-label" for="auto-model"><span data-i18n="taskForm.model"></span></label>
+                <select class="tc2-input tc2-model-sel" id="auto-model">
+                  <option value="" data-i18n="taskForm.modelDefault"></option>
+                </select>
+              </div>
+            </div>
+            <div class="tc2-error" id="auto-error" hidden></div>
+          </div>
+        </div>
+        <div class="auto-actions">
+          <button type="button" class="set-btn ghost" id="auto-test-btn">测试运行</button>
+          <span class="auto-actions-spacer"></span>
+          <button type="button" class="set-btn ghost" id="auto-form-cancel-btn" data-close>取消</button>
+          <button type="button" class="set-btn primary" id="auto-save-btn">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 渠道日志 弹窗 -->
   <div class="modal" id="chan-log-modal" hidden>
     <div class="modal-backdrop" data-close></div>
@@ -1100,77 +1529,6 @@
   <img class="lightbox-img" id="lightbox-img" alt="">
 </div>
 
-<!-- 创建定时任务 弹窗 -->
-<div class="modal" id="task-create-modal" hidden>
-  <div class="modal-backdrop" data-close></div>
-  <div class="modal-card" role="dialog">
-    <div class="modal-head">
-      <div class="modal-title" data-i18n="page.tasks.create"></div>
-      <button class="modal-x" data-close data-i18n-title="common.close" title="">
-        <span data-ga-icon="x"></span>
-      </button>
-    </div>
-    <div class="modal-body cp-body">
-      <div class="cp-field">
-        <span class="field-label"><span data-i18n="taskForm.name"></span><span class="field-req" aria-hidden="true">*</span></span>
-        <input type="text" class="cp-input" id="tc-name" placeholder="" data-i18n-ph="taskForm.namePh">
-      </div>
-      <div class="cp-field">
-        <span class="field-label"><span data-i18n="taskForm.prompt"></span><span class="field-req" aria-hidden="true">*</span></span>
-        <textarea class="cp-textarea" id="tc-prompt" placeholder="" data-i18n-ph="taskForm.promptPh"></textarea>
-      </div>
-      <div class="tc-row">
-        <div class="cp-field tc-half">
-          <span class="field-label"><span data-i18n="taskForm.repeat"></span></span>
-          <select class="cp-input" id="tc-repeat">
-            <option value="daily" data-i18n="taskForm.repeatDaily"></option>
-            <option value="weekday" data-i18n="taskForm.repeatWeekday"></option>
-            <option value="weekly" data-i18n="taskForm.repeatWeekly"></option>
-            <option value="monthly" data-i18n="taskForm.repeatMonthly"></option>
-            <option value="once" data-i18n="taskForm.repeatOnce"></option>
-            <option value="every_1h" data-i18n="taskForm.repeat1h"></option>
-            <option value="every_3h" data-i18n="taskForm.repeat3h"></option>
-            <option value="every_6h" data-i18n="taskForm.repeat6h"></option>
-            <option value="every_1d" data-i18n="taskForm.repeat1d"></option>
-          </select>
-        </div>
-        <div class="cp-field tc-half">
-          <span class="field-label"><span data-i18n="taskForm.schedule"></span></span>
-          <input type="time" class="cp-input" id="tc-schedule" value="08:00">
-        </div>
-      </div>
-      <div class="cp-field tc-adv-toggle" id="tc-adv-toggle">
-        <span data-ga-icon="caretRight" class="tc-adv-caret"></span>
-        <span data-i18n="taskForm.advanced"></span>
-      </div>
-      <div class="tc-adv" id="tc-adv" hidden>
-        <div class="cp-field">
-          <span class="field-label"><span data-i18n="taskForm.maxDelay"></span></span>
-          <input type="number" class="cp-input" id="tc-max-delay" value="6" min="0" step="1" style="width:80px">
-          <span class="field-hint" data-i18n="taskForm.maxDelayHint"></span>
-        </div>
-        <div class="set-toggle-row">
-          <span class="set-toggle-label" data-i18n="taskForm.enabled"></span>
-          <button class="set-switch" type="button" id="tc-enabled-switch" role="switch" aria-checked="true">
-            <span class="set-switch-knob" aria-hidden="true"></span>
-          </button>
-        </div>
-        <div class="cp-field">
-          <span class="field-label"><span data-i18n="taskForm.model"></span></span>
-          <select class="cp-input" id="tc-model" style="width:200px">
-            <option value="" data-i18n="taskForm.modelDefault"></option>
-          </select>
-        </div>
-      </div>
-      <div class="cp-error" id="tc-error" hidden></div>
-      <div class="cp-actions">
-        <button type="button" class="cp-btn" id="tc-cancel" data-close data-i18n="common.cancel"></button>
-        <button type="button" class="cp-btn cp-btn-primary" id="tc-save" data-i18n="common.save"></button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <div class="modal" id="project-create-modal" hidden>
   <div class="modal-backdrop" data-close></div>
   <div class="modal-card" role="dialog">
@@ -1258,6 +1616,25 @@
   </div>
 </div>
 
+<div class="modal" id="instruction-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" style="max-width:640px">
+    <div class="modal-head">
+      <div class="modal-title">项目指令</div>
+      <button class="modal-x" data-close data-i18n-title="common.close" title="">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--ga-text-sub);margin-bottom:10px;">在此项目下的所有任务都会参考这里的指令。建议提供当前项目的背景信息和规范，让 GenericAgent 的回复更精准、更符合要求。</div>
+      <textarea id="instruction-textarea" class="as-input" style="width:100%;min-height:240px;resize:vertical;font-family:inherit;font-size:14px;padding:10px;box-sizing:border-box;" placeholder="例如：本项目是一个 Flink 监控系统，代码在 /path/to/repo，使用 Python 3.9…"></textarea>
+    </div>
+    <div class="modal-foot" style="display:flex;justify-content:flex-end;gap:8px;padding:0 18px 16px;">
+      <button type="button" class="as-back-btn" data-close>取消</button>
+      <button type="button" class="as-add-btn" id="instruction-save">保存</button>
+    </div>
+  </div>
+</div>
 <div class="modal" id="addsource-modal" hidden>
   <div class="modal-backdrop" data-close></div>
   <div class="modal-card addsource-card" role="dialog" aria-modal="true">
@@ -1324,6 +1701,7 @@
   <div class="modal-card" role="dialog">
     <div class="modal-head">
       <div class="modal-title" data-i18n="project.editSkills"></div>
+      <button type="button" class="cp-btn cp-btn-primary" id="phs-add" data-i18n="project.addSkill"></button>
       <button class="modal-x" data-close data-i18n-title="common.close" title="">
         <span data-ga-icon="x"></span>
       </button>
@@ -1331,13 +1709,54 @@
     <div class="modal-body cp-body">
       <div class="cp-field">
         <span class="field-label"><span data-i18n="project.skills"></span></span>
-        <div class="cp-skills-list" id="ps-skills"></div>
-        <span class="field-hint" data-i18n="project.skillsHint"></span>
+        <div class="cp-skills-list" id="phs-list"></div>
+        <span class="field-hint" data-i18n="project.skillsActiveHint"></span>
       </div>
       <div class="cp-error" id="ps-error" hidden></div>
+    </div>
+  </div>
+</div>
+<div class="modal" id="ps-picker-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog">
+    <div class="modal-head">
+      <div class="modal-title" data-i18n="project.addSkill"></div>
+      <button class="modal-x" data-close data-i18n-title="common.close" title="">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body cp-body">
+      <div class="cp-field">
+        <input type="text" class="cp-input" id="ps-picker-search" data-i18n-placeholder="project.skillsSearchPh" placeholder="搜索技能">
+        <div class="cp-skills-list" id="ps-picker-list"></div>
+      </div>
+      <div class="cp-error" id="ps-picker-error" hidden></div>
       <div class="cp-actions">
-        <button type="button" class="cp-btn" id="ps-cancel" data-close data-i18n="common.cancel"></button>
-        <button type="button" class="cp-btn cp-btn-primary" id="ps-save" data-i18n="common.save"></button>
+        <button type="button" class="cp-btn" id="ps-picker-cancel" data-close data-i18n="common.cancel"></button>
+        <button type="button" class="cp-btn cp-btn-primary" id="ps-picker-confirm" data-i18n="common.confirm"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="pe-picker-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog">
+    <div class="modal-head">
+      <div class="modal-title" data-i18n="project.addExpert"></div>
+      <button class="modal-x" data-close data-ga-icon="x"></button>
+    </div>
+    <div class="modal-body">
+      <div class="cp-body">
+        <div class="cp-field">
+          <input type="text" class="cp-input" id="pe-picker-search" data-i18n-placeholder="project.expertsSearchPh" placeholder="搜索专家…" />
+        </div>
+        <div class="cp-skills-list" id="pe-picker-list"></div>
+        <div class="cp-error" id="pe-picker-error" hidden></div>
+      </div>
+      <div class="cp-actions">
+        <button type="button" class="cp-btn" id="pe-picker-cancel" data-close data-i18n="common.cancel"></button>
+        <button type="button" class="cp-btn cp-btn-primary" id="pe-picker-confirm" data-i18n="common.confirm"></button>
       </div>
     </div>
   </div>
@@ -1381,12 +1800,12 @@
           </div>
           <div class="todo-detail-item">
             <div class="todo-detail-item-label">处理人</div>
-            <input type="text" class="nt-input todo-detail-input" id="td-assignee" placeholder="请输入处理人" autocomplete="off">
+            <select class="nt-input todo-detail-input" id="td-assignee"></select>
           </div>
           <div class="todo-detail-item">
             <div class="todo-detail-item-label">截止日期</div>
             <button type="button" class="nt-pill todo-detail-pill" id="td-due"></button>
-            <input type="text" id="td-due-input" hidden>
+            <input type="text" id="td-due-input" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0;">
           </div>
           <div class="todo-detail-item">
             <div class="todo-detail-item-label">来源</div>
@@ -1401,6 +1820,46 @@
         <button type="button" class="nt-btn nt-btn-cancel" data-close>取消</button>
         <button type="button" class="nt-btn nt-btn-create" id="td-save">保存</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="members-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" style="max-width:720px;">
+    <div class="modal-head">
+      <div class="modal-title" data-i18n="ph.member.title"></div>
+      <button class="modal-x" data-close data-i18n-title="common.close" title="">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body" style="padding:16px 20px;">
+      <div class="nt-field" style="margin-bottom:12px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;">
+          <div style="flex:1;min-width:140px;">
+            <span class="nt-label" data-i18n="ph.member.nick"></span>
+            <input type="text" class="nt-input" id="mbr-nick" data-i18n-ph="ph.member.nick.ph" autocomplete="off">
+          </div>
+          <div style="flex:1;min-width:140px;">
+            <span class="nt-label" data-i18n="ph.member.name"></span>
+            <input type="text" class="nt-input" id="mbr-name" data-i18n-ph="ph.member.name.ph" autocomplete="off">
+          </div>
+          <div style="flex:1;min-width:140px;">
+            <span class="nt-label" data-i18n="ph.member.phone"></span>
+            <input type="text" class="nt-input" id="mbr-phone" autocomplete="off">
+          </div>
+          <div style="flex:1;min-width:160px;">
+            <span class="nt-label" data-i18n="ph.member.email"></span>
+            <input type="text" class="nt-input" id="mbr-email" autocomplete="off">
+          </div>
+          <div style="flex:1;min-width:140px;">
+            <span class="nt-label" data-i18n="ph.member.role"></span>
+            <input type="text" class="nt-input" id="mbr-role" autocomplete="off">
+          </div>
+          <button type="button" class="nt-btn nt-btn-create" id="mbr-save" data-i18n="ph.member.add"></button>
+        </div>
+      </div>
+      <div id="mbr-list" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
   </div>
 </div>
@@ -1435,6 +1894,34 @@
   </div>
 </div>
 
+<!-- Skill Hub 详情 modal -->
+<div class="modal" id="sh-detail-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog">
+    <div class="modal-head">
+      <div class="modal-title" id="sh-detail-title">Skill 详情</div>
+      <button class="modal-x" data-close title="关闭">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body" id="sh-detail-body" style="min-width:520px;max-width:680px;max-height:70vh;overflow-y:auto;"></div>
+    <div class="cp-actions" id="sh-detail-actions"></div>
+  </div>
+</div>
+
+<div class="modal" id="expert-detail-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog">
+    <div class="modal-head">
+      <div class="modal-title" id="expert-detail-title">专家详情</div>
+      <button class="modal-x" data-close title="关闭">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body" id="expert-detail-body" style="min-width:520px;max-width:680px;max-height:70vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
 <div id="toast-root" class="toast-root" aria-live="polite"></div>
 
 <script src="vendor/marked.min.js"></script>
@@ -1443,7 +1930,7 @@
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
 <!-- highlight.js -->
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js" crossorigin="anonymous"></script>
-<script src="phosphor-icons.js?v=4"></script>
-<script src="app.js?v=257"></script>
+<script src="phosphor-icons.js?v=6"></script>
+<script src="app.js?v=301"></script>
 </body>
 </html>

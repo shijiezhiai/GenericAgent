@@ -270,6 +270,16 @@
       .app-grid { grid-template-columns: 1fr; grid-template-rows: 38% 1fr; }
       .msg { max-width: 92%; }
     }
+
+    .head-right { display:flex; align-items:center; gap:10px; }
+    .hub-btn {
+      display:inline-flex; align-items:center; gap:5px; text-decoration:none;
+      border:1px solid var(--accent); color:var(--accent); background:transparent;
+      padding:4px 10px; border-radius:8px; font-size:12px; cursor:pointer; white-space:nowrap;
+      transition:all .15s;
+    }
+    .hub-btn:hover { background:var(--accent); color:#fff; }
+    .hub-btn:hover svg rect { fill:#fff !important; }
   </style>
 </head>
 <body>
@@ -313,7 +323,13 @@
       <section class="pane chat">
         <div class="head">
           <div class="title">Conversation</div>
-          <div class="hint" id="wsStatus">connecting...</div>
+          <div class="head-right">
+            <div class="hint" id="wsStatus">connecting...</div>
+            <a class="hub-btn" href="/skills" title="Skill Hub">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align:-2px"><rect x="2" y="2" width="9" height="9" rx="2.5" fill="#3b82f6" opacity="0.9"/><rect x="13" y="2" width="9" height="9" rx="2.5" fill="#8b5cf6" opacity="0.65"/><rect x="2" y="13" width="9" height="9" rx="2.5" fill="#8b5cf6" opacity="0.65"/><rect x="13" y="13" width="9" height="9" rx="2.5" fill="#3b82f6" opacity="0.9"/></svg>
+              Skills
+            </a>
+          </div>
         </div>
         <div class="messages" id="messages"></div>
         <div class="composer">

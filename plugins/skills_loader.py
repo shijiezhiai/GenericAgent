@@ -55,7 +55,11 @@ def _load_config():
 
 
 def _parse_frontmatter(text):
-    """解析 SKILL.md 的 YAML frontmatter，提取 name / description。"""
+    """解析 SKILL.md 的 YAML frontmatter，提取 name / description / version / tags / category /
+    permission_level / argument_hint / license。
+
+    仅做轻量行级解析（不依赖 PyYAML），向后兼容：缺失字段返回 None。
+    """
     m = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
     if not m:
         return None
@@ -63,24 +67,65 @@ def _parse_frontmatter(text):
     name = None
     desc_lines = []
     in_desc = False
+    version = None
+    tags = []
+    in_tags = False
+    category = None
+    permission_level = None
+    argument_hint = None
+    license_ = None
     for line in body.splitlines():
+        # description 多行块结束判定
+        if in_desc:
+            if line.strip() == "" or not line.startswith((" ", "\t")):
+                in_desc = False
+            else:
+                desc_lines.append(line.strip())
+                continue
+        # tags 多行列表块
+        if in_tags:
+            tm = re.match(r"^-\s+(.+)", line.strip())
+            if tm:
+                tags.append(tm.group(1).strip().strip('"\''))
+                continue
+            in_tags = False
         if line.startswith("name:"):
-            name = line.split(":", 1)[1].strip()
-            in_desc = False
+            name = line.split(":", 1)[1].strip() or None
         elif line.startswith("description:"):
             rest = line.split(":", 1)[1].strip()
             if rest in (">", "|"):
                 in_desc = True
             elif rest:
                 desc_lines.append(rest)
-                in_desc = False
-        elif in_desc:
-            if line.strip() == "" or not line.startswith((" ", "\t")):
-                in_desc = False
+        elif line.startswith("version:"):
+            version = line.split(":", 1)[1].strip() or None
+        elif line.startswith("category:"):
+            category = line.split(":", 1)[1].strip() or None
+        elif line.startswith("permission-level:") or line.startswith("permission_level:"):
+            permission_level = line.split(":", 1)[1].strip() or None
+        elif line.startswith("argument-hint:") or line.startswith("argument_hint:"):
+            argument_hint = line.split(":", 1)[1].strip().strip('"\'') or None
+        elif line.startswith("license:"):
+            license_ = line.split(":", 1)[1].strip() or None
+        elif line.startswith("tags:"):
+            rest = line.split(":", 1)[1].strip()
+            if rest in (">", "|", ""):
+                in_tags = True
             else:
-                desc_lines.append(line.strip())
+                # inline list: [a, b, c] 或 a, b, c
+                items = rest.strip("[]").split(",")
+                tags = [t.strip().strip('"\'') for t in items if t.strip()]
     desc = " ".join(desc_lines).strip()
-    return {"name": name, "description": desc}
+    return {
+        "name": name,
+        "description": desc,
+        "version": version,
+        "tags": tags,
+        "category": category,
+        "permission_level": permission_level,
+        "argument_hint": argument_hint,
+        "license": license_,
+    }
 
 
 def _discover_skills(roots):
@@ -114,7 +159,9 @@ def _discover_skills(roots):
                     continue
                 meta = _parse_frontmatter(text)
                 if not meta or not meta["name"]:
-                    meta = {"name": entry, "description": ""}
+                    meta = {"name": entry, "description": "", "version": None,
+                            "tags": [], "category": None, "permission_level": None,
+                            "argument_hint": None, "license": None}
                 meta["path"] = skill_md
                 meta["root"] = root
                 meta["dir"] = os.path.join(scan_dir, entry)
