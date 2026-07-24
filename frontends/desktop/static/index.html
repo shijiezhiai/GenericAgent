@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="ga-icon.svg">
 <link rel="apple-touch-icon" href="ga-icon.svg">
 <link rel="stylesheet" href="assets/fonts/fonts.css?v=2">
-<link rel="stylesheet" href="styles.css?v=228">
+<link rel="stylesheet" href="styles.css?v=244">
 <!-- KaTeX: LaTeX 公式渲染 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
 <!-- highlight.js: 代码高亮 -->
@@ -181,6 +181,10 @@
               <span class="ga-spin" aria-hidden="true"></span>
               <span data-i18n="chat.interrupting"></span>
             </div>
+          </div>
+          <div id="round-view-bar" class="round-view-bar" hidden>
+            <span class="rv-text"></span>
+            <button type="button" class="rv-back">返回完整会话</button>
           </div>
           <div class="composer-anchor" id="chat-composer-anchor">
             <div class="composer" id="chat-composer" data-composer-ctx="chat">
@@ -396,9 +400,25 @@
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg>
                   </button>
                 </div>
-                <div class="collab-prog-stats" id="collab-progress-stats" hidden></div>
-                <div class="collab-progress-empty" id="collab-progress-empty" data-i18n="collab.progressEmpty"></div>
-                <div id="collab-workers"></div>
+                <div class="collab-prog-tabs" id="collab-prog-tabs">
+                  <button type="button" class="collab-prog-tab is-active" data-prog-tab="live">运行中</button>
+                  <button type="button" class="collab-prog-tab" data-prog-tab="history">历史<span class="collab-hist-badge" id="collab-hist-badge" hidden></span></button>
+                </div>
+                <div id="collab-prog-live">
+                  <div class="collab-prog-stats" id="collab-progress-stats" hidden></div>
+                  <div class="collab-progress-empty" id="collab-progress-empty" data-i18n="collab.progressEmpty"></div>
+                  <div id="collab-workers"></div>
+                </div>
+                <div id="collab-prog-history" hidden>
+                  <div class="collab-hist-toolbar">
+                    <input class="collab-hist-search" id="collab-hist-search" type="search" placeholder="搜索历史任务…">
+                    <button type="button" class="ic-btn collab-hist-clear" id="collab-hist-clear" title="清空历史">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V192a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,152H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"/></svg>
+                    </button>
+                  </div>
+                  <div class="collab-hist-empty" id="collab-hist-empty" hidden>暂无历史记录</div>
+                  <div class="collab-hist-list" id="collab-hist-list"></div>
+                </div>
               </aside>
             </div>
           </div>
@@ -592,6 +612,19 @@
                     <option value="" data-i18n="taskForm.modelDefault"></option>
                   </select>
                 </div>
+                <!-- 完成通知：通道选择（动态加载已启用通道，默认不选） -->
+                <div class="tc2-field">
+                  <label class="tc2-label tc2-label-nomark"><span data-i18n="taskForm.notifyChannels"></span></label>
+                  <div class="tc2-notify-ch" id="tc-notify-channels"></div>
+                </div>
+                <!-- 完成通知：内容模式 -->
+                <div class="tc2-field" id="tc-notify-content-field" hidden>
+                  <label class="tc2-label" for="tc-notify-content"><span data-i18n="taskForm.notifyContent"></span></label>
+                  <select class="tc2-input" id="tc-notify-content">
+                    <option value="status_only" data-i18n="taskForm.notifyStatusOnly"></option>
+                    <option value="with_result" data-i18n="taskForm.notifyWithResult"></option>
+                  </select>
+                </div>
               </div>
               <div class="tc2-error" id="tc-error" hidden></div>
             </div>
@@ -661,6 +694,7 @@
                   <button class="ph-tab" data-ph-tab="plan" data-i18n="ph.tab.plan"></button>
                   <button class="ph-tab" data-ph-tab="task" data-i18n="ph.tab.task"></button>
                   <button class="ph-tab" data-ph-tab="asset" data-i18n="ph.tab.asset"></button>
+                  <button class="ph-tab" data-ph-tab="library" data-i18n="ph.tab.library"></button>
                 </div>
                 <button type="button" class="ph-settings-btn" id="ph-settings-btn" aria-label="settings">
                   <span data-ga-icon="settings"></span>
@@ -689,6 +723,10 @@
                 <!-- 资产 Tab -->
                 <div class="ph-pane" data-ph-pane="asset">
                   <div class="ph-empty" data-i18n="ph.empty.asset"></div>
+                </div>
+                <!-- 资料库 Tab -->
+                <div class="ph-pane" data-ph-pane="library">
+                  <div class="ph-empty" data-i18n="ph.empty.library"></div>
                 </div>
               </div>
               <!-- 底部 AI 输入框 -->
@@ -735,6 +773,10 @@
                           <button type="button" class="ga-menu-item" data-composer-action="upload" role="menuitem">
                             <span data-ga-icon="paperclip"></span>
                             <span data-i18n="upload.button"></span>
+                          </button>
+                          <button type="button" class="ga-menu-item" data-composer-action="library" role="menuitem">
+                            <span data-ga-icon="books"></span>
+                            <span data-i18n="ph.lib.refFromLibrary"></span>
                           </button>
                         </div>
                       </div>
@@ -916,6 +958,7 @@
             <div class="sh-tabbar">
               <button type="button" class="sh-tab-btn active" id="sh-tab-skills" data-shtab="skills">Skills</button>
               <button type="button" class="sh-tab-btn" id="sh-tab-plugins" data-shtab="plugins">Plugins</button>
+              <button type="button" class="sh-tab-btn" id="sh-tab-mcp" data-shtab="mcp">MCP</button>
             </div>
             <!-- Skills 面板 -->
             <div class="sh-pane" id="sh-skills-pane">
@@ -955,6 +998,33 @@
                 <div id="sh-pg-builtin-list" class="sh-pg-grid"></div>
               </div>
             </div><!-- /sh-plugins-pane -->
+            <!-- MCP 面板 -->
+            <div class="sh-pane" id="sh-mcp-pane" hidden>
+              <div class="sh-pg-sec">
+                <div class="sh-pg-sec-title" style="display:flex;align-items:center;justify-content:space-between;">
+                  <span>MCP Servers</span>
+                  <span style="display:flex;align-items:center;gap:8px;">
+                    <span id="sh-mcp-cfg-path" style="font-size:11px;color:var(--text-dim,#888);font-weight:normal;"></span>
+                    <button type="button" class="cp-btn" id="sh-mcp-reload-btn" title="热重载 MCP servers">重载</button>
+                  </span>
+                </div>
+                <!-- 添加表单 -->
+                <div class="sh-install-row" style="flex-wrap:wrap;gap:6px;">
+                  <input type="text" id="sh-mcp-name" class="sh-input" placeholder="Server 名称" style="max-width:140px;">
+                  <select id="sh-mcp-transport" class="sh-input" style="max-width:100px;">
+                    <option value="stdio">stdio</option>
+                    <option value="http">http</option>
+                  </select>
+                  <input type="text" id="sh-mcp-command" class="sh-input" placeholder="command (如 npx)">
+                  <input type="text" id="sh-mcp-args" class="sh-input" placeholder="args (空格分隔)">
+                  <input type="text" id="sh-mcp-env" class="sh-input" placeholder="env (KEY=VAL,KEY2=VAL2)">
+                  <input type="text" id="sh-mcp-url" class="sh-input" placeholder="URL (http模式)" hidden>
+                  <button type="button" class="cp-btn cp-btn-primary" id="sh-mcp-add-btn">添加</button>
+                </div>
+              </div>
+              <!-- server 列表 -->
+              <div id="sh-mcp-list" class="sh-pg-grid" style="margin-top:12px;"></div>
+            </div><!-- /sh-mcp-pane -->
           </div>
         </section>
 
@@ -1037,6 +1107,36 @@
         <div class="ctx-item danger" data-act="del">
           <span data-ga-icon="trash"></span>
           <span data-i18n="ctx.del"></span>
+        </div>
+      </div>
+      <!-- 资料库条目三点菜单 -->
+      <div class="ctx-menu" id="lib-menu" hidden>
+        <div class="ctx-item" data-act="preview">
+          <span data-ga-icon="eye"></span>
+          <span data-i18n="ph.lib.preview"></span>
+        </div>
+        <div class="ctx-item" data-act="open">
+          <span data-ga-icon="arrowUpRight"></span>
+          <span data-i18n="ph.lib.open"></span>
+        </div>
+        <div class="ctx-item" data-act="reveal">
+          <span data-ga-icon="folderOpen"></span>
+          <span data-i18n="ph.lib.reveal"></span>
+        </div>
+        <div class="ctx-item" data-act="pin">
+          <span data-ga-icon="pushPinSimple"></span>
+          <span data-i18n="ph.lib.pin"></span>
+        </div>
+      </div>
+      <!-- 文件预览弹窗 -->
+      <div class="modal" id="lib-preview-modal" hidden>
+        <div class="modal-card modal-card-wide">
+          <div class="modal-head">
+            <div class="modal-title" id="lib-preview-title"></div>
+            <button class="modal-close" type="button" data-close aria-label="close">&times;</button>
+          </div>
+          <div class="modal-sub" id="lib-preview-meta"></div>
+          <div class="modal-body" id="lib-preview-body"></div>
         </div>
       </div>
       <div class="ctx-menu" id="folder-menu" hidden>
@@ -1357,6 +1457,18 @@
                   <option value="" data-i18n="taskForm.modelDefault"></option>
                 </select>
               </div>
+              <!-- 完成通知：通道选择（自动模式） -->
+              <div class="tc2-field">
+                <label class="tc2-label tc2-label-opt"><span data-i18n="taskForm.notifyChannels"></span><span class="tc2-opt-hint" data-i18n="taskForm.notifyChannelsHint"></span></label>
+                <div class="tc2-notify-channels" id="auto-notify-channels"></div>
+              </div>
+              <div class="tc2-field" id="auto-notify-content-field" hidden>
+                <label class="tc2-label" for="auto-notify-content"><span data-i18n="taskForm.notifyContent"></span></label>
+                <select class="tc2-input" id="auto-notify-content">
+                  <option value="status_only" data-i18n="taskForm.notifyStatusOnly"></option>
+                  <option value="with_result" data-i18n="taskForm.notifyWithResult"></option>
+                </select>
+              </div>
             </div>
             <div class="tc2-error" id="auto-error" hidden></div>
           </div>
@@ -1632,6 +1744,83 @@
     <div class="modal-foot" style="display:flex;justify-content:flex-end;gap:8px;padding:0 18px 16px;">
       <button type="button" class="as-back-btn" data-close>取消</button>
       <button type="button" class="as-add-btn" id="instruction-save">保存</button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="library-add-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card lib-add-card" role="dialog" aria-modal="true" style="max-width:560px">
+    <div class="modal-head lib-add-head">
+      <div class="lib-head-badge"><span data-ga-icon="books"></span></div>
+      <div class="lib-head-text">
+        <div class="modal-title" data-i18n="ph.lib.addToLibrary"></div>
+        <div class="lib-head-sub" data-i18n="ph.lib.addSubtitle"></div>
+      </div>
+      <button class="modal-x" data-close data-i18n-title="common.close" title="">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body lib-add-body">
+      <div class="lib-tabs">
+        <button type="button" class="lib-tab active" id="lib-add-tab-file">
+          <span data-ga-icon="fileText"></span><span data-i18n="ph.lib.file"></span>
+        </button>
+        <button type="button" class="lib-tab" id="lib-add-tab-web">
+          <span data-ga-icon="compass"></span><span data-i18n="ph.lib.web"></span>
+        </button>
+      </div>
+      <div class="lib-row" id="lib-add-row-file">
+        <span class="lib-label" data-i18n="ph.lib.filePath"></span>
+        <div class="lib-path-wrap">
+          <input type="text" class="as-input lib-input" id="lib-add-path" data-i18n-ph="ph.lib.filePathPh" autocomplete="off">
+          <button type="button" class="lib-browse-btn" id="lib-add-browse"><span data-ga-icon="folder"></span><span data-i18n="ph.lib.browse"></span></button>
+          <input type="file" id="lib-add-file-input" hidden>
+        </div>
+      </div>
+      <div class="lib-row" id="lib-add-row-web" hidden>
+        <span class="lib-label" data-i18n="ph.lib.url"></span>
+        <input type="text" class="as-input lib-input" id="lib-add-url" placeholder="https://…" autocomplete="off">
+      </div>
+      <div class="lib-row lib-row-check" id="lib-add-row-subpages" hidden>
+        <label class="lib-check">
+          <input type="checkbox" id="lib-add-subpages">
+          <span class="lib-check-text" data-i18n="ph.lib.includeSubpages"></span>
+        </label>
+        <span class="lib-check-hint" data-i18n="ph.lib.subpagesHint"></span>
+      </div>
+      <div class="lib-row">
+        <span class="lib-label" data-i18n="ph.lib.name"></span>
+        <input type="text" class="as-input lib-input" id="lib-add-name" data-i18n-ph="ph.lib.namePh" autocomplete="off">
+      </div>
+      <div class="lib-row">
+        <span class="lib-label" data-i18n="ph.lib.desc"></span>
+        <input type="text" class="as-input lib-input" id="lib-add-desc" data-i18n-ph="ph.lib.descPh" autocomplete="off">
+      </div>
+      <div class="lib-err" id="lib-add-err" hidden></div>
+    </div>
+    <div class="modal-foot lib-foot">
+      <button type="button" class="as-back-btn" data-close data-i18n="common.cancel"></button>
+      <button type="button" class="as-add-btn" id="lib-add-confirm" data-i18n="ph.lib.add"></button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="library-ref-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card lib-ref-card" role="dialog" aria-modal="true" style="max-width:560px">
+    <div class="modal-head">
+      <div class="modal-title" data-i18n="ph.lib.refTitle"></div>
+      <button class="modal-x" data-close data-i18n-title="common.close" title="">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body lib-ref-body">
+      <div class="lib-ref-hint" data-i18n="ph.lib.refHint"></div>
+      <input type="text" class="as-input lib-input" id="lib-ref-search" data-i18n-ph="ph.lib.searchPh" autocomplete="off">
+      <div class="lib-ref-list" id="lib-ref-list"></div>
+    </div>
+    <div class="modal-foot lib-foot">
+      <button type="button" class="as-back-btn" data-close data-i18n="common.cancel"></button>
+      <button type="button" class="as-add-btn" id="lib-ref-confirm" data-i18n="ph.lib.refConfirm"></button>
     </div>
   </div>
 </div>
@@ -1931,6 +2120,6 @@
 <!-- highlight.js -->
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js" crossorigin="anonymous"></script>
 <script src="phosphor-icons.js?v=6"></script>
-<script src="app.js?v=301"></script>
+<script src="app.js?v=330"></script>
 </body>
 </html>

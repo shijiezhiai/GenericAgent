@@ -671,6 +671,21 @@ def _drop_unsigned_thinking(messages):
         if isinstance(c, list): m["content"] = [b for b in c if _keep_claude_block(b)]
     return messages
 
+def _drop_old_thinking(messages, keep_last=2, model=""):
+    # P0-B: strip thinking blocks from all but the last `keep_last` assistant
+    # turns to cut multi-turn token cost. Mutates only the passed-in per-turn
+    # copy (caller never passes self.history); text/tool_use blocks are always
+    # preserved. deepseek is skipped: its _ensure_thinking_blocks requires
+    # thinking to remain in history or the request errors.
+    if 'deepseek' in model.lower(): return messages
+    asst_idxs = [i for i, m in enumerate(messages) if m.get("role") == "assistant"]
+    targets = asst_idxs[:-keep_last] if keep_last > 0 else asst_idxs
+    for i in targets:
+        c = messages[i].get("content")
+        if isinstance(c, list):
+            messages[i]["content"] = [b for b in c if not (isinstance(b, dict) and b.get("type") == "thinking")]
+    return messages
+
 def _ensure_thinking_blocks(messages, model):
     """deepseek needs thinking in history!"""
     if 'deepseek' not in model.lower(): return messages
@@ -770,7 +785,14 @@ class NativeClaudeSession(BaseSession):
         #if self.fake_cc_system_prompt: payload["max_tokens"] = 64000
         if self.temperature != 1: payload["temperature"] = self.temperature
         self._apply_claude_thinking(payload)
-        payload["context_management"] = {"edits": [{"type": "clear_thinking_20251015", "keep": "all"}]}; 
+        ctx_tokens = self.context_win
+        payload["context_management"] = {"edits": [
+            {"type": "clear_thinking_20251015", "keep": "last"},
+            {"type": "clear_tool_uses_20250919",
+             "trigger": {"type": "input_tokens", "value": int(0.7 * ctx_tokens)},
+             "clear_at_least": {"type": "input_tokens", "value": int(0.3 * ctx_tokens)},
+             "exclude_tools": ["update_working_checkpoint"]},
+        ]}
         if self.fake_cc_system_prompt:
             if 'thinking' not in payload: payload["thinking"] = {"type": "adaptive"}
             if 'output_config' not in payload: payload["output_config"] = {"effort": "medium"}
@@ -792,12 +814,28 @@ class NativeClaudeSession(BaseSession):
         parse_fn = (lambda r: _parse_claude_sse(r.iter_lines())) if self.stream else (lambda r: _parse_claude_json(r.json()))
         return (yield from _stream_with_retry(self, url, headers, payload, parse_fn))
 
+    def _maybe_drop_old_thinking(self, messages):
+        # P0-B: drop old thinking blocks (on the per-turn copy only) to cut
+        # multi-turn token cost. Token-gated so small contexts keep the
+        # Anthropic prefix cache intact. Config: /session.drop_thinking_keep_last
+        # (default 2; <0 disables) and /session.drop_thinking_gate (default 0.5,
+        # fraction of context_win above which dropping activates).
+        try: keep = int(getattr(self, 'drop_thinking_keep_last', 2))
+        except (TypeError, ValueError): keep = 2
+        if keep < 0: return messages
+        try: gate = float(getattr(self, 'drop_thinking_gate', 0.5))
+        except (TypeError, ValueError): gate = 0.5
+        est_tokens = sum(len(json.dumps(m, ensure_ascii=False)) for m in messages) // 3
+        if est_tokens <= self.context_win * gate: return messages
+        return _drop_old_thinking(messages, keep_last=keep, model=self.model)
+
     def ask(self, msg):
         assert type(msg) is dict
         with self.lock:
             self.history.append(msg)
             trim_messages_history(self.history, self)
             messages = [{"role": m["role"], "content": list(m["content"])} for m in self.history]
+        messages = self._maybe_drop_old_thinking(messages)
         content_blocks = None
         gen = self.raw_ask(messages)
         try:

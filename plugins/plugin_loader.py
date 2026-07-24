@@ -33,6 +33,7 @@ except Exception:
     hooks = None
 
 _PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
+_GA_ROOT = os.path.dirname(_PLUGIN_DIR)  # GA 项目根目录
 _CONFIG_PATH = os.environ.get("GA_SKILLS_CONFIG", os.path.join(_PLUGIN_DIR, "skills_config.json"))
 _injection_cache = None   # (key, text)
 _plugin_cache = None      # (key, plugins_list)
@@ -318,6 +319,7 @@ def _discover_plugins():
             agents = _discover_plugin_agents(pdir, pname)
             hooks = _discover_plugin_hooks(pdir, pname)
             mcp = _discover_plugin_mcp(pdir, pname, user_cfg)
+            lsp = _discover_plugin_lsp(pdir, pname, user_cfg)
             monitors = _discover_plugin_monitors(pdir, pname, user_cfg)
             plugins.append({
                 "name": pname,
@@ -330,6 +332,7 @@ def _discover_plugins():
                 "agents": agents,
                 "hooks": hooks,
                 "mcp": mcp,
+                "lsp": lsp,
                 "monitors": monitors,
             })
     return plugins
@@ -524,6 +527,53 @@ def _discover_plugin_mcp(plugin_dir, plugin_name, user_cfg=None):
     return out
 
 
+def _discover_plugin_lsp(plugin_dir, plugin_name, user_cfg=None):
+    """解析 plugin 的 LSP server 配置（.lsp.json）。
+
+    配置格式：
+      {"command": "pylsp", "args": [], "env": {},
+       "extensionToLanguage": {".py": "python"},
+       "workspaceFolder": "...", "initializationOptions": {},
+       "settings": {}, "startupTimeout": 30, "maxRestarts": 3, "diagnostics": true}
+    也支持 {"lspServers": {name: config}} 多 server 格式。
+    返回 {server_name: config}，无配置返回 {}。fail-open。
+    """
+    lsp_json = os.path.join(plugin_dir, ".lsp.json")
+    if not os.path.isfile(lsp_json):
+        return {}
+    try:
+        with open(lsp_json, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+    except Exception:
+        return {}
+    if not isinstance(cfg, dict):
+        return {}
+
+    plugin_id = _plugin_id(plugin_name)
+
+    def _sub(v):
+        return _substitute_vars(v, plugin_dir, plugin_id, user_cfg)
+
+    # 多 server 格式: {"lspServers": {name: config}}
+    if "lspServers" in cfg and isinstance(cfg["lspServers"], dict):
+        out = {}
+        for sname, sconf in cfg["lspServers"].items():
+            if not isinstance(sconf, dict) or "command" not in sconf:
+                continue
+            sc = _sub(sconf)
+            sc["plugin_name"] = plugin_name
+            sc["plugin_dir"] = plugin_dir
+            out[sname] = sc
+        return out
+    # 单 server 格式: 整个文件就是一个 config
+    if "command" in cfg:
+        sc = _sub(cfg)
+        sc["plugin_name"] = plugin_name
+        sc["plugin_dir"] = plugin_dir
+        return {plugin_name: sc}
+    return {}
+
+
 def _discover_plugin_monitors(plugin_dir, plugin_name, user_cfg=None):
     """解析 plugin 的 background monitor 配置（4.2）。
 
@@ -648,11 +698,26 @@ def collect_mcp_tools():
                     _tname = _t.get("name", "")
                     _fn = f"mcp__{_pn}__{_sn}__{_tname}"
                     _schema = _t.get("inputSchema") or {"type": "object", "properties": {}}
+                    # P3: 将 Tool Annotations 附加到 description 供 LLM 感知工具行为特征
+                    _desc = _t.get("description", f"MCP tool {_tname} from {_pn}/{_sn}")
+                    _ann = _t.get("annotations")
+                    if isinstance(_ann, dict) and _ann:
+                        _hints = []
+                        if _ann.get("readOnlyHint"):
+                            _hints.append("read-only")
+                        if _ann.get("destructiveHint"):
+                            _hints.append("destructive")
+                        if _ann.get("idempotentHint"):
+                            _hints.append("idempotent")
+                        if _ann.get("openWorldHint"):
+                            _hints.append("open-world")
+                        if _hints:
+                            _desc += f" [{', '.join(_hints)}]"
                     tools.append({
                         "type": "function",
                         "function": {
                             "name": _fn,
-                            "description": _t.get("description", f"MCP tool {_tname} from {_pn}/{_sn}"),
+                            "description": _desc,
                             "parameters": _schema,
                         },
                     })
@@ -665,6 +730,211 @@ def collect_mcp_tools():
                     if _c: _c.stop()
                 except Exception:
                     pass
+    # --- 全局 MCP servers（非 plugin 绑定，独立配置） ---
+    _global_mcp = _load_global_mcp_config()
+    for _sn, _cfg in _global_mcp.items():
+        _key = f"global__{_sn}"
+        if _key in clients:
+            continue
+        _c = None
+        try:
+            _c = McpClient(_key, _cfg)
+            _c.start()
+            _tl = _c.list_tools() or []
+            for _t in _tl:
+                _tname = _t.get("name", "")
+                _fn = f"mcp__global__{_sn}__{_tname}"
+                _schema = _t.get("inputSchema") or {"type": "object", "properties": {}}
+                _desc = _t.get("description", f"MCP tool {_tname} from global/{_sn}")
+                _ann = _t.get("annotations")
+                if isinstance(_ann, dict) and _ann:
+                    _hints = []
+                    if _ann.get("readOnlyHint"): _hints.append("read-only")
+                    if _ann.get("destructiveHint"): _hints.append("destructive")
+                    if _ann.get("idempotentHint"): _hints.append("idempotent")
+                    if _ann.get("openWorldHint"): _hints.append("open-world")
+                    if _hints: _desc += f" [{', '.join(_hints)}]"
+                tools.append({
+                    "type": "function",
+                    "function": {"name": _fn, "description": _desc, "parameters": _schema},
+                })
+                tool_map[_fn] = (_c, _tname)
+            clients[_key] = _c
+        except Exception as _e:
+            import sys
+            print(f"[MCP] skip global server {_key}: {_e}", file=sys.stderr)
+            try:
+                if _c: _c.stop()
+            except Exception:
+                pass
+    return tools, tool_map, clients
+
+
+def _load_global_mcp_config():
+    """加载全局 MCP server 配置（非 plugin 绑定）。
+
+    查找路径（优先级）：
+      1. GA_ROOT/mcp_servers.json
+      2. ~/.config/ga/mcp_servers.json
+    格式同 Claude Code .mcp.json：{"serverName": {command, args, env, ...}}
+    也支持 {"mcpServers": {...}} 包裹格式。
+    fail-open：文件不存在/解析失败返回 {}。
+    """
+    candidates = [
+        os.path.join(_GA_ROOT, "mcp_servers.json"),
+        os.path.expanduser("~/.config/ga/mcp_servers.json"),
+    ]
+    for path in candidates:
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                return {}
+            servers = data.get("mcpServers", data)
+            if not isinstance(servers, dict):
+                return {}
+            return {k: v for k, v in servers.items()
+                    if isinstance(v, dict) and ("command" in v or "url" in v)}
+        except Exception:
+            return {}
+    return {}
+
+
+def collect_lsp_clients():
+    """启动所有 plugin 的 LSP servers，返回 {server_key: LspClient}。
+
+    fail-open：单 server 启动失败不影响其他，仅 stderr 警告。
+    """
+    try:
+        from plugins.lsp_client import LspClient
+    except ImportError:
+        return {}
+    clients = {}
+    try:
+        plugins = _get_plugins()
+    except Exception:
+        return clients
+    for _p in plugins:
+        _pn = _p.get("name", "")
+        _lsp = _p.get("lsp") or {}
+        if not isinstance(_lsp, dict) or not _lsp:
+            continue
+        for _sn, _cfg in _lsp.items():
+            _key = f"{_pn}__{_sn}"
+            try:
+                _c = LspClient(_key, _cfg)
+                _c.start()
+                clients[_key] = _c
+            except Exception as _e:
+                import sys
+                print(f"[LSP] skip server {_key}: {_e}", file=sys.stderr)
+    return clients
+
+
+def stop_all_lsp(lsp_clients):
+    """停止所有 LSP clients。"""
+    for _c in (lsp_clients or {}).values():
+        try:
+            _c.stop()
+        except Exception:
+            pass
+
+
+# ─── 动态 MCP server 热加载/卸载 ───────────────────────────────────────────────
+
+def add_mcp_server(server_name, config, agent_ref=None):
+    """运行时动态添加一个 MCP server。
+
+    Returns: (success, message, tools_added)
+    """
+    try:
+        from plugins.mcp_client import McpClient
+    except ImportError:
+        return False, "mcp_client import failed", []
+    _key = f"global__{server_name}"
+    if agent_ref and _key in getattr(agent_ref, "mcp_clients", {}):
+        return False, f"server '{server_name}' already exists", []
+    _c = None
+    try:
+        _c = McpClient(_key, config)
+        _c.start()
+        _tl = _c.list_tools() or []
+        new_tools, new_map = [], {}
+        for _t in _tl:
+            _tname = _t.get("name", "")
+            _fn = f"mcp__global__{server_name}__{_tname}"
+            _schema = _t.get("inputSchema") or {"type": "object", "properties": {}}
+            _desc = _t.get("description", f"MCP tool {_tname} from global/{server_name}")
+            new_tools.append({
+                "type": "function",
+                "function": {"name": _fn, "description": _desc, "parameters": _schema},
+            })
+            new_map[_fn] = (_c, _tname)
+        if agent_ref:
+            agent_ref.mcp_clients[_key] = _c
+            agent_ref.mcp_tool_map.update(new_map)
+            if hasattr(agent_ref, "llmclient") and hasattr(agent_ref.llmclient, "backend"):
+                be = agent_ref.llmclient.backend
+                if hasattr(be, "tools_schema"):
+                    be.tools_schema.extend(new_tools)
+        return True, f"server '{server_name}' added with {len(new_tools)} tools", [t["function"]["name"] for t in new_tools]
+    except Exception as e:
+        try:
+            if _c: _c.stop()
+        except Exception:
+            pass
+        return False, f"failed to start server '{server_name}': {e}", []
+
+
+def remove_mcp_server(server_name, agent_ref=None):
+    """运行时动态卸载一个 MCP server。
+
+    Returns: (success, message)
+    """
+    _key = f"global__{server_name}"
+    if not agent_ref:
+        return False, "no agent_ref provided"
+    _c = getattr(agent_ref, "mcp_clients", {}).pop(_key, None)
+    if _c is None:
+        return False, f"server '{server_name}' not found"
+    _prefix = f"mcp__global__{server_name}__"
+    _removed = [k for k in getattr(agent_ref, "mcp_tool_map", {}) if k.startswith(_prefix)]
+    for k in _removed:
+        agent_ref.mcp_tool_map.pop(k, None)
+    if hasattr(agent_ref, "llmclient") and hasattr(agent_ref.llmclient, "backend"):
+        be = agent_ref.llmclient.backend
+        if hasattr(be, "tools_schema"):
+            be.tools_schema = [t for t in be.tools_schema
+                               if t.get("function", {}).get("name", "") not in _removed]
+    try:
+        _c.stop()
+    except Exception:
+        pass
+    return True, f"server '{server_name}' removed ({len(_removed)} tools)"
+
+
+def reload_mcp_servers(agent_ref=None):
+    """重新加载所有 MCP servers（stop all → re-collect）。"""
+    if agent_ref:
+        for _c in list(getattr(agent_ref, "mcp_clients", {}).values()):
+            try:
+                _c.stop()
+            except Exception:
+                pass
+        agent_ref.mcp_clients = {}
+        agent_ref.mcp_tool_map = {}
+    tools, tool_map, clients = collect_mcp_tools()
+    if agent_ref:
+        agent_ref.mcp_clients = clients
+        agent_ref.mcp_tool_map = tool_map
+        if hasattr(agent_ref, "llmclient") and hasattr(agent_ref.llmclient, "backend"):
+            be = agent_ref.llmclient.backend
+            if hasattr(be, "tools_schema"):
+                be.tools_schema = [t for t in be.tools_schema
+                                   if not t.get("function", {}).get("name", "").startswith("mcp__")]
+                be.tools_schema.extend(tools)
     return tools, tool_map, clients
 
 

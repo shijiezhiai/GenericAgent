@@ -26,8 +26,8 @@ import urllib.request
 import urllib.error
 import urllib.parse
 
-# MCP 协议版本（最初稳定版本；端到端真实 server 验证后可上调）
-PROTOCOL_VERSION = "2024-11-05"
+# MCP 协议版本（2025-03-26: 新增 OAuth/Streamable HTTP/Batching/Tool Annotations/Audio）
+PROTOCOL_VERSION = "2025-03-26"
 
 CLIENT_INFO = {"name": "GenericAgent", "version": "1.0"}
 

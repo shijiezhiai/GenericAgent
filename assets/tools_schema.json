@@ -69,5 +69,31 @@
     "name": "start_long_term_update",
     "description": "Start distilling long-term memory. Call when discovering info worth remembering (env facts/user prefs/lessons learned). Skip if memory already updated or in autonomous flow. Must call when a task that took 15+ turns is completed",
     "parameters": {"type": "object", "properties": {}}}
-  }
+  },
+  {"type": "function", "function": {
+    "name": "code_search",
+    "description": "Search code content by regex pattern using ripgrep. Returns matched lines with file:line:content. Much faster and more token-efficient than code_run grep/rg.",
+    "parameters": {"type": "object", "properties": {
+      "pattern": {"type": "string", "description": "Regex pattern to search (PCRE2 syntax)"},
+      "path": {"type": "string", "description": "Directory or file to search in. Defaults to cwd", "default": "."},
+      "include": {"type": "string", "description": "Glob to include files, e.g. '*.py', '*.{js,ts}'. Comma-separated for multiple"},
+      "exclude": {"type": "string", "description": "Glob to exclude, e.g. 'node_modules', '*.min.js'. Comma-separated for multiple"},
+      "file_pattern": {"type": "string", "description": "Only search files whose NAME matches this glob (e.g. '*config*')"},
+      "case_insensitive": {"type": "boolean", "description": "Case insensitive search", "default": false},
+      "context_lines": {"type": "integer", "description": "Context lines before/after match (0-5)", "default": 0},
+      "max_results": {"type": "integer", "description": "Max matched lines to return (default 50, max 200)", "default": 50},
+      "fixed_strings": {"type": "boolean", "description": "Treat pattern as literal string, not regex", "default": false}},
+      "required": ["pattern"]}
+  }},
+  {"type": "function", "function": {
+    "name": "file_find",
+    "description": "Find files by name pattern using ripgrep --files. Returns matching file paths. Respects .gitignore.",
+    "parameters": {"type": "object", "properties": {
+      "pattern": {"type": "string", "description": "Glob pattern for filename, e.g. '*.py', '*config*', 'test_*.js'"},
+      "path": {"type": "string", "description": "Root directory to search. Defaults to cwd", "default": "."},
+      "type_filter": {"type": "string", "description": "rg type filter: 'py','js','rs','go','md','json','yaml', etc."},
+      "max_results": {"type": "integer", "description": "Max results (default 50, max 200)", "default": 50},
+      "sort_by": {"type": "string", "enum": ["path", "modified"], "description": "Sort by path (default) or modification time (newest first)", "default": "path"}},
+      "required": ["pattern"]}
+  }}
 ]

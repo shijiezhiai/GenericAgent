@@ -280,6 +280,86 @@
     }
     .hub-btn:hover { background:var(--accent); color:#fff; }
     .hub-btn:hover svg rect { fill:#fff !important; }
+
+    /* ---------- History Tabs ---------- */
+    .panel-tabs {
+      display: flex; gap: 0; border-bottom: 1px solid var(--border);
+      padding: 0 16px; background: var(--panel-2);
+    }
+    .panel-tabs .tab {
+      padding: 9px 18px; font-size: 13px; font-weight: 600;
+      color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent;
+      transition: all .15s;
+    }
+    .panel-tabs .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .panel-tabs .tab:hover { color: var(--text); }
+
+    /* ---------- History Cards ---------- */
+    .history-wrap { display: none; flex-direction: column; height: 100%; }
+    .history-wrap.active { display: flex; }
+    .history-search {
+      margin: 10px 14px 6px; padding: 7px 12px; border-radius: 10px;
+      border: 1px solid var(--border); font-size: 13px; outline: none;
+      background: rgba(255,255,255,.9);
+    }
+    .history-search:focus { border-color: var(--accent); }
+    .history-list { flex: 1; overflow-y: auto; padding: 6px 14px 14px; }
+    .h-card {
+      padding: 11px 13px; border-radius: 14px; margin-bottom: 8px;
+      background: rgba(255,255,255,.82); border: 1px solid var(--border);
+      cursor: pointer; transition: box-shadow .15s, transform .1s;
+    }
+    .h-card:hover { box-shadow: 0 4px 16px rgba(30,45,80,.10); transform: translateY(-1px); }
+    .h-card .h-prompt { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .h-card .h-meta { display: flex; gap: 10px; margin-top: 5px; font-size: 11px; color: var(--muted); }
+    .h-card .h-status { font-weight: 600; }
+    .h-card .h-status.done { color: var(--green); }
+    .h-card .h-status.stopped { color: var(--green); }
+    .h-card .h-status.aborted { color: var(--red); }
+    .history-empty { text-align: center; color: var(--muted); padding: 40px 0; font-size: 13px; }
+    .history-footer { padding: 8px 14px; text-align: right; border-top: 1px solid var(--border); }
+    .history-footer button {
+      font-size: 11px; color: var(--red); background: none; border: none;
+      cursor: pointer; opacity: .7;
+    }
+    .history-footer button:hover { opacity: 1; text-decoration: underline; }
+
+    /* ---------- History Detail Modal ---------- */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(15,20,35,.45);
+      backdrop-filter: blur(3px); z-index: 1000; display: flex;
+      align-items: center; justify-content: center; opacity: 0;
+      pointer-events: none; transition: opacity .2s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: auto; }
+    .modal-box {
+      width: min(720px, 90vw); max-height: 82vh; background: #fff;
+      border-radius: 20px; box-shadow: 0 24px 80px rgba(20,30,60,.22);
+      display: flex; flex-direction: column; overflow: hidden;
+      transform: translateY(12px) scale(.97); transition: transform .2s;
+    }
+    .modal-overlay.open .modal-box { transform: translateY(0) scale(1); }
+    .modal-head {
+      padding: 18px 22px 14px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: flex-start; justify-content: space-between;
+    }
+    .modal-head .m-title { font-size: 15px; font-weight: 700; color: var(--text); flex: 1; margin-right: 12px; word-break: break-all; }
+    .modal-head .m-close {
+      width: 28px; height: 28px; border-radius: 8px; border: none;
+      background: var(--bg); cursor: pointer; font-size: 16px; color: var(--muted);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .modal-head .m-close:hover { background: var(--red); color: #fff; }
+    .modal-meta { padding: 10px 22px; font-size: 12px; color: var(--muted); display: flex; gap: 14px; border-bottom: 1px solid var(--border); }
+    .modal-body {
+      flex: 1; overflow-y: auto; padding: 18px 22px;
+      font-size: 13.5px; line-height: 1.7; color: var(--text);
+    }
+    .modal-body pre { background: var(--bg); padding: 12px; border-radius: 10px; overflow-x: auto; font-size: 12px; }
+    .modal-body code { background: var(--bg); padding: 2px 5px; border-radius: 4px; font-size: 12px; }
+    .modal-body h1,.modal-body h2,.modal-body h3 { margin: 16px 0 8px; }
+    .modal-body table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+    .modal-body th, .modal-body td { border: 1px solid var(--border); padding: 6px 10px; font-size: 12px; text-align: left; }
   </style>
 </head>
 <body>
@@ -293,8 +373,21 @@
         <div class="title">Subagents</div>
         <div class="hint">点击卡片展开 · live</div>
       </div>
+      <div class="panel-tabs">
+        <div class="tab active" id="tabLive" onclick="switchPanel('live')">运行中</div>
+        <div class="tab" id="tabHistory" onclick="switchPanel('history')">历史记录 <span id="histCount"></span></div>
+      </div>
       <div class="cards" id="cards">
         <div class="empty">暂无 subagent。</div>
+      </div>
+      <div class="history-wrap" id="historyWrap">
+        <input class="history-search" id="histSearch" placeholder="搜索历史任务…" oninput="onHistSearch()" />
+        <div class="history-list" id="histList">
+          <div class="history-empty">暂无历史记录</div>
+        </div>
+        <div class="history-footer">
+          <button onclick="clearHistory()">清空历史</button>
+        </div>
       </div>
     </section>
 
@@ -340,6 +433,18 @@
     </section>
     </div><!-- /app-grid -->
   </main>
+
+  <!-- 历史详情 Modal -->
+  <div class="modal-overlay" id="histModal" onclick="if(event.target===this)closeHistModal()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div class="m-title" id="mTitle">任务详情</div>
+        <button class="m-close" onclick="closeHistModal()">✕</button>
+      </div>
+      <div class="modal-meta" id="mMeta"></div>
+      <div class="modal-body" id="mBody"></div>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
@@ -521,6 +626,94 @@
     });
 
     inputEl.addEventListener('input', checkLimit);
+
+    /* ===================== Task History ===================== */
+    const histListEl = document.getElementById('histList');
+    const histWrapEl = document.getElementById('historyWrap');
+    const histCountEl = document.getElementById('histCount');
+    let histSearchTimer = null;
+
+    function switchPanel(mode) {
+      document.getElementById('tabLive').classList.toggle('active', mode === 'live');
+      document.getElementById('tabHistory').classList.toggle('active', mode === 'history');
+      cardsEl.style.display = mode === 'live' ? '' : 'none';
+      histWrapEl.classList.toggle('active', mode === 'history');
+      if (mode === 'history') loadHistory();
+    }
+
+    async function loadHistory(q) {
+      try {
+        const params = new URLSearchParams({ limit: '50' });
+        if (q) params.set('q', q);
+        const res = await fetch('/history?' + params);
+        const data = await res.json();
+        histCountEl.textContent = data.total ? '(' + data.total + ')' : '';
+        if (!data.items.length) {
+          histListEl.innerHTML = '<div class="history-empty">' + (q ? '无匹配结果' : '暂无历史记录') + '</div>';
+          return;
+        }
+        histListEl.innerHTML = data.items.map(r => {
+          const t = new Date(r.created_at * 1000);
+          const timeStr = t.toLocaleDateString('zh-CN', {month:'numeric',day:'numeric'}) + ' ' +
+                          t.toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'});
+          const dur = r.duration >= 60 ? Math.floor(r.duration/60) + 'm' + (r.duration%60 ? (r.duration%60)+'s' : '') : r.duration + 's';
+          const stLabel = r.status === 'aborted' ? '已中止' : '已完成';
+          return '<div class="h-card" onclick="openHistDetail(\'' + r.id + '\')">' +
+            '<div class="h-prompt" title="' + escHtml(r.prompt) + '">' + escHtml(r.prompt) + '</div>' +
+            '<div class="h-meta"><span class="h-status ' + r.status + '">' + stLabel + '</span>' +
+            '<span>' + timeStr + '</span><span>耗时 ' + dur + '</span>' +
+            (r.truncated ? '<span title="回复已截断">…</span>' : '') + '</div></div>';
+        }).join('');
+      } catch (e) {
+        histListEl.innerHTML = '<div class="history-empty">加载失败: ' + e.message + '</div>';
+      }
+    }
+
+    function escHtml(s) {
+      return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function onHistSearch() {
+      clearTimeout(histSearchTimer);
+      histSearchTimer = setTimeout(() => loadHistory(document.getElementById('histSearch').value.trim()), 300);
+    }
+
+    async function openHistDetail(rid) {
+      const modal = document.getElementById('histModal');
+      document.getElementById('mTitle').textContent = '加载中…';
+      document.getElementById('mMeta').innerHTML = '';
+      document.getElementById('mBody').innerHTML = '<div class="history-empty">加载详情…</div>';
+      modal.classList.add('open');
+      try {
+        const res = await fetch('/history/' + rid);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const r = await res.json();
+        document.getElementById('mTitle').textContent = r.prompt || '(无 prompt)';
+        const t = new Date(r.created_at * 1000);
+        const dur = r.duration >= 60 ? Math.floor(r.duration/60) + ' 分 ' + (r.duration%60) + ' 秒' : r.duration + ' 秒';
+        document.getElementById('mMeta').innerHTML =
+          '<span>🕐 ' + t.toLocaleString('zh-CN') + '</span>' +
+          '<span>⏱ 耗时 ' + dur + '</span>' +
+          '<span>状态: ' + (r.status === 'aborted' ? '已中止' : '已完成') + '</span>' +
+          '<span style="opacity:.6">ID: ' + r.id + '</span>';
+        const reply = r.reply || '(无回复内容)';
+        document.getElementById('mBody').innerHTML =
+          (typeof marked !== 'undefined') ? marked.parse(reply) : '<pre>' + escHtml(reply) + '</pre>';
+      } catch (e) {
+        document.getElementById('mBody').innerHTML = '<div class="history-empty">加载失败: ' + e.message + '</div>';
+      }
+    }
+
+    function closeHistModal() {
+      document.getElementById('histModal').classList.remove('open');
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHistModal(); });
+
+    async function clearHistory() {
+      if (!confirm('确定清空所有历史记录？此操作不可恢复。')) return;
+      await fetch('/history', { method: 'DELETE' });
+      loadHistory();
+    }
 
     /* 接通后端: hello 推送 cards/chat/log 快照, approval 由 /approval 推送 */
     connect();

@@ -433,7 +433,120 @@ class GenericAgentHandler(BaseHandler):
         if 'memory' in path or 'sop' in path: 
             next_prompt += "\n[SYSTEM TIPS] 正在读取记忆或SOP文件，若决定按sop执行请提取sop中的关键点（特别是靠后的）update working memory."
         return StepOutcome(result, next_prompt=next_prompt)
-    
+
+    def _run_rg(self, cmd_args, cwd, timeout=30):
+        """Run ripgrep subprocess, return (stdout, stderr, returncode). Fallback to grep if rg missing."""
+        rg = shutil.which('rg')
+        if rg:
+            cmd = [rg] + cmd_args
+        else:
+            return None, "rg not found", -1
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd)
+            return proc.stdout, proc.stderr, proc.returncode
+        except subprocess.TimeoutExpired:
+            return "", "Search timed out (30s)", -1
+        except Exception as e:
+            return "", str(e), -1
+
+    def do_code_search(self, args, response):
+        '''基于ripgrep的代码内容搜索'''
+        pattern = args.get("pattern", "")
+        if not pattern:
+            return StepOutcome("Error: pattern is required")
+        path = self._get_abs_path(args.get("path", "."))
+        max_results = min(args.get("max_results", 50), 200)
+        context_lines = min(args.get("context_lines", 0), 5)
+        yield f"\n[Action] Searching: {pattern} in {path}\n"
+
+        cmd = ["--line-number", "--no-heading", "--color", "never", "-m", str(max_results)]
+        if args.get("case_insensitive"): cmd.append("-i")
+        if args.get("fixed_strings"): cmd.append("-F")
+        if context_lines > 0: cmd += ["-C", str(context_lines)]
+        # include globs
+        inc = args.get("include", "")
+        if inc:
+            for g in inc.split(","):
+                g = g.strip()
+                if g: cmd += ["-g", g]
+        # exclude globs
+        exc = args.get("exclude", "")
+        if exc:
+            for g in exc.split(","):
+                g = g.strip()
+                if g: cmd += ["-g", f"!{g}"]
+        # file name filter
+        fp = args.get("file_pattern", "")
+        if fp:
+            for g in fp.split(","):
+                g = g.strip()
+                if g: cmd += ["-g", g]
+        cmd += ["-e", pattern, path]
+
+        stdout, stderr, rc = self._run_rg(cmd, cwd=self.working.get("cwd", "."))
+        if stdout is None:
+            return StepOutcome(f"Error: {stderr}")
+        if rc > 1:  # rg error (not "no match")
+            return StepOutcome(f"Error: {stderr.strip() or stdout.strip()}")
+        if not stdout.strip():
+            result = f"No matches found for '{pattern}' in {path}"
+        else:
+            lines = stdout.splitlines()
+            truncated = len(lines) > max_results * 2
+            if truncated:
+                lines = lines[:max_results * 2]
+            result = "\n".join(lines)
+            if truncated:
+                result += f"\n... (truncated, showing first {max_results*2} lines)"
+            result = f"Found matches ({len(stdout.splitlines())} lines total):\n{result}"
+        # output cap
+        maxlen = 15000 // args.get('_tool_num', 1)
+        if len(result) > maxlen:
+            result = result[:maxlen] + f"\n... [output truncated at {maxlen} chars]"
+        return StepOutcome(result, next_prompt=self._get_anchor_prompt(skip=args.get('_index', 0) > 0))
+
+    def do_file_find(self, args, response):
+        '''按文件名模式查找文件路径'''
+        pattern = args.get("pattern", "")
+        if not pattern:
+            return StepOutcome("Error: pattern is required")
+        path = self._get_abs_path(args.get("path", "."))
+        max_results = min(args.get("max_results", 50), 200)
+        sort_by = args.get("sort_by", "path")
+        yield f"\n[Action] Finding files: {pattern} in {path}\n"
+
+        cmd = ["--files", "--no-messages"]
+        if sort_by == "modified":
+            cmd.append("--sort")
+            cmd.append("modified")
+        # type filter
+        tf = args.get("type_filter", "")
+        if tf: cmd += ["-t", tf]
+        # glob pattern for filename
+        cmd += ["-g", pattern, path]
+
+        stdout, stderr, rc = self._run_rg(cmd, cwd=self.working.get("cwd", "."))
+        if stdout is None:
+            return StepOutcome(f"Error: {stderr}")
+        if rc > 1:
+            return StepOutcome(f"Error: {stderr.strip() or stdout.strip()}")
+        if not stdout.strip():
+            result = f"No files matching '{pattern}' found in {path}"
+        else:
+            lines = stdout.strip().splitlines()
+            total = len(lines)
+            if total > max_results:
+                lines = lines[:max_results]
+            result = "\n".join(lines)
+            if total > max_results:
+                result += f"\n... ({total} total, showing first {max_results})"
+            else:
+                result = f"{total} file(s) found:\n{result}"
+        maxlen = 15000 // args.get('_tool_num', 1)
+        if len(result) > maxlen:
+            result = result[:maxlen] + f"\n... [output truncated at {maxlen} chars]"
+        return StepOutcome(result, next_prompt=self._get_anchor_prompt(skip=args.get('_index', 0) > 0))
+
     def export_history(self, fn): 
         with open(fn, 'w', encoding='utf-8') as f: json.dump(self.parent.llmclient.backend.history, f, ensure_ascii=False)
     def _in_plan_mode(self): return self.working.get('in_plan_mode')

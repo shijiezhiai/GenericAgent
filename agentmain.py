@@ -72,6 +72,13 @@ class GenericAgent:
             self.mcp_tools, self.mcp_tool_map, self.mcp_clients = _tools, _tmap, _clients
         except Exception as _e:
             import sys; print(f"[MCP] init failed: {_e}", file=sys.stderr)
+        # LSP servers：启动并收集 LSP clients（fail-open，无 plugin/.lsp.json 时静默跳过）
+        self.lsp_clients = {}
+        try:
+            from plugins.plugin_loader import collect_lsp_clients
+            self.lsp_clients = collect_lsp_clients()
+        except Exception as _e:
+            import sys; print(f"[LSP] init failed: {_e}", file=sys.stderr)
 
     def load_llm_sessions(self):
         mykeys, changed = reload_mykeys()
@@ -213,6 +220,12 @@ class GenericAgent:
                 for _c in list(getattr(self, 'mcp_clients', {}).values()):
                     try: _c.stop()
                     except Exception as _e: print(f"[MCP] stop failed: {_e}")
+                # 关闭所有 LSP client 进程（fail-open）
+                try:
+                    from plugins.plugin_loader import stop_all_lsp
+                    stop_all_lsp()
+                except Exception as _e:
+                    print(f"[LSP] stop failed: {_e}")
 
 GeneraticAgent = GenericAgent
 

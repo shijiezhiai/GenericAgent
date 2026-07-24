@@ -18,6 +18,13 @@ _LOG  = os.path.join(_dir, '../sche_tasks/scheduler.log')
 
 os.makedirs(DONE, exist_ok=True)
 _logger = logging.getLogger('scheduler')
+
+# 通知：on_done 时按任务配置的 notify_channels 发送结果通知
+# notify.json 存接收者ID: {"wechat": to_user_id, "feishu": open_id}
+# 任务JSON: notify_channels=["wechat","feishu"](空=不通知), notify_content="status_only"|"with_result"
+NOTIFY_CFG = os.path.join(_dir, '../sche_tasks/notify.json')
+_pending = {}  # {tid: {"channels":[...], "content": "...", "rpt": "..."}}
+
 if not _logger.handlers:
     _logger.setLevel(logging.INFO)
     _fh = logging.FileHandler(_LOG, encoding='utf-8')
@@ -124,6 +131,14 @@ def check():
         prompt = task.get('prompt', '')
         model = task.get('model', '')
         model_tag = f'[MODEL:{model}]\n' if model else ''
+        # 记录通知配置，on_done 时读取发送
+        channels = task.get('notify_channels', [])
+        if channels:
+            _pending[tid] = {
+                'channels': [c for c in channels if c in ('wechat', 'feishu')],
+                'content': task.get('notify_content', 'status_only'),
+                'rpt': rpt,
+            }
         return (f'[定时任务] {tid}\n'
                 f'[报告路径] {rpt}\n\n'
                 f'先读 scheduled_task_sop 了解执行流程，然后执行以下任务：\n\n'
@@ -132,3 +147,94 @@ def check():
                 f'完成后将执行报告写入 {rpt}。')
 
     return None
+
+
+def _load_notify_cfg():
+    """读取 notify.json: {"wechat": to_user_id, "feishu": open_id}"""
+    try:
+        with open(NOTIFY_CFG, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        _logger.error(f'load notify.json failed: {e}')
+        return {}
+
+
+def _send_wechat(to_user_id, text):
+    """通过 wechatapp.py 的 WxBotClient 主动发消息"""
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'wechatapp', os.path.join(_dir, '../frontends/wechatapp.py'))
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        client = m.WxBotClient()
+        client._save = lambda **kw: None  # patch 掉 TCC 拦截的 token 写入
+        resp = client.send_text(to_user_id, text)
+        return bool(resp and resp.get('message_id'))
+    except Exception as e:
+        _logger.error(f'send_wechat failed: {e}')
+        return False
+
+
+def _send_feishu(open_id, text):
+    """通过 fsapp.py 的 send_message 主动发消息（用卡片支持长文本/换行）"""
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'fsapp', os.path.join(_dir, '../frontends/fsapp.py'))
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        mid = m.send_message(open_id, text, use_card=True, receive_id_type='open_id')
+        return bool(mid)
+    except Exception as e:
+        _logger.error(f'send_feishu failed: {e}')
+        return False
+
+
+def on_done(result):
+    """任务执行完成后被 agentmain 调用，按任务配置发送通知。
+    result: agent 完整输出。失败时以 [ERROR] 开头。
+    """
+    if not _pending:
+        return
+    tid, info = next(iter(_pending.items()))
+    _pending.pop(tid, None)  # 取出即清，避免重复
+    channels = info.get('channels', [])
+    content_mode = info.get('content', 'status_only')
+    rpt = info.get('rpt', '')
+    if not channels:
+        return
+
+    result = result or ''
+    is_error = result.strip().startswith('[ERROR]')
+    status = '❌ 失败' if is_error else '✅ 成功'
+
+    # 组装消息内容
+    if content_mode == 'with_result':
+        # 带执行结果（截断防止超长）
+        body = result.strip()
+        if len(body) > 1800:
+            body = body[:1800] + '\n...(结果已截断)'
+        msg = f'定时任务 {tid} {status}\n\n{body}'
+    else:
+        # 仅状态（失败含原因，剥离 [ERROR] 前缀）
+        if is_error:
+            parts = result.strip().split('\n', 1)
+            reason = parts[1][:500].strip() if len(parts) > 1 else parts[0][7:][:500].strip()
+            msg = f'定时任务 {tid} {status}\n失败原因: {reason}'
+        else:
+            msg = f'定时任务 {tid} {status}'
+
+    cfg = _load_notify_cfg()
+    for ch in channels:
+        try:
+            if ch == 'wechat':
+                uid = cfg.get('wechat', '')
+                if uid:
+                    _send_wechat(uid, msg)
+            elif ch == 'feishu':
+                oid = cfg.get('feishu', '')
+                if oid:
+                    _send_feishu(oid, msg)
+        except Exception as e:
+            _logger.error(f'notify {ch} failed: {e}')

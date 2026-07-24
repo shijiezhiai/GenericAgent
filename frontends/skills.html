@@ -91,6 +91,40 @@
     .plg-dir-remove:hover { background: #ef4444; color: #fff; }
     .plg-empty { padding: 20px; text-align: center; color: var(--muted, #8a8a9a); font-size: 13px; background: var(--card, #1e1e2a); border: 1px dashed var(--border, #2a2a3a); border-radius: 10px; }
 
+    /* MCP 区块 */
+    .mcp-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .mcp-toolbar .mcp-cfg-path { flex: 1; font-size: 12px; color: var(--muted, #8a8a9a); font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mcp-reload-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--accent, #3b82f6); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+    .mcp-reload-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .mcp-reload-btn:active { transform: none; }
+    .mcp-reload-btn svg { transition: transform .4s; }
+    .mcp-reload-btn.spinning svg { animation: mcpSpin .8s linear infinite; }
+    @keyframes mcpSpin { to { transform: rotate(360deg); } }
+    .mcp-add-form { background: var(--card, #1e1e2a); border: 1px solid var(--border, #2a2a3a); border-radius: 12px; padding: 18px 20px; margin-bottom: 24px; }
+    .mcp-add-form .maf-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .mcp-add-form .maf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .mcp-add-form .maf-grid.single { grid-template-columns: 1fr; }
+    .mcp-add-form label { display: block; font-size: 11px; font-weight: 600; color: var(--muted, #8a8a9a); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }
+    .mcp-add-form input, .mcp-add-form select { width: 100%; padding: 9px 12px; background: rgba(255,255,255,.04); border: 1px solid var(--border, #2a2a3a); border-radius: 8px; color: var(--fg, #e4e4e8); font-size: 13px; font-family: inherit; box-sizing: border-box; }
+    .mcp-add-form input:focus, .mcp-add-form select:focus { outline: none; border-color: var(--accent, #3b82f6); box-shadow: 0 0 0 3px rgba(59,130,246,.1); }
+    .mcp-add-form .maf-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+    .mcp-add-form .maf-submit { padding: 9px 22px; background: linear-gradient(135deg, var(--accent, #3b82f6), #2563eb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; box-shadow: 0 4px 14px rgba(59,130,246,.25); }
+    .mcp-add-form .maf-submit:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,130,246,.35); }
+    .mcp-server-card { background: var(--card, #1e1e2a); border: 1px solid var(--border, #2a2a3a); border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; transition: border-color .15s, box-shadow .15s; }
+    .mcp-server-card:hover { border-color: rgba(59,130,246,.4); box-shadow: 0 2px 12px rgba(59,130,246,.08); }
+    .mcp-server-card .msc-icon { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: rgba(16,185,129,.12); }
+    .mcp-server-card .msc-icon.http { background: rgba(245,158,11,.12); }
+    .mcp-server-card .msc-body { flex: 1; min-width: 0; }
+    .mcp-server-card .msc-name { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .mcp-server-card .msc-cmd { font-size: 12px; color: var(--muted, #8a8a9a); font-family: ui-monospace, monospace; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .msc-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: .5px; }
+    .msc-badge.stdio { background: rgba(16,185,129,.15); color: #10b981; }
+    .msc-badge.http { background: rgba(245,158,11,.15); color: #f59e0b; }
+    .msc-badge.src-global { background: rgba(59,130,246,.12); color: var(--accent, #3b82f6); }
+    .msc-badge.src-plugin { background: rgba(139,92,246,.12); color: #8b5cf6; }
+    .msc-remove { background: transparent; border: 1px solid #ef4444; color: #ef4444; padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; flex-shrink: 0; transition: all .15s; }
+    .msc-remove:hover { background: #ef4444; color: #fff; }
+
     .plg-card { background: var(--card, #1e1e2a); border: 1px solid var(--border, #2a2a3a); border-radius: 10px; padding: 14px 16px; }
     .plg-card .plg-name { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
     .plg-card .plg-ver { font-size: 11px; color: var(--muted, #8a8a9a); font-weight: 400; }
@@ -259,6 +293,7 @@
   <div class="tabbar">
     <button class="tab-btn active" id="tabSkills" onclick="switchTab('skills')">Skills</button>
     <button class="tab-btn" id="tabPlugins" onclick="switchTab('plugins')">Plugins</button>
+    <button class="tab-btn" id="tabMcp" onclick="switchTab('mcp')">MCP</button>
   </div>
 
   <!-- Skills 内容 -->
@@ -314,6 +349,70 @@
         <span class="ps-sub">GA 根目录 plugins/*.py，随会话自动加载（只读，禁用需改名加下划线前缀）</span>
       </div>
       <div id="builtinPluginList" class="ext-repo-list"><div class="loading">加载中…</div></div>
+    </div>
+  </div>
+
+  <!-- ===== MCP Tab ===== -->
+  <div class="container" id="mcpPane" hidden>
+    <div class="mcp-toolbar">
+      <span class="mcp-cfg-path" id="mcpCfgPath"></span>
+      <button class="mcp-reload-btn" id="mcpReloadBtn" onclick="reloadMcp()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+        重载 MCP
+      </button>
+    </div>
+
+    <div class="mcp-add-form">
+      <div class="maf-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent, #3b82f6)" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        添加 MCP Server
+      </div>
+      <div class="maf-grid">
+        <div>
+          <label>名称</label>
+          <input type="text" id="mcpName" placeholder="my-server（唯一标识）" />
+        </div>
+        <div>
+          <label>传输方式</label>
+          <select id="mcpTransport" onchange="toggleMcpTransport()">
+            <option value="stdio">stdio（本地命令）</option>
+            <option value="http">http / streamable-http（远程 URL）</option>
+          </select>
+        </div>
+      </div>
+      <div class="maf-grid" id="mcpStdioFields">
+        <div>
+          <label>命令</label>
+          <input type="text" id="mcpCommand" placeholder="如 npx / uvx / node / python3" />
+        </div>
+        <div>
+          <label>参数（空格分隔）</label>
+          <input type="text" id="mcpArgs" placeholder="如 -y @modelcontextprotocol/server-filesystem /tmp" />
+        </div>
+      </div>
+      <div class="maf-grid single" id="mcpHttpFields" style="display:none">
+        <div>
+          <label>Server URL</label>
+          <input type="text" id="mcpUrl" placeholder="如 http://localhost:3000/mcp" />
+        </div>
+      </div>
+      <div class="maf-grid single">
+        <div>
+          <label>环境变量（JSON，可选）</label>
+          <input type="text" id="mcpEnv" placeholder='如 {"API_KEY": "sk-xxx"}' />
+        </div>
+      </div>
+      <div class="maf-actions">
+        <button class="maf-submit" onclick="addMcpServer()">添加 Server</button>
+      </div>
+    </div>
+
+    <div class="plugin-section">
+      <div class="ps-head">
+        <h3>已注册的 MCP Servers</h3>
+        <span class="ps-sub">全局配置（mcp_servers.json）与 Plugin 内置（.mcp.json）的 MCP server，重载后生效</span>
+      </div>
+      <div id="mcpServerList" class="ext-repo-list"><div class="loading">加载中…</div></div>
     </div>
   </div>
 
@@ -514,12 +613,13 @@
     function _esc(s){ s = (s==null?'':String(s)); return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
     function switchTab(tab){
-      var skillsActive = (tab === 'skills');
-      document.getElementById('tabSkills').classList.toggle('active', skillsActive);
-      document.getElementById('tabPlugins').classList.toggle('active', !skillsActive);
-      document.getElementById('skillsPane').hidden = !skillsActive;
-      document.getElementById('pluginsPane').hidden = skillsActive;
-      if(!skillsActive){ loadPlugins(); }
+      var tabs = ['skills', 'plugins', 'mcp'];
+      tabs.forEach(function(t){
+        document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+        document.getElementById(t + 'Pane').hidden = (t !== tab);
+      });
+      if(tab === 'plugins'){ loadPlugins(); }
+      if(tab === 'mcp'){ loadMcp(); }
     }
 
     async function loadPlugins(){
@@ -599,6 +699,125 @@
         if(d.success){ toast('已移除'); loadPlugins(); }
         else { toast('移除失败: ' + (d.error||'未知错误')); }
       }catch(e){ toast('移除失败: ' + e.message); }
+    }
+
+    // ===== MCP Tab =====
+    var mcpData = null;
+
+    function toggleMcpTransport(){
+      var t = document.getElementById('mcpTransport').value;
+      document.getElementById('mcpStdioFields').style.display = (t === 'stdio') ? '' : 'none';
+      document.getElementById('mcpHttpFields').style.display = (t === 'http') ? '' : 'none';
+    }
+
+    async function loadMcp(){
+      var listEl = document.getElementById('mcpServerList');
+      try{
+        var r = await fetch('/api/mcp');
+        var d = await r.json();
+        mcpData = d;
+        document.getElementById('mcpCfgPath').textContent = d.config_path || '';
+        renderMcpServers(d.servers || []);
+      }catch(e){
+        listEl.innerHTML = '<div class="plg-empty">加载失败: ' + _esc(e.message) + '</div>';
+      }
+    }
+
+    function renderMcpServers(servers){
+      var el = document.getElementById('mcpServerList');
+      if(!servers.length){
+        el.innerHTML = '<div class="plg-empty">暂无 MCP Server，可通过上方表单添加（写入全局 mcp_servers.json），或在 plugin 目录放置 .mcp.json</div>';
+        return;
+      }
+      el.innerHTML = servers.map(function(s){
+        var isHttp = (s.transport === 'http' || s.transport === 'sse');
+        var cmdText = isHttp ? _esc(s.url || '') : _esc([s.command].concat(s.args || []).join(' '));
+        var envKeys = Object.keys(s.env || {});
+        var envHtml = envKeys.length ? '<span class="msc-badge src-global" style="background:rgba(107,114,128,.15);color:#9ca3af">' + envKeys.length + ' env</span>' : '';
+        var srcBadge = s.source === 'global'
+          ? '<span class="msc-badge src-global">全局</span>'
+          : '<span class="msc-badge src-plugin">plugin: ' + _esc(s.source || '') + '</span>';
+        var removeBtn = s.source === 'global'
+          ? '<button class="msc-remove" onclick="removeMcpServer(\'' + _esc(s.name).replace(/'/g, "\\'") + '\')">移除</button>'
+          : '<span style="font-size:11px;color:var(--muted,#8a8a9a);white-space:nowrap">随 plugin 管理</span>';
+        var icon = isHttp
+          ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
+          : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
+        return '<div class="mcp-server-card">'
+          + '<div class="msc-icon' + (isHttp ? ' http' : '') + '">' + icon + '</div>'
+          + '<div class="msc-body">'
+          +   '<div class="msc-name">' + _esc(s.name) + ' <span class="msc-badge ' + (isHttp ? 'http' : 'stdio') + '">' + _esc(s.transport || 'stdio') + '</span> ' + srcBadge + envHtml + '</div>'
+          +   '<div class="msc-cmd">' + cmdText + '</div>'
+          + '</div>'
+          + removeBtn
+          + '</div>';
+      }).join('');
+    }
+
+    async function addMcpServer(){
+      var name = document.getElementById('mcpName').value.trim();
+      var transport = document.getElementById('mcpTransport').value;
+      if(!name){ toast('请输入 Server 名称'); return; }
+      if(!/^[a-zA-Z0-9_-]+$/.test(name)){ toast('名称仅支持字母/数字/下划线/连字符'); return; }
+
+      var config = {};
+      if(transport === 'stdio'){
+        var command = document.getElementById('mcpCommand').value.trim();
+        if(!command){ toast('请输入命令（如 npx / uvx / node）'); return; }
+        config.command = command;
+        var argsStr = document.getElementById('mcpArgs').value.trim();
+        if(argsStr){ config.args = argsStr.split(/\s+/); }
+      } else {
+        var url = document.getElementById('mcpUrl').value.trim();
+        if(!url){ toast('请输入 Server URL'); return; }
+        if(!/^https?:\/\//.test(url)){ toast('URL 需以 http:// 或 https:// 开头'); return; }
+        config.url = url;
+      }
+      var envStr = document.getElementById('mcpEnv').value.trim();
+      if(envStr){
+        try{
+          var env = JSON.parse(envStr);
+          if(typeof env !== 'object' || Array.isArray(env)){ toast('环境变量需为 JSON 对象'); return; }
+          config.env = env;
+        }catch(e){ toast('环境变量 JSON 解析失败: ' + e.message); return; }
+      }
+
+      try{
+        var r = await fetch('/api/mcp/server', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name: name, config: config})});
+        var d = await r.json();
+        if(d.success){
+          toast('已添加 ' + name + '，点击「重载 MCP」生效');
+          document.getElementById('mcpName').value = '';
+          document.getElementById('mcpCommand').value = '';
+          document.getElementById('mcpArgs').value = '';
+          document.getElementById('mcpUrl').value = '';
+          document.getElementById('mcpEnv').value = '';
+          loadMcp();
+        } else { toast('添加失败: ' + (d.error || '未知错误')); }
+      }catch(e){ toast('添加失败: ' + e.message); }
+    }
+
+    async function removeMcpServer(name){
+      if(!confirm('确定移除 MCP Server「' + name + '」？\n（仅从全局配置删除，重载后生效）')) return;
+      try{
+        var r = await fetch('/api/mcp/server/remove', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name: name})});
+        var d = await r.json();
+        if(d.success){ toast('已移除 ' + name); loadMcp(); }
+        else { toast('移除失败: ' + (d.error || '未知错误')); }
+      }catch(e){ toast('移除失败: ' + e.message); }
+    }
+
+    async function reloadMcp(){
+      var btn = document.getElementById('mcpReloadBtn');
+      btn.classList.add('spinning');
+      btn.disabled = true;
+      try{
+        var r = await fetch('/api/mcp/reload', {method:'POST'});
+        var d = await r.json();
+        if(d.success){ toast(d.message || 'MCP 已重载'); loadMcp(); }
+        else { toast('重载失败: ' + (d.error || '未知错误')); }
+      }catch(e){ toast('重载失败: ' + e.message); }
+      finally{ btn.classList.remove('spinning'); btn.disabled = false; }
     }
 
     // 初始化

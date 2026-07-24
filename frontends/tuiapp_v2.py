@@ -2984,6 +2984,11 @@ class InputArea(TextArea):
         # saturated.  Cleared by `_stash_cleanup_clear`.
         self._skip_change_next: bool = False
         self._HISTORY_MAX = 200
+        # Ctrl+R 反向历史搜索（zsh 风格）状态
+        self._hs_active: bool = False
+        self._hs_query: str = ""
+        self._hs_matches: list = []   # _input_history 中匹配项的下标（旧→新）
+        self._hs_idx: int = -1        # 当前展示项在 _hs_matches 中的位置
 
     def expand_placeholders(self, text: str) -> str:
         def repl(m):
@@ -3050,6 +3055,114 @@ class InputArea(TextArea):
         self._paste_counter = 0
         self._history_index = -1
         self._history_stash = ""
+        self._hs_active = False
+        self._hs_query = ""
+        self._hs_matches = []
+        self._hs_idx = -1
+
+    # ---- Ctrl+R 反向历史搜索（zsh 风格）----
+    def _hs_compute(self, query: str) -> list:
+        """返回 _input_history 中匹配 query（子串，忽略大小写）的下标，旧→新。"""
+        q = (query or "").lower()
+        if not q:
+            return list(range(len(self._input_history)))
+        return [i for i, h in enumerate(self._input_history) if q in h.lower()]
+
+    def _hs_show(self) -> None:
+        if not self._hs_matches:
+            self._suppress_palette_next_change()
+            self.text = ""
+            self._hs_update_prompt(0, 0, empty=True)
+            return
+        idx = max(0, min(self._hs_idx, len(self._hs_matches) - 1))
+        self._hs_idx = idx
+        text = self._input_history[self._hs_matches[idx]]
+        # 历史命令可能以 "/" 开头，写入会触发命令面板自动弹出，先抑制
+        self._suppress_palette_next_change()
+        self.text = text
+        # 光标定位到匹配子串起点（zsh 行为），未命中则置于行尾
+        pos = text.lower().find(self._hs_query.lower()) if self._hs_query else len(text)
+        if pos < 0:
+            pos = len(text)
+        try:
+            row = text[:pos].count("\n")
+            col = len(text[:pos].split("\n")[-1])
+            self.move_cursor((row, col))
+        except Exception:
+            pass
+        self._hs_update_prompt(idx + 1, len(self._hs_matches))
+
+    def _hs_update_prompt(self, cur: int, total: int, empty: bool = False) -> None:
+        try:
+            bar = self.app.query_one("#tipbar", Static)
+        except Exception:
+            return
+        if empty:
+            bar.update(_tip_line(f"🔍 (reverse-i-search)`{self._hs_query}`: 无匹配 — Esc 取消"))
+            return
+        bar.update(_tip_line(
+            f"🔍 (reverse-i-search)`{self._hs_query}`:  [{cur}/{total}]"
+            f"  Enter确认 · Esc取消 · Ctrl+R下一条"
+        ))
+
+    def _hs_start(self) -> None:
+        if not self._input_history:
+            try:
+                self.app.query_one("#tipbar", Static).update(_tip_line("🔍 暂无历史记录可搜索，先发几条消息"))
+            except Exception:
+                pass
+            return
+        self._hs_active = True
+        self._hs_query = ""
+        self._hs_stash = self.text
+        self._hs_matches = self._hs_compute("")
+        self._hs_idx = len(self._hs_matches) - 1
+        self._hs_show()
+
+    def _hs_type(self, ch: str) -> None:
+        self._hs_query += ch
+        self._hs_matches = self._hs_compute(self._hs_query)
+        self._hs_idx = len(self._hs_matches) - 1
+        self._hs_show()
+
+    def _hs_backspace(self) -> None:
+        if self._hs_query:
+            self._hs_query = self._hs_query[:-1]
+            self._hs_matches = self._hs_compute(self._hs_query)
+            self._hs_idx = len(self._hs_matches) - 1
+            self._hs_show()
+        else:
+            self._hs_cancel()
+
+    def _hs_cycle(self) -> None:
+        """Ctrl+R 再次触发：跳到下一条更旧的历史匹配，循环。"""
+        if not self._hs_matches:
+            return
+        self._hs_idx = (self._hs_idx - 1) % len(self._hs_matches)
+        self._hs_show()
+
+    def _hs_accept(self) -> None:
+        # 保留当前匹配文本，仅退出搜索模式
+        self._hs_active = False
+        self._hs_query = ""
+        self._hs_matches = []
+        self._hs_idx = -1
+        self._restore_tip()
+
+    def _hs_cancel(self) -> None:
+        self._hs_active = False
+        self._suppress_palette_next_change()
+        self.text = self._hs_stash
+        self._hs_query = ""
+        self._hs_matches = []
+        self._hs_idx = -1
+        self._restore_tip()
+
+    def _restore_tip(self) -> None:
+        try:
+            self.app.query_one("#tipbar", Static).update(_tip_line(""))
+        except Exception:
+            pass
 
     def action_newline(self) -> None:
         self._insert_via_keyboard("\n")
@@ -3124,6 +3237,41 @@ class InputArea(TextArea):
                 choice.action_select(); event.stop(); event.prevent_default(); return
             if event.key == "escape":
                 self.app._cancel_choice(choice.msg); event.stop(); event.prevent_default(); return
+        # 2.5) Ctrl+R 反向历史搜索模式（zsh 风格）：不自动触发，仅 Ctrl+R 进入
+        if self._hs_active:
+            key = event.key
+            if key == "enter":
+                self._hs_accept(); event.stop(); event.prevent_default(); return
+            if key in ("escape", "ctrl+g"):
+                self._hs_cancel(); event.stop(); event.prevent_default(); return
+            if key == "ctrl+r":
+                self._hs_cycle(); event.stop(); event.prevent_default(); return
+            if key == "backspace":
+                self._hs_backspace(); event.stop(); event.prevent_default(); return
+            if key in ("up", "down"):
+                # 退出搜索后按方向键做历史翻页
+                self._hs_cancel()
+                if key == "up":
+                    self._history_up()
+                else:
+                    self._history_down()
+                event.stop(); event.prevent_default(); return
+            if key in ("left", "right", "home", "end"):
+                # 退出搜索并保留匹配文本，把光标移动交给父类处理
+                self._hs_active = False
+                self._hs_query = ""; self._hs_matches = []; self._hs_idx = -1
+                self._restore_tip()
+                await super()._on_key(event)
+                return
+            # 可打印字符（含中文）：IME 提交时 event.character 即整段中文，
+            # 走 event.is_printable / event.character 才同时覆盖英文与中文
+            # （不写入输入框文本，匹配结果由 _hs_show 覆盖显示）
+            if event.is_printable and event.character:
+                self._hs_type(event.character); event.stop(); event.prevent_default(); return
+            # 其它键：取消搜索并吞掉，避免误触发
+            self._hs_cancel(); event.stop(); event.prevent_default(); return
+        if event.key == "ctrl+r":
+            self._hs_start(); event.stop(); event.prevent_default(); return
         # 3) history browse: only at (0,0) for up / end-of-text for down, so in-line
         #    cursor movement is preserved.
         if event.key == "up" and self.cursor_location == (0, 0):
@@ -7006,6 +7154,12 @@ class GenericAgentTUI(App[None]):
         except Exception: pass
 
     def _rotate_tip(self) -> None:
+        # 反向历史搜索进行中时，保留搜索提示，不轮转 tip
+        try:
+            if getattr(self.query_one("#input", InputArea), "_hs_active", False):
+                return
+        except Exception:
+            pass
         try: bar = self.query_one("#tipbar", Static)
         except Exception: return
         bar.update(_tip_line(""))  # blank pulse

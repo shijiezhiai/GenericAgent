@@ -144,6 +144,7 @@ class Session:
     id: str
     title: str = "New chat"
     cwd: str = ""
+    expert: Optional[str] = None   # 会话级专家（方案B：用户主动选择才注入，None=普通模式）
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     messages: List[dict] = field(default_factory=list)
@@ -303,13 +304,25 @@ class AgentManager:
         f.write_text(json.dumps(clean, ensure_ascii=False), encoding="utf-8")
 
     # ── 项目待办 (todos) 持久化 ──────────────────────────────
+    # 注：todos 文件存放在 GA 自身的元数据侧车目录 projects_meta/{name}/，
+    # 而非项目目录本身。因为部分项目是符号链接指向外部 repo（如 flink），
+    # 其目录受 macOS TCC 沙箱限制不可写，直接写 .todos.json 会 EPERM → 500。
     def _project_todos_file(self, project_name: str) -> Path:
+        return Path(self.ga_root) / "temp" / "projects_meta" / str(project_name or "") / ".todos.json"
+
+    def _project_todos_file_legacy(self, project_name: str) -> Path:
+        """旧路径：项目目录下的 .todos.json（用于回退读取与迁移清理）。"""
         return self._project_dir(project_name) / ".todos.json"
 
     def _load_todos(self, project_name: str) -> list:
         try:
             f = self._project_todos_file(project_name)
             if not f.exists():
+                # 回退：旧版本数据存放在项目目录内，迁移前先读旧路径
+                legacy = self._project_todos_file_legacy(project_name)
+                if legacy.exists():
+                    data = json.loads(legacy.read_text(encoding="utf-8"))
+                    return data if isinstance(data, list) else []
                 return []
             data = json.loads(f.read_text(encoding="utf-8"))
             return data if isinstance(data, list) else []
@@ -321,6 +334,13 @@ class AgentManager:
         f = self._project_todos_file(project_name)
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(json.dumps(items, ensure_ascii=False, default=str), encoding="utf-8")
+        # 迁移清理：若旧路径仍存在数据文件，说明是旧版本遗留，删掉避免双源
+        legacy = self._project_todos_file_legacy(project_name)
+        if legacy.exists():
+            try:
+                legacy.unlink()
+            except Exception as e:
+                print(f"[bridge] cleanup legacy todos failed: {e}", file=sys.stderr)
 
     def list_todos(self, project_name: str) -> list:
         return self._load_todos(project_name)
@@ -1002,6 +1022,8 @@ class AgentManager:
                     pass
             if sess.project:
                 agent._ga_project_mode_name = sess.project
+            # 方案B：会话级专家优先走 _active_expert() 第一条路径(agent._ga_expert_name)，绕过全局 pid 锚文件
+            agent._ga_expert_name = getattr(sess, 'expert', None) or None
             threading.Thread(target=agent.run, daemon=True, name=f"GA-{sess.id}").start()
             return agent
         finally:
@@ -1279,6 +1301,20 @@ class AgentManager:
                 raise web.HTTPNotFound(text=json.dumps({"error": f"session not found: {sid}"}, ensure_ascii=False), content_type="application/json")
             return sess
 
+    def mark_viewed(self, sid: str) -> dict:
+        """Mark a 'done' (completed-but-unviewed) session as viewed → 'idle'."""
+        with self.lock:
+            sess = self.sessions.get(sid)
+            if not sess:
+                raise web.HTTPNotFound(text=json.dumps({"error": f"session not found: {sid}"}, ensure_ascii=False), content_type="application/json")
+            changed = sess.status == "done"
+            if changed:
+                sess.status = "idle"
+                self._persist()
+        if changed:
+            emit_session_state(sess, "viewed")
+        return {"ok": True, "sessionId": sid, "status": sess.status}
+
     def delete_session(self, sid: str) -> dict:
         import traceback as _tb
         print(f"[DEBUG-DELETE] delete_session called for {sid} | sessions keys before: {list(self.sessions.keys())[:10]}", file=sys.stderr)
@@ -1297,7 +1333,7 @@ class AgentManager:
         _purge_session_uploads(sid)
         return {"ok": True, "sessionId": sid}
 
-    def submit_prompt(self, sid: str, prompt: Any, images: Optional[list] = None, llm_no: Optional[int] = None, display: Optional[str] = None, files_meta: Optional[list] = None, image_metas: Optional[list] = None) -> dict:
+    def submit_prompt(self, sid: str, prompt: Any, images: Optional[list] = None, llm_no: Optional[int] = None, display: Optional[str] = None, files_meta: Optional[list] = None, image_metas: Optional[list] = None, expert: Optional[str] = None) -> dict:
         prompt, image_ids = normalize_prompt(prompt, images)
         if llm_no is not None:
             self.config["llmNo"] = int(llm_no)
@@ -1307,6 +1343,11 @@ class AgentManager:
                 raise web.HTTPNotFound(text=json.dumps({"error": f"session not found: {sid}"}, ensure_ascii=False), content_type="application/json")
             if sess.status == "running":
                 raise web.HTTPConflict(text=json.dumps({"error": "session is already running"}, ensure_ascii=False), content_type="application/json")
+            # 方案B：会话级专家。前端每次发消息带 expert(null=普通模式)；同步到 sess 与已创建的 agent 实例
+            sess.expert = expert or None
+            if sess.agent is not None:
+                with contextlib.suppress(Exception):
+                    sess.agent._ga_expert_name = expert or None
             extra = {}
             if image_ids:
                 extra["image_ids"] = image_ids
@@ -1431,9 +1472,9 @@ class AgentManager:
                     self.add_message(sess, "assistant", full, **_extra)
                 try: sess.llm_history = json.loads(json.dumps(agent.llmclient.backend.history, ensure_ascii=False, default=str))
                 except Exception: pass
-                sess.status = "idle"
+                sess.status = "done"
                 sess.last_error = ""
-            emit_session_state(sess, "idle")
+            emit_session_state(sess, "done")
         except Exception as e:
             tb = traceback.format_exc()
             with self.lock:
@@ -2497,8 +2538,11 @@ async def prompt_handler(request):
     llm_no = data.get("llmNo")
     if llm_no is not None:
         llm_no = int(llm_no)
+    expert = data.get("expert")  # 方案B：会话级专家（null/缺失=普通模式）
+    if isinstance(expert, str):
+        expert = expert.strip() or None
     return json_ok(manager.submit_prompt(sid, prompt, images, llm_no=llm_no, display=display,
-                                          files_meta=files_meta, image_metas=image_metas))
+                                          files_meta=files_meta, image_metas=image_metas, expert=expert))
 
 
 async def messages_handler(request):
@@ -2511,6 +2555,11 @@ async def messages_handler(request):
 async def cancel_handler(request):
     sid = request.match_info["sid"]
     return json_ok(manager.cancel(sid))
+
+
+async def viewed_handler(request):
+    sid = request.match_info["sid"]
+    return json_ok(manager.mark_viewed(sid))
 
 
 async def restore_handler(request):
@@ -2720,6 +2769,526 @@ async def project_skills_update_handler(request):
     return json_ok({"ok": True, "name": name, "skills": clean})
 
 
+def _library_file(pdir):
+    return os.path.join(pdir, '.library.json')
+
+
+def _read_library(pdir):
+    lf = _library_file(pdir)
+    if os.path.isfile(lf):
+        try:
+            with open(lf, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                for _it in data:
+                    if isinstance(_it, dict):
+                        _it.setdefault('pinned', False)
+                return data
+        except (OSError, json.JSONDecodeError):
+            pass
+    return []
+
+
+def _write_library(pdir, items):
+    try:
+        with open(_library_file(pdir), 'w', encoding='utf-8') as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+        return True
+    except OSError:
+        return False
+
+
+async def pick_folder_handler(request):
+    """POST /api/pick-folder - 弹出 macOS 原生文件夹选择对话框，返回所选文件夹的绝对路径。
+    浏览器 tab 无法使用 Tauri pick_folder，故由本地 bridge 调 osascript 实现原生选择，
+    供「添加文件资料库」时选择文件夹（选中后前端把路径填入输入框，提交时后端展开为全部文件）。"""
+    import asyncio
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "osascript", "-e",
+            'POSIX path of (choose folder with prompt "选择要加入资料库的文件夹")',
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        out, _err = await asyncio.wait_for(proc.communicate(), timeout=300)
+        path = out.decode("utf-8", "replace").strip()
+        if proc.returncode != 0 or not path:
+            return json_ok({"path": "", "cancelled": True})
+        return json_ok({"path": path.rstrip("/"), "cancelled": False})
+    except asyncio.TimeoutError:
+        return json_ok({"path": "", "cancelled": True})
+    except Exception as e:
+        return web.json_response({"error": "picker failed: %s" % e}, status=500, headers=cors_headers())
+
+
+def _library_dedupe_key(item):
+    """资料库条目去重键：web 用归一化 URL，file 用绝对路径。返回 None 表示不参与去重。"""
+    typ = (item.get("type") or "").strip()
+    if typ == "web":
+        u = (item.get("url") or "").strip().rstrip('/')
+        return ("web:" + u.lower()) if u else None
+    if typ == "file":
+        p = (item.get("path") or "").strip()
+        return ("file:" + p) if p else None
+    if typ == "folder":
+        p = (item.get("path") or "").strip()
+        return ("folder:" + p) if p else None
+    return None
+
+
+def _library_existing_keys(items):
+    """收集现有资料库条目的去重键集合（用于添加时跳过已存在条目）。"""
+    keys = set()
+    for it in items:
+        k = _library_dedupe_key(it)
+        if k:
+            keys.add(k)
+    return keys
+
+
+# 添加本地文件夹 / 展开文件夹子项时跳过的无关目录
+_LIB_SKIP_DIRS = {'.git', 'node_modules', '__pycache__', '.venv', 'venv',
+                  '.idea', '.vscode', 'dist', 'build', '.codegraph', '.cache'}
+
+
+def _list_dir_direct_entries(folder, skip_dirs=_LIB_SKIP_DIRS):
+    """列出 folder 下的直接子项，返回 [(is_dir, name, abspath)]。
+
+    跳过隐藏项（以 . 开头）与无关目录；目录优先、再按名称排序。
+    """
+    entries = []
+    try:
+        for name in sorted(os.listdir(folder)):
+            if name.startswith('.'):
+                continue
+            fp = os.path.join(folder, name)
+            if os.path.isdir(fp):
+                if name in skip_dirs:
+                    continue
+                entries.append((True, name, fp))
+            else:
+                entries.append((False, name, fp))
+    except OSError:
+        pass
+    entries.sort(key=lambda e: (not e[0], e[1].lower()))
+    return entries
+
+
+def _dir_has_children(folder, skip_dirs=_LIB_SKIP_DIRS):
+    """folder 是否包含（非隐藏、非跳过）直接子项。"""
+    for _ in _list_dir_direct_entries(folder, skip_dirs):
+        return True
+    return False
+
+
+def _confluence_config(page_url=None):
+    """读取 Confluence 连接配置（~/.bilibili/config 为 JSON 格式）。
+
+    base_url 优先级：环境变量 > config["confluence"]["base_url"] > 从 page_url 派生（scheme://netloc）。
+    凭证优先级：token（env/config）> cookie（config["confluence"]["cookie"] / accessCookie / cookie，内部 SSO 兜底）。
+    返回 {base_url, token?, user?, cookie?}；无法确定 base_url 或无任何凭证返回 None。
+    """
+    cfg = {}
+    base = os.environ.get("CONFLUENCE_BASE_URL") or os.environ.get("CONFLUENCE_URL")
+    token = os.environ.get("CONFLUENCE_TOKEN") or os.environ.get("CONFLUENCE_API_TOKEN")
+    user = os.environ.get("CONFLUENCE_USER") or os.environ.get("CONFLUENCE_USERNAME")
+    cookie = None
+    try:
+        cp = Path.home() / ".bilibili" / "config"
+        if cp.exists():
+            data = json.loads(cp.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                sec = data.get("confluence")
+                if isinstance(sec, dict):
+                    base = base or sec.get("base_url") or sec.get("url")
+                    token = token or sec.get("token") or sec.get("api_token")
+                    user = user or sec.get("user") or sec.get("username")
+                    cookie = sec.get("cookie")
+                # 顶层 confluence_* 键（与 ~/.bilibili/config 扁平 JSON 风格一致）
+                base = base or data.get("confluence_base_url") or data.get("confluence_url")
+                token = token or data.get("confluence_token") or data.get("confluence_api_token")
+                user = user or data.get("confluence_user") or data.get("confluence_username")
+                # 内部 Confluence 通常走 bilibili SSO，用现有 cookie 兜底认证
+                cookie = cookie or data.get("accessCookie") or data.get("cookie")
+    except Exception:
+        pass
+    # base_url 从 page_url 派生（取 scheme://netloc）
+    if not base and page_url:
+        try:
+            from urllib.parse import urlparse
+            p = urlparse(page_url)
+            if p.scheme and p.netloc:
+                base = p.scheme + "://" + p.netloc
+        except Exception:
+            pass
+    if base:
+        cfg["base_url"] = base.rstrip("/")
+    if token:
+        cfg["token"] = token
+    if user:
+        cfg["user"] = user
+    if cookie:
+        cfg["cookie"] = cookie
+    if not cfg.get("base_url") or not (cfg.get("token") or cfg.get("cookie")):
+        return None
+    return cfg
+
+
+def _parse_confluence_page_id(url, base_url):
+    """从 Confluence 页面 URL 解析 pageId；解析不出（非 Confluence 链接等）返回 None。"""
+    try:
+        from urllib.parse import urlparse, parse_qs
+        p = urlparse(url)
+        if base_url:
+            bnet = urlparse(base_url).netloc
+            if bnet and p.netloc and p.netloc != bnet:
+                return None
+        # 形式一：/pages/viewpage.action?pageId=12345
+        qs = parse_qs(p.query)
+        if "pageId" in qs:
+            return qs["pageId"][0]
+        # 形式二：/wiki/spaces/SPACE/pages/12345/Title
+        m = re.search(r"/pages/(\d+)", p.path)
+        if m:
+            return m.group(1)
+        return None
+    except Exception:
+        return None
+
+
+async def _fetch_confluence_direct_children(page_id, cfg, limit=500):
+    """抓取 Confluence 页面的【直接】子页面（仅一层），返回 [(id, title, url), ...]。
+
+    分页拉完该层全部子页——层级资料库按需逐层动态加载，因此不再受全局 200 上限影响。
+    任何网络/认证失败都静默返回已抓到的部分（优雅降级，由调用方决定是否采用）。
+    """
+    import aiohttp
+    base = cfg["base_url"]
+    headers = {}
+    auth = None
+    if cfg.get("token"):
+        if cfg.get("user"):
+            auth = aiohttp.BasicAuth(cfg["user"], cfg["token"])
+        else:
+            headers["Authorization"] = "Bearer " + cfg["token"]
+    elif cfg.get("cookie"):
+        headers["Cookie"] = cfg["cookie"]
+    results = []
+    seen = set()
+    try:
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(headers=headers, auth=auth, timeout=timeout) as sess:
+            start = 0
+            while len(results) < limit:
+                api = "%s/rest/api/content/%s/child/page?limit=50&start=%s&expand=title" % (base, str(page_id), start)
+                async with sess.get(api) as resp:
+                    if resp.status != 200:
+                        break
+                    data = await resp.json()
+                children = data.get("results") or []
+                if not children:
+                    break
+                for ch in children:
+                    cid = str(ch.get("id") or "")
+                    if not cid or cid in seen:
+                        continue
+                    seen.add(cid)
+                    title = (ch.get("title") or "").strip()
+                    curl = "%s/pages/viewpage.action?pageId=%s" % (base, cid)
+                    results.append((cid, title, curl))
+                    if len(results) >= limit:
+                        break
+                size = data.get("size", len(children))
+                start += size
+                if size < 50:
+                    break
+    except Exception:
+        pass
+    return results
+
+
+async def _confluence_has_children(page_id, cfg):
+    """快速判断 Confluence 页面是否有子页面（只取 1 条）。失败/无子页返回 False。"""
+    children = await _fetch_confluence_direct_children(page_id, cfg, limit=1)
+    return len(children) > 0
+
+
+async def project_library_get_handler(request):
+    """读取项目资料库条目（GET /projects/{name}/library）。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    return json_ok({"name": name, "items": _read_library(pdir)})
+
+
+async def project_library_add_handler(request):
+    """向项目资料库添加条目（POST /projects/{name}/library）。
+
+    body: {type: file|web|generated, name, path?, url?, desc?}
+    """
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    data = await read_json(request)
+    typ = str(data.get("type") or "").strip()
+    if typ not in ("file", "web", "generated"):
+        return web.json_response({"error": "type must be file|web|generated"}, status=400, headers=cors_headers())
+    item_name = str(data.get("name") or "").strip()
+    path = str(data.get("path") or "").strip()
+    url = str(data.get("url") or "").strip()
+    desc = str(data.get("desc") or "").strip()
+    include_children = bool(data.get("includeChildren"))
+    import time
+
+    # 文件类型：若 path 是文件夹 → 作为有层级的树入库（根节点 + 直接子项，深层子项展开时懒加载），
+    # 与「父页面/子页面」一致；不再扁平化所有文件。
+    if typ == "file" and path:
+        folder = os.path.abspath(os.path.expanduser(path))
+        if os.path.isdir(folder):
+            items = _read_library(pdir)
+            existing = _library_existing_keys(items)
+            now = int(time.time())
+            MAX_CHILDREN = 1000
+            # 复用已有根文件夹节点（按路径去重），否则新建
+            fkey = "folder:" + folder
+            root = next((it for it in items if _library_dedupe_key(it) == fkey), None)
+            if root is None:
+                root_id = "lib_" + uuid.uuid4().hex[:12]
+                root = {
+                    "id": root_id, "type": "folder",
+                    "name": os.path.basename(folder.rstrip("/")) or folder,
+                    "path": folder, "url": "", "desc": desc, "added_at": now,
+                    "parent_id": "", "has_children": False, "is_dir": True,
+                }
+                items.append(root)
+            else:
+                root_id = root["id"]
+            added = 0
+            truncated = False
+            children_nodes = []
+            for is_dir, cname, cfp in _list_dir_direct_entries(folder):
+                if added >= MAX_CHILDREN:
+                    truncated = True
+                    break
+                ckey = ("folder:" if is_dir else "file:") + cfp
+                if ckey in existing:
+                    continue
+                existing.add(ckey)
+                children_nodes.append({
+                    "id": "lib_" + uuid.uuid4().hex[:12],
+                    "type": "folder" if is_dir else "file",
+                    "name": cname, "path": cfp, "url": "", "desc": desc,
+                    "added_at": now, "parent_id": root_id,
+                    "has_children": bool(is_dir and _dir_has_children(cfp)),
+                    "is_dir": is_dir,
+                })
+                added += 1
+            if children_nodes:
+                items.extend(children_nodes)
+                root["has_children"] = True
+                root["is_dir"] = True
+            if not _write_library(pdir, items):
+                return web.json_response({"error": "write failed"}, status=500, headers=cors_headers())
+            return json_ok({"ok": True, "name": name, "added": added, "hierarchical": True,
+                            "folder": True, "folder_id": root_id, "truncated": truncated})
+
+    if not item_name:
+        return web.json_response({"error": "name is required"}, status=400, headers=cors_headers())
+
+    # Confluence 层级展开：type=web 且勾选含子页面 且 URL 是 Confluence 页面
+    #   → 父页入库（page_id + has_children），并把【直接子页】作为其子节点入库（parent_id=父）
+    #   更深层级由前端展开时通过 /library/{id}/children 动态加载，避免一次性抓取触发上限
+    if typ == "web" and url and include_children:
+        cfg = _confluence_config(url)
+        if cfg:
+            page_id = _parse_confluence_page_id(url, cfg.get("base_url"))
+            if page_id:
+                items = _read_library(pdir)
+                existing = _library_existing_keys(items)
+                pkey = "web:" + url.strip().rstrip("/").lower()
+                now = int(time.time())
+                # 父页（去重：已存在则复用其 id 作为子节点 parent_id）
+                parent = next((it for it in items if _library_dedupe_key(it) == pkey), None)
+                parent_new = parent is None
+                if parent_new:
+                    parent = {
+                        "id": "lib_" + uuid.uuid4().hex[:12],
+                        "type": "web", "name": item_name, "path": "",
+                        "url": url, "desc": desc, "added_at": now,
+                        "page_id": page_id, "parent_id": "", "has_children": False,
+                    }
+                    items.append(parent)
+                else:
+                    parent["page_id"] = page_id
+                    parent["type"] = "web"
+                # 直接子页（去重后追加，parent_id=父）
+                children = await _fetch_confluence_direct_children(page_id, cfg)
+                child_added = 0
+                for (cid, ctitle, curl) in children:
+                    ckey = "web:" + (curl or url).strip().rstrip("/").lower()
+                    if ckey in existing:
+                        continue
+                    existing.add(ckey)
+                    items.append({
+                        "id": "lib_" + uuid.uuid4().hex[:12],
+                        "type": "web", "name": ctitle or cid,
+                        "path": "", "url": curl or url, "desc": desc, "added_at": now,
+                        "page_id": cid, "parent_id": parent["id"],
+                        "has_children": await _confluence_has_children(cid, cfg),
+                    })
+                    child_added += 1
+                parent["has_children"] = bool(child_added) or await _confluence_has_children(page_id, cfg)
+                if not _write_library(pdir, items):
+                    return web.json_response({"error": "write failed"}, status=500, headers=cors_headers())
+                return json_ok({"ok": True, "name": name, "added": child_added + (1 if parent_new else 0),
+                                "subpages": child_added, "parent_id": parent["id"], "hierarchical": True})
+    # Confluence 未配置 / 非 Confluence 页面 / 抓取失败 → 落入下方单条添加
+
+    item = {
+        "id": "lib_" + uuid.uuid4().hex[:12],
+        "type": typ,
+        "name": item_name,
+        "path": path,
+        "url": url,
+        "desc": desc,
+        "added_at": int(time.time()),
+        "parent_id": "",
+    }
+    items = _read_library(pdir)
+    # 去重：web 按 URL、file 按路径，已存在则直接返回现有条目
+    dkey = _library_dedupe_key(item)
+    if dkey:
+        dup = next((it for it in items if _library_dedupe_key(it) == dkey), None)
+        if dup is not None:
+            return json_ok({"ok": True, "name": name, "item": dup, "duplicate": True})
+    # web 条目若是 Confluence 页面，记录 page_id + has_children 以支持后续展开
+    if typ == "web" and url:
+        cfg = _confluence_config(url)
+        if cfg:
+            pid = _parse_confluence_page_id(url, cfg.get("base_url"))
+            if pid:
+                item["page_id"] = pid
+                item["has_children"] = await _confluence_has_children(pid, cfg)
+    items.append(item)
+    if not _write_library(pdir, items):
+        return web.json_response({"error": "write failed"}, status=500, headers=cors_headers())
+    return json_ok({"ok": True, "name": name, "item": item})
+
+
+async def project_library_delete_handler(request):
+    """删除项目资料库条目（DELETE /projects/{name}/library/{id}）。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    item_id = request.match_info.get("id", "")
+    items = _read_library(pdir)
+    # 级联删除：收集目标条目 + 其所有后代（按 parent_id 链迭代）
+    to_delete = {item_id}
+    changed = True
+    while changed:
+        changed = False
+        for it in items:
+            pid = it.get("parent_id") or ""
+            if pid and pid in to_delete and it.get("id") not in to_delete:
+                to_delete.add(it.get("id"))
+                changed = True
+    new_items = [it for it in items if it.get("id") not in to_delete]
+    deleted = len(items) - len(new_items)
+    if deleted and not _write_library(pdir, new_items):
+        return web.json_response({"error": "write failed"}, status=500, headers=cors_headers())
+    return json_ok({"ok": True, "name": name, "deleted": deleted})
+
+
+async def project_library_children_handler(request):
+    """动态加载某条目的直接子页面（GET /projects/{name}/library/{id}/children）。
+    若条目是 Confluence 页面（有 page_id），从 Confluence 抓取其直接子页，
+    去重后以 parent_id=该条目 追加入库并返回；否则返回已存的直接子条目。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    item_id = request.match_info.get("id", "")
+    items = _read_library(pdir)
+    parent = next((it for it in items if it.get("id") == item_id), None)
+    if parent is None:
+        return web.json_response({"error": "item not found"}, status=404, headers=cors_headers())
+    # 本地文件夹节点：动态列出该目录的直接子项，去重入库后返回（深层子项继续懒加载）
+    if parent.get("is_dir") or parent.get("type") == "folder":
+        fpath = parent.get("path") or ""
+        if os.path.isdir(fpath):
+            existing = _library_existing_keys(items)
+            now = int(time.time())
+            MAX_CHILDREN = 1000
+            new_children = []
+            for is_dir, cname, cfp in _list_dir_direct_entries(fpath):
+                if len(new_children) >= MAX_CHILDREN:
+                    break
+                ckey = ("folder:" if is_dir else "file:") + cfp
+                if ckey in existing:
+                    continue
+                existing.add(ckey)
+                new_children.append({
+                    "id": "lib_" + uuid.uuid4().hex[:12],
+                    "type": "folder" if is_dir else "file",
+                    "name": cname, "path": cfp, "url": "", "desc": "",
+                    "added_at": now, "parent_id": item_id,
+                    "has_children": bool(is_dir and _dir_has_children(cfp)),
+                    "is_dir": is_dir,
+                })
+            if new_children:
+                items.extend(new_children)
+                parent["has_children"] = True
+                if not _write_library(pdir, items):
+                    return web.json_response({"error": "write failed"}, status=500, headers=cors_headers())
+            children = [it for it in items if (it.get("parent_id") or "") == item_id]
+            return json_ok({"ok": True, "name": name, "children": children, "added": len(new_children)})
+        # 文件夹已被移动/删除：仍返回已存子项，避免报错
+        children = [it for it in items if (it.get("parent_id") or "") == item_id]
+        return json_ok({"ok": True, "name": name, "children": children, "added": 0})
+    page_id = parent.get("page_id")
+    # 非 Confluence 页面：直接返回已存的子条目
+    if not page_id:
+        children = [it for it in items if (it.get("parent_id") or "") == item_id]
+        return json_ok({"ok": True, "name": name, "children": children, "added": 0})
+    cfg = _confluence_config(parent.get("url") or "")
+    if not cfg:
+        children = [it for it in items if (it.get("parent_id") or "") == item_id]
+        return json_ok({"ok": True, "name": name, "children": children, "added": 0})
+    # 抓取直接子页，去重后追加
+    existing = _library_existing_keys(items)
+    fetched = await _fetch_confluence_direct_children(page_id, cfg)
+    now = int(time.time())
+    added = 0
+    for (cid, ctitle, curl) in fetched:
+        ckey = "web:" + (curl or "").strip().rstrip("/").lower()
+        if ckey and ckey in existing:
+            continue
+        if ckey:
+            existing.add(ckey)
+        items.append({
+            "id": "lib_" + uuid.uuid4().hex[:12],
+            "type": "web", "name": ctitle or cid,
+            "path": "", "url": curl or "", "desc": "", "added_at": now,
+            "page_id": cid, "parent_id": item_id,
+            "has_children": await _confluence_has_children(cid, cfg),
+        })
+        added += 1
+    parent["has_children"] = bool([it for it in items if (it.get("parent_id") or "") == item_id])
+    if added and not _write_library(pdir, items):
+        return web.json_response({"error": "write failed"}, status=500, headers=cors_headers())
+    children = [it for it in items if (it.get("parent_id") or "") == item_id]
+    return json_ok({"ok": True, "name": name, "children": children, "added": added})
+
+
 async def project_experts_get_handler(request):
     """读取已建项目绑定的 experts 列表（GET /projects/{name}/experts）。"""
     name = request.match_info.get("name", "")
@@ -2739,6 +3308,338 @@ async def project_experts_get_handler(request):
         except (OSError, json.JSONDecodeError):
             pass
     return json_ok({"name": name, "experts": experts})
+
+
+# ── 资料库条目操作：置顶 / 默认应用打开 / 定位 / 预览 ──
+
+def _library_find_item(pdir, item_id):
+    """在资料库条目中按 id 查找，返回 (item, items, index)。"""
+    items = _read_library(pdir)
+    for idx, it in enumerate(items):
+        if isinstance(it, dict) and it.get("id") == item_id:
+            return it, items, idx
+    return None, items, -1
+
+
+async def project_library_patch_handler(request):
+    """修改资料库条目（PATCH /projects/{name}/library/{id}）：当前支持 pinned 置顶。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    item_id = request.match_info.get("id", "")
+    data = await read_json(request)
+    item, items, _idx = _library_find_item(pdir, item_id)
+    if item is None:
+        return web.json_response({"error": "item not found"}, status=404, headers=cors_headers())
+    if "pinned" in data:
+        item["pinned"] = bool(data["pinned"])
+    if not _write_library(pdir, items):
+        return web.json_response({"error": "write failed"}, status=500, headers=cors_headers())
+    return json_ok({"ok": True, "id": item_id, "pinned": item["pinned"]})
+
+
+async def project_library_open_handler(request):
+    """用默认应用程序打开文件（POST /projects/{name}/library/{id}/open）。文件夹不支持。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    item_id = request.match_info.get("id", "")
+    item, _items, _idx = _library_find_item(pdir, item_id)
+    if item is None:
+        return web.json_response({"error": "item not found"}, status=404, headers=cors_headers())
+    path = item.get("path") or ""
+    is_dir = bool(item.get("is_dir")) or (path and os.path.isdir(path))
+    if is_dir:
+        return web.json_response({"error": "folder not supported"}, status=400, headers=cors_headers())
+    if not path or not os.path.isfile(path):
+        return web.json_response({"error": "file not found"}, status=404, headers=cors_headers())
+    try:
+        proc = await asyncio.create_subprocess_exec("open", path)
+        await proc.wait()
+    except (OSError, ValueError) as e:
+        return web.json_response({"error": "open failed: %s" % e}, status=500, headers=cors_headers())
+    return json_ok({"ok": True})
+
+
+async def project_library_reveal_handler(request):
+    """在文件管理器中定位文件/文件夹（POST /projects/{name}/library/{id}/reveal，macOS `open -R`）。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    item_id = request.match_info.get("id", "")
+    item, _items, _idx = _library_find_item(pdir, item_id)
+    if item is None:
+        return web.json_response({"error": "item not found"}, status=404, headers=cors_headers())
+    path = item.get("path") or ""
+    if not path or not os.path.exists(path):
+        return web.json_response({"error": "path not found"}, status=404, headers=cors_headers())
+    try:
+        proc = await asyncio.create_subprocess_exec("open", "-R", path)
+        await proc.wait()
+    except (OSError, ValueError) as e:
+        return web.json_response({"error": "reveal failed: %s" % e}, status=500, headers=cors_headers())
+    return json_ok({"ok": True})
+
+
+def _resolve_project_dir(name):
+    """解析项目目录：先对传入名做一次 URL 反编码（兼容前端偶发双重编码），
+    再严格匹配；失败则按 去空格/大小写不敏感 兜底匹配。
+    返回 (pdir, matched_name) 或 (None, None)。"""
+    name = _unquote_name(name)
+    base = os.path.join(manager.ga_root, 'temp', 'projects')
+    pdir = os.path.join(base, name)
+    if os.path.isdir(pdir):
+        return pdir, name
+    if not os.path.isdir(base):
+        return None, None
+    norm = name.strip()
+    lowered = norm.lower()
+    try:
+        for cand in os.listdir(base):
+            cp = os.path.join(base, cand)
+            if not os.path.isdir(cp):
+                continue
+            if cand.strip() == norm or cand.strip().lower() == lowered:
+                return cp, cand
+    except OSError:
+        pass
+    return None, None
+
+
+def _unquote_name(name):
+    """对传入的项目名做一次安全的 URL 反编码（兼容重复编码 / 已解码两种输入）。"""
+    import urllib.parse
+    s = name or ''
+    try:
+        s = urllib.parse.unquote(s)
+    except Exception:
+        pass
+    return s
+
+
+async def project_library_preview_handler(request):
+    """读取文件内容用于预览（GET /projects/{name}/library/{id}/preview）。文件夹返回直接子项列表。"""
+    name = _unquote_name(request.match_info.get("name", ""))
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir, real_name = _resolve_project_dir(name)
+    if pdir is None:
+        return web.json_response({"error": "project not found", "name": name,
+                                   "ga_root": manager.ga_root,
+                                   "available": sorted(os.listdir(os.path.join(manager.ga_root, 'temp', 'projects'))) if os.path.isdir(os.path.join(manager.ga_root, 'temp', 'projects')) else []},
+                                  status=404, headers=cors_headers())
+    item_id = request.match_info.get("id", "")
+    item, _items, _idx = _library_find_item(pdir, item_id)
+    if item is None:
+        return web.json_response({"error": "item not found"}, status=404, headers=cors_headers())
+    path = item.get("path") or ""
+    if not path:
+        return web.json_response({"error": "no path"}, status=400, headers=cors_headers())
+    if bool(item.get("is_dir")) or os.path.isdir(path):
+        entries = []
+        try:
+            for nm in sorted(os.listdir(path)):
+                entries.append({"name": nm, "is_dir": os.path.isdir(os.path.join(path, nm))})
+        except OSError as e:
+            return web.json_response({"error": "list failed: %s" % e}, status=500, headers=cors_headers())
+        return json_ok({"is_dir": True, "name": item.get("name"), "path": path, "entries": entries})
+    if not os.path.isfile(path):
+        return web.json_response({"error": "file not found"}, status=404, headers=cors_headers())
+    size = os.path.getsize(path)
+    ext = (os.path.basename(path).rsplit('.', 1)[-1].lower()
+           if '.' in os.path.basename(path) else '')
+    IMG_EXTS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg',
+                'avif', 'heic', 'heif', 'tif', 'tiff'}
+    is_image = ext in IMG_EXTS
+    is_pdf = ext == 'pdf'
+    max_bytes = 200 * 1024
+    try:
+        with open(path, 'rb') as f:
+            head = f.read(min(size, 8192))
+        is_binary = (b'\x00' in head) and not is_image  # svg 是文本但按图片处理
+        truncated = False
+        content = None
+        if not is_binary:
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                if size <= max_bytes:
+                    content = f.read()
+                else:
+                    content = f.read(max_bytes)
+                    truncated = True
+    except OSError as e:
+        return web.json_response({"error": "read failed: %s" % e}, status=500, headers=cors_headers())
+    return json_ok({"is_dir": False, "name": item.get("name"), "path": path,
+                    "size": size, "is_binary": is_binary, "is_image": is_image,
+                    "is_pdf": is_pdf, "ext": ext,
+                    "truncated": truncated, "content": content})
+
+
+async def project_library_raw_handler(request):
+    """流式返回资料库文件内容（图片/PDF 等），供预览内联展示（GET /projects/{name}/library/{id}/raw）。
+    路径来自已存储的资料库条目，不做裸路径遍历。"""
+    import mimetypes
+    name = _unquote_name(request.match_info.get("name", ""))
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.Response(status=400, text="invalid project name", headers=cors_headers())
+    pdir, real_name = _resolve_project_dir(name)
+    if pdir is None:
+        avail = sorted(os.listdir(os.path.join(manager.ga_root, 'temp', 'projects'))) if os.path.isdir(os.path.join(manager.ga_root, 'temp', 'projects')) else []
+        return web.json_response({"error": "project not found", "name": name,
+                                   "ga_root": manager.ga_root, "available": avail},
+                                  status=404, headers=cors_headers())
+    item_id = request.match_info.get("id", "")
+    item, _items, _idx = _library_find_item(pdir, item_id)
+    if item is None:
+        return web.Response(status=404, text="item not found", headers=cors_headers())
+    path = item.get("path") or ""
+    if not path or os.path.isdir(path) or not os.path.isfile(path):
+        return web.Response(status=404, text="file not found", headers=cors_headers())
+    ctype = mimetypes.guess_type(path)[0] or "application/octet-stream"
+    _EXT_CT = {'.pdf': 'application/pdf', '.svg': 'image/svg+xml',
+               '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+               '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+               '.ico': 'image/x-icon'}
+    ctype = _EXT_CT.get(os.path.splitext(path)[1].lower(), ctype)
+    try:
+        data = open(path, 'rb').read()
+    except OSError as e:
+        return web.Response(status=500, text="read failed: %s" % e, headers=cors_headers())
+    return web.Response(
+        body=data,
+        content_type=ctype,
+        headers={"Content-Disposition": "inline", "Cache-Control": "no-cache"},
+    )
+
+
+# ---- 网站 favicon 解析（资料库 web 条目图标） ----
+_FAVICON_CACHE = {}
+
+
+async def _resolve_favicon(url):
+    """解析网站 favicon 的绝对 URL；找不到返回 None。带内存缓存（仅缓存成功结果）。"""
+    if url in _FAVICON_CACHE:
+        return _FAVICON_CACHE[url]
+    from urllib.parse import urlparse, urljoin
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+        return None
+    origin = '%s://%s' % (parsed.scheme, parsed.netloc)
+    from aiohttp import ClientSession, ClientTimeout
+    import re
+    timeout = ClientTimeout(total=4)
+    headers = {'User-Agent': 'Mozilla/5.0 (compatible; GenericAgent/1.0)'}
+
+    def _svg_is_all_white(text):
+        """判断 SVG 的可见填充是否全为白色（在浅色背景上会不可见）。
+        仅当存在显式颜色且这些颜色全部是白色变体时才判为 True；没有显式颜色
+        （默认黑色填充）或含任意非白颜色/位图/渐变时判为 False（视为可见）。"""
+        try:
+            low = text.lower()
+            if '<image' in low or 'xlink:href' in low:
+                return False  # 内嵌位图，无法判断，保守视为可见
+            cols = re.findall(r'(?:fill|stroke)\s*[:=]\s*["\']?\s*(#[0-9a-f]{3,8}|rgb[a]?\([^)]*\)|[a-z]+)', low)
+            visible = []
+            for c in cols:
+                c = c.strip()
+                if c in ('none', 'transparent', 'currentcolor', 'inherit'):
+                    continue
+                visible.append(c)
+            if not visible:
+                return False  # 无显式颜色 → 默认黑色 → 可见
+            white = {'#fff', '#ffff', '#ffffff', '#ffffffff', 'white',
+                     'rgb(255,255,255)', 'rgba(255,255,255,1)', 'rgb(255, 255, 255)'}
+            return all(c in white for c in visible)
+        except Exception:
+            return False
+
+    async def _verify_icon(session, icon_url):
+        """icon_url 能作为图片加载（200 + image/*）才返回，否则 None。
+        对 SVG 额外检测：若填充全为白色（浅色背景下不可见）则跳过。"""
+        try:
+            async with session.get(icon_url, allow_redirects=True) as resp:
+                if resp.status != 200:
+                    return None
+                ctype = resp.headers.get('Content-Type', '') or (resp.content_type or '')
+                if 'image/' not in ctype:
+                    return None
+                if 'svg' in ctype:
+                    body = await resp.content.read(65536)
+                    if _svg_is_all_white(body.decode('utf-8', 'replace')):
+                        return None
+                await resp.release()
+                return icon_url
+        except Exception:
+            return None
+
+    cands = []
+    try:
+        async with ClientSession(timeout=timeout, headers=headers) as session:
+            try:
+                async with session.get(url, allow_redirects=True) as resp:
+                    ctype = resp.headers.get('Content-Type', '')
+                    if 'text/html' in ctype:
+                        html = ''
+                        while True:
+                            chunk = await resp.content.read(4096)
+                            if not chunk:
+                                break
+                            html += chunk.decode('utf-8', 'replace')
+                            if '</head>' in html or len(html) > 200000:
+                                break
+                        # 优先 <link rel="icon">/shortcut icon，其次 apple-touch-icon，再次 og:image
+                        links = re.findall(r'<link\b[^>]*>', html, re.I)
+                        for tag in links:
+                            rel_m = re.search(r"rel=[\"']([^\"']*)[\"']", tag, re.I)
+                            href_m = re.search(r"href=[\"']([^\"']*)[\"']", tag, re.I)
+                            if not rel_m or not href_m:
+                                continue
+                            rel = rel_m.group(1).lower()
+                            href = href_m.group(1).strip()
+                            if 'icon' in rel and 'apple-touch' not in rel:
+                                cands.insert(0, href)
+                            elif 'apple-touch' in rel:
+                                cands.append(href)
+                        if not cands:
+                            og = re.search(r"<meta\b[^>]*property=[\"']og:image[\"'][^>]*content=[\"']([^\"']*)[\"']", html, re.I)
+                            if og:
+                                cands.append(og.group(1))
+            except Exception:
+                pass
+            # 根目录 favicon 作为最后的兜底候选（很多站点真正的图标在这里）
+            cands.append(origin + '/favicon.ico')
+            # 去重并保持优先级顺序
+            seen = set()
+            ordered = []
+            for c in cands:
+                ac = urljoin(url, c)
+                if ac not in seen:
+                    seen.add(ac)
+                    ordered.append(ac)
+            for cand in ordered:
+                if await _verify_icon(session, cand):
+                    _FAVICON_CACHE[url] = cand
+                    return cand
+    except Exception:
+        pass
+    return None
+
+
+async def favicon_handler(request):
+    """解析网站 favicon 图标 URL（GET /api/favicon?url=...）。找不到返回 {icon:null}。"""
+    url = request.query.get('url', '').strip()
+    if not url:
+        return web.json_response({"icon": None}, headers=cors_headers())
+    icon = await _resolve_favicon(url)
+    return web.json_response({"icon": icon}, headers=cors_headers())
 
 
 async def project_experts_update_handler(request):
@@ -3671,6 +4572,132 @@ async def experts_toggle_handler(request):
     return json_ok(result, status=status)
 
 
+# ─── MCP Server 管理 API ─────────────────────────────────────────────────────────
+
+def _mcp_config_path():
+    """返回全局 MCP 配置文件路径（优先 GA_ROOT/mcp_servers.json）。"""
+    p = os.path.join(manager.ga_root, "mcp_servers.json")
+    if os.path.isfile(p):
+        return p
+    alt = os.path.expanduser("~/.config/ga/mcp_servers.json")
+    if os.path.isfile(alt):
+        return alt
+    return p  # 默认写 GA_ROOT
+
+
+def _mcp_read_config():
+    """读取全局 MCP 配置。"""
+    path = _mcp_config_path()
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        servers = data.get("mcpServers", data) if isinstance(data, dict) else {}
+        return {k: v for k, v in servers.items() if isinstance(v, dict)} if isinstance(servers, dict) else {}
+    except Exception:
+        return {}
+
+
+def _mcp_write_config(servers: dict):
+    """写入全局 MCP 配置。"""
+    path = _mcp_config_path()
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"mcpServers": servers}, f, ensure_ascii=False, indent=2)
+
+
+async def mcp_list_handler(request):
+    """GET /api/mcp — 列出所有 MCP servers（全局 + plugin 绑定）"""
+    servers = []
+    # 全局 servers
+    global_cfg = _mcp_read_config()
+    for name, cfg in global_cfg.items():
+        servers.append({
+            "name": name,
+            "source": "global",
+            "transport": "http" if cfg.get("url") else "stdio",
+            "command": cfg.get("command", ""),
+            "args": cfg.get("args", []),
+            "url": cfg.get("url", ""),
+            "env": cfg.get("env", {}),
+        })
+    # plugin 绑定 servers
+    import sys as _sys
+    _ga_root = manager.ga_root
+    if _ga_root not in _sys.path:
+        _sys.path.insert(0, _ga_root)
+    try:
+        from plugins import plugin_loader as _pl
+        for p in _pl._get_plugins():
+            mcp = p.get("mcp") or {}
+            if not isinstance(mcp, dict):
+                continue
+            pname = p.get("name", "")
+            for sname, scfg in mcp.items():
+                if not isinstance(scfg, dict):
+                    continue
+                servers.append({
+                    "name": f"{pname}/{sname}",
+                    "source": f"plugin:{pname}",
+                    "transport": "http" if scfg.get("url") else "stdio",
+                    "command": scfg.get("command", ""),
+                    "args": scfg.get("args", []),
+                    "url": scfg.get("url", ""),
+                    "env": scfg.get("env", {}),
+                })
+    except Exception:
+        pass
+    return json_ok({"success": True, "servers": servers, "config_path": _mcp_config_path()})
+
+
+async def mcp_add_handler(request):
+    """POST /api/mcp/server — 添加全局 MCP server"""
+    data = await read_json(request)
+    name = (data.get("name") or "").strip()
+    if not name:
+        return json_ok({"success": False, "error": "name is required"}, status=400)
+    config = data.get("config") or {}
+    if not isinstance(config, dict) or not (config.get("command") or config.get("url")):
+        return json_ok({"success": False, "error": "config must have 'command' or 'url'"}, status=400)
+    servers = _mcp_read_config()
+    if name in servers:
+        return json_ok({"success": False, "error": f"server '{name}' already exists"}, status=409)
+    servers[name] = config
+    _mcp_write_config(servers)
+    return json_ok({"success": True, "name": name, "message": f"server '{name}' added"})
+
+
+async def mcp_remove_handler(request):
+    """POST /api/mcp/server/remove — 移除全局 MCP server"""
+    data = await read_json(request)
+    name = (data.get("name") or "").strip()
+    if not name:
+        return json_ok({"success": False, "error": "name is required"}, status=400)
+    servers = _mcp_read_config()
+    if name not in servers:
+        return json_ok({"success": False, "error": f"server '{name}' not found"}, status=404)
+    del servers[name]
+    _mcp_write_config(servers)
+    return json_ok({"success": True, "name": name, "message": f"server '{name}' removed"})
+
+
+async def mcp_reload_handler(request):
+    """POST /api/mcp/reload — 热重载所有 MCP servers（需要运行中的 agent）"""
+    import sys as _sys
+    _ga_root = manager.ga_root
+    if _ga_root not in _sys.path:
+        _sys.path.insert(0, _ga_root)
+    try:
+        from plugins import plugin_loader as _pl
+        # 尝试获取运行中的 agent 引用
+        agent_ref = getattr(manager, "agent", None)
+        tools, tool_map, clients = _pl.reload_mcp_servers(agent_ref=agent_ref)
+        return json_ok({"success": True, "message": f"reloaded, {len(tools)} tools available"})
+    except Exception as e:
+        return json_ok({"success": False, "error": str(e)}, status=500)
+
+
 async def skills_detail_handler(request):
     """返回单个 skill 的详情：frontmatter 字段 + SKILL.md 正文"""
     name = request.query.get("name", "").strip()
@@ -4034,7 +5061,10 @@ async def files_favorites_handler(request):
 
 
 async def files_delete_handler(request):
-    """DELETE /api/files/delete - delete a file within allowed directories."""
+    """DELETE /api/files/delete - delete a file or folder within allowed directories.
+    允许目录: temp/desktop_uploads（会话上传）、temp/sche_tasks（调度任务）、
+    temp/projects/{name}（项目资产）。禁止删除根目录、整个项目目录及项目元数据文件。
+    """
     data = await read_json(request)
     raw = data.get("path") or ""
     try:
@@ -4045,16 +5075,32 @@ async def files_delete_handler(request):
         target = p.resolve()
         upload_root = (ga_root / "temp" / "desktop_uploads").resolve()
         sche_root = (ga_root / "sche_tasks").resolve()
+        proj_root = (ga_root / "temp" / "projects").resolve()
 
         in_upload = upload_root in target.parents or target == upload_root
         in_sche = sche_root in target.parents or target == sche_root
-        if not (in_upload or in_sche):
+        in_proj = proj_root in target.parents or target == proj_root
+        if not (in_upload or in_sche or in_proj):
             return json_ok({"ok": False, "error": "path outside allowed directories"}, status=403)
+
+        # 禁止删除根目录 / 整个项目目录 / 项目元数据文件
+        if target in (proj_root, upload_root, sche_root):
+            return json_ok({"ok": False, "error": "cannot delete a root directory"}, status=400)
+        if target.parent == proj_root and target != proj_root:
+            return json_ok({"ok": False, "error": "cannot delete a project directory"}, status=400)
+        if in_proj and target.name in ('.library.json', '.workspace.json', '.datasources.json', '.events.jsonl', '.todos.json'):
+            return json_ok({"ok": False, "error": "protected project metadata"}, status=400)
 
         if not target.exists():
             return json_ok({"ok": False, "error": "file not found"}, status=404)
+
+        if target.is_dir():
+            import shutil
+            shutil.rmtree(target)
+            return json_ok({"ok": True, "deleted": str(target), "dir": True})
+
         if not target.is_file():
-            return json_ok({"ok": False, "error": "not a file"}, status=400)
+            return json_ok({"ok": False, "error": "not a file or directory"}, status=400)
         target.unlink()
         return json_ok({"ok": True, "deleted": str(target)})
     except Exception as e:
@@ -4147,6 +5193,73 @@ async def files_read_handler(request):
             return json_ok({"ok": False, "error": "file too large to preview"})
         content = target.read_text(encoding="utf-8", errors="replace")
         return json_ok({"ok": True, "content": content, "name": target.name, "size": size})
+    except Exception as e:
+        return json_ok({"ok": False, "error": str(e)})
+
+
+async def files_diff_handler(request):
+    """GET /api/files/diff?path=... - get git diff for a file (uncommitted changes vs HEAD)."""
+    import asyncio
+    from urllib.parse import unquote
+    raw = unquote(request.query.get("path") or "")
+    try:
+        ga_root = Path(DEFAULT_GA_ROOT)
+        target = Path(raw).expanduser().resolve()
+        in_ga = _preview_allowed_under_ga_root(target, ga_root)
+        if not in_ga:
+            return json_ok({"ok": False, "error": "path not allowed"}, status=403)
+        if not target.exists():
+            return json_ok({"ok": False, "error": "file not found"}, status=404)
+
+        # Find git repo root by walking up
+        repo_root = None
+        d = target.parent
+        for _ in range(30):
+            if (d / ".git").exists():
+                repo_root = d
+                break
+            if d == d.parent:
+                break
+            d = d.parent
+        if not repo_root:
+            return json_ok({"ok": False, "error": "not a git repository"})
+
+        rel_path = str(target.relative_to(repo_root))
+
+        # Try git diff HEAD (staged + unstaged vs last commit)
+        proc = await asyncio.create_subprocess_exec(
+            "git", "diff", "HEAD", "--", rel_path,
+            cwd=str(repo_root),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
+        diff_text = stdout.decode("utf-8", errors="replace")
+
+        # If no diff vs HEAD, try untracked file (show full content as new)
+        if not diff_text.strip():
+            proc2 = await asyncio.create_subprocess_exec(
+                "git", "status", "--porcelain", "--", rel_path,
+                cwd=str(repo_root),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout2, _ = await asyncio.wait_for(proc2.communicate(), timeout=10)
+            status_line = stdout2.decode("utf-8", errors="replace").strip()
+            if status_line.startswith("??"):
+                # Untracked file - show as entirely new
+                content = target.read_text(encoding="utf-8", errors="replace")
+                lines = content.splitlines()
+                diff_lines = [f"--- /dev/null", f"+++ b/{rel_path}"]
+                diff_lines.append(f"@@ -0,0 +1,{len(lines)} @@")
+                diff_lines.extend(f"+{l}" for l in lines)
+                diff_text = "\n".join(diff_lines)
+            elif not status_line:
+                return json_ok({"ok": True, "diff": "", "has_changes": False, "name": target.name})
+
+        return json_ok({"ok": True, "diff": diff_text, "has_changes": bool(diff_text.strip()), "name": target.name})
+    except asyncio.TimeoutError:
+        return json_ok({"ok": False, "error": "git command timed out"})
     except Exception as e:
         return json_ok({"ok": False, "error": str(e)})
 
@@ -4695,6 +5808,7 @@ def create_app():
     app.router.add_get("/session/{sid}/messages", messages_handler)
     app.router.add_get("/session/{sid}/plan", plan_handler)
     app.router.add_post("/session/{sid}/cancel", cancel_handler)
+    app.router.add_post("/session/{sid}/viewed", viewed_handler)
     app.router.add_post("/session/{sid}/restore", restore_handler)
     app.router.add_post("/session/{sid}/suggest", suggest_handler)
     app.router.add_get("/projects", projects_list_handler)
@@ -4712,12 +5826,27 @@ def create_app():
     app.router.add_post("/api/skills/pull_update", skills_pull_update_handler)
     app.router.add_get("/api/plugins", plugins_list_handler)
     app.router.add_post("/api/plugins/dir", plugins_dir_handler)
+    app.router.add_get("/api/mcp", mcp_list_handler)
+    app.router.add_post("/api/mcp/server", mcp_add_handler)
+    app.router.add_post("/api/mcp/server/remove", mcp_remove_handler)
+    app.router.add_post("/api/mcp/reload", mcp_reload_handler)
     app.router.add_get("/projects/{name}/skills", project_skills_get_handler)
     app.router.add_put("/projects/{name}/skills", project_skills_update_handler)
     app.router.add_get("/projects/{name}/experts", project_experts_get_handler)
     app.router.add_put("/projects/{name}/experts", project_experts_update_handler)
     app.router.add_put("/projects/{name}/workspace", project_workspace_update_handler)
     app.router.add_get("/projects/{name}/datasources", project_datasources_handler)
+    # 项目资料库 (library) —— /projects/{name}/library 与 /projects/{name}/library/{id}
+    app.router.add_get("/projects/{name}/library", project_library_get_handler)
+    app.router.add_post("/projects/{name}/library", project_library_add_handler)
+    app.router.add_delete("/projects/{name}/library/{id}", project_library_delete_handler)
+    app.router.add_get("/projects/{name}/library/{id}/children", project_library_children_handler)
+    app.router.add_patch("/projects/{name}/library/{id}", project_library_patch_handler)
+    app.router.add_post("/projects/{name}/library/{id}/open", project_library_open_handler)
+    app.router.add_post("/projects/{name}/library/{id}/reveal", project_library_reveal_handler)
+    app.router.add_get("/projects/{name}/library/{id}/preview", project_library_preview_handler)
+    app.router.add_get("/projects/{name}/library/{id}/raw", project_library_raw_handler)
+    app.router.add_get("/api/favicon", favicon_handler)
     # 项目待办 (todos) CRUD —— /projects/{name}/todos 与 /projects/{name}/todos/{tid}
     app.router.add_get("/projects/{name}/todos", project_todos_handler)
     app.router.add_post("/projects/{name}/todos", project_todos_handler)
@@ -4749,9 +5878,11 @@ def create_app():
     # @ mention & slash command APIs
     app.router.add_get("/api/files/list", files_list_handler)
     app.router.add_get("/api/files/browse", files_browse_handler)
+    app.router.add_post("/api/pick-folder", pick_folder_handler)
     app.router.add_delete("/api/files/delete", files_delete_handler)
     app.router.add_post("/api/files/copy", files_copy_handler)
     app.router.add_get("/api/files/read", files_read_handler)
+    app.router.add_get("/api/files/diff", files_diff_handler)
     app.router.add_post("/api/files/favorite", files_favorite_handler)
     app.router.add_get("/api/files/favorites", files_favorites_handler)
     app.router.add_get("/api/commands", commands_list_handler)
@@ -4867,7 +5998,7 @@ def create_app():
             body = await request.json()
             with open(task_file, 'r', encoding='utf-8') as fp:
                 task = json.load(fp)
-            for k in ('name', 'schedule', 'repeat', 'enabled', 'model', 'prompt', 'max_delay_hours', 'workspace', 'date_range'):
+            for k in ('name', 'schedule', 'repeat', 'enabled', 'model', 'prompt', 'max_delay_hours', 'workspace', 'date_range', 'notify_channels', 'notify_content'):
                 if k in body:
                     task[k] = body[k]
             with open(task_file, 'w', encoding='utf-8') as fp:
@@ -4907,6 +6038,11 @@ def create_app():
         model = (data.get('model') or '').strip()
         workspace = (data.get('workspace') or '').strip()
         date_range = data.get('date_range')
+        # 通知配置: notify_channels=["wechat","feishu"](空=不通知), notify_content="status_only"|"with_result"
+        notify_channels = [c for c in (data.get('notify_channels') or []) if c in ('wechat', 'feishu')]
+        notify_content = (data.get('notify_content') or 'status_only').strip()
+        if notify_content not in ('status_only', 'with_result'):
+            notify_content = 'status_only'
         # generate tid: sanitize name + short random suffix
         import re, uuid
         safe = re.sub(r'[^A-Za-z0-9\u4e00-\u9fff_]', '_', name)[:30] or 'task'
@@ -4929,6 +6065,9 @@ def create_app():
         }
         if date_range:
             task['date_range'] = date_range
+        if notify_channels:
+            task['notify_channels'] = notify_channels
+            task['notify_content'] = notify_content
         try:
             with open(task_file, 'w', encoding='utf-8') as fp:
                 json.dump(task, fp, ensure_ascii=False, indent=2)
@@ -4943,6 +6082,53 @@ def create_app():
     app.router.add_post("/services/tasks/update/{tid}", tasks_update_handler)
     app.router.add_post("/services/tasks/toggle/{tid}", tasks_toggle_handler)
     app.router.add_delete("/services/tasks/delete/{tid}", tasks_delete_handler)
+
+    # notify.json: 接收者ID配置 + 已启用通道探测
+    async def tasks_notify_get_handler(request):
+        notify_file = APP_DIR.parent / "sche_tasks" / "notify.json"
+        cfg = {}
+        if notify_file.exists():
+            try:
+                cfg = json.loads(notify_file.read_text(encoding='utf-8'))
+            except Exception:
+                cfg = {}
+        # 探测已启用通道(从/services/panel的服务运行状态)
+        enabled = []
+        panel = getattr(request.app, '_services_status', None)
+        if isinstance(panel, list):
+            for s in panel:
+                sid = s.get('id', '') if isinstance(s, dict) else ''
+                if 'wechatapp' in sid: enabled.append('wechat')
+                elif 'fsapp' in sid: enabled.append('feishu')
+        else:
+            # 兜底:按进程探测
+            import subprocess
+            out = subprocess.run(['pgrep', '-lf', 'wechatapp.py'], capture_output=True, text=True).stdout
+            if out.strip(): enabled.append('wechat')
+            out = subprocess.run(['pgrep', '-lf', 'fsapp.py'], capture_output=True, text=True).stdout
+            if out.strip(): enabled.append('feishu')
+        return web.json_response({'config': cfg, 'enabled_channels': enabled})
+
+    async def tasks_notify_set_handler(request):
+        notify_file = APP_DIR.parent / "sche_tasks" / "notify.json"
+        try:
+            body = await request.json()
+            cfg = {}
+            if notify_file.exists():
+                try: cfg = json.loads(notify_file.read_text(encoding='utf-8'))
+                except Exception: pass
+            for k in ('wechat', 'feishu'):
+                if k in body:
+                    v = (body.get(k) or '').strip()
+                    if v: cfg[k] = v
+                    elif k in cfg: del cfg[k]
+            notify_file.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding='utf-8')
+            return web.json_response({'ok': True})
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=500)
+
+    app.router.add_get("/services/tasks/notify", tasks_notify_get_handler)
+    app.router.add_post("/services/tasks/notify", tasks_notify_set_handler)
 
     # Serve static frontend (desktop/static/)
     static_dir = APP_DIR / "desktop" / "static"

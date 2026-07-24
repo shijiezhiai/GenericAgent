@@ -386,7 +386,7 @@ const I18N = {
     'project.title': '项目', 'project.subtitle': '多人协同打造超级团队', 'project.newBtn': '新建项目', 'project.myProjects': '我的项目', 'project.searchPh': '搜索项目', 'project.fromTemplate': '从模版创建', 'project.menuTitle': '更多操作', 'project.promptName': '请输入项目名称', 'project.addedAgo': '添加于 {0} 前', 'project.justNow': '刚刚', 'project.minAgo': '{0} 分钟前', 'project.hourAgo': '{0} 小时前', 'project.dayAgo': '{0} 天前', 'project.monAgo': '{0} 个月前', 'project.yearAgo': '{0} 年前',
     'project.create': '新建项目', 'project.name': '项目名称', 'project.template': '选择模板', 'project.tplBlank': '不使用模板', 'project.instruction': '指令', 'project.instructionPh': '输入项目背景、规范或系统提示词…', 'project.instructionHint': '可选。作为项目指令写入 CLAUDE.md，进入项目后自动生效。', 'project.createBtn': '创建', 'project.nameRequired': '请输入项目名称', 'project.tplOverwrite': '切换模板将覆盖当前指令内容，是否继续？', 'project.skills': '技能', 'project.skillsHint': '可选。选择该项目启用的 Skills，未勾选的不会被注入。留空则启用全部。', 'project.skillsLoading': '加载中…', 'project.skillsNone': '未发现可用技能', 'project.editSkills': '编辑技能', 'project.skillsSaved': '技能已保存，新会话生效', 'project.rename': '重命名', 'project.renamePrompt': '输入新的项目名称', 'project.renameErr': '重命名失败', 'project.delete': '删除项目', 'project.deleteConfirm': '确定要删除项目「{0}」吗？此操作不可恢复。', 'project.deleteErr': '删除失败', 'project.nameInvalid': '名称不能包含 / \\ 或以 . 开头', 'project.workspace': '工作区', 'project.wsNone': '无绑定', 'project.wsExisting': '使用已有工作区', 'project.wsNew': '新建工作区', 'project.wsPathPh': '输入新工作区的完整路径…', 'project.wsHint': '新建工作区时会自动注册到工作区列表。', 'project.wsSelectErr': '请选择一个已有工作区', 'project.wsPathErr': '请输入新工作区路径', 'project.wsSaved': '工作区已更新', 'project.wsCurrent': '当前工作区', 'project.addSkill': '添加技能', 'project.skillsSearchPh': '搜索技能…', 'project.skillsActiveHint': '已启用的技能；点击 × 可移除。清空表示启用全部技能。', 'project.expertsLoading': '加载中…', 'project.expertNone': '暂无专家', 'project.expertsNone': '未发现可用专家', 'project.expertsSaved': '专家已保存，新会话生效', 'project.addExpert': '添加专家', 'project.expertsSearchPh': '搜索专家…',
     'project.tpl.req.t': '产品需求全流程', 'project.tpl.req.d': '从需求采集到评审的完整流程', 'project.tpl.research.t': '市场调研与竞品分析', 'project.tpl.research.d': '行业趋势、用户洞察与竞品对比', 'project.tpl.kb.t': '团队知识库', 'project.tpl.kb.d': '沉淀团队经验与协作规范', 'project.tpl.delivery.t': '项目交付', 'project.tpl.delivery.d': '里程碑、交付物与验收管理', 'project.tpl.bug.t': 'Bug 跟踪测试验收', 'project.tpl.bug.d': '缺陷记录、复现与回归验证',
-    'ph.invite': '邀请', 'ph.tab.feed': '动态', 'ph.tab.plan': '计划', 'ph.tab.task': '任务', 'ph.tab.asset': '资产', 'ph.filter.mine': '与我相关', 'ph.filter.member': '成员动态', 'ph.empty.feed': '暂无与我有关的动态', 'ph.empty.plan': '暂无计划', 'ph.empty.task': '暂无任务', 'ph.empty.asset': '暂无资产', 'ph.composer.ph': '输入消息…',
+    'ph.invite': '邀请', 'ph.tab.feed': '动态', 'ph.tab.plan': '计划', 'ph.tab.task': '任务', 'ph.tab.asset': '资产', 'ph.tab.library': '资料库', 'ph.filter.mine': '与我相关', 'ph.filter.member': '成员动态', 'ph.empty.feed': '暂无与我有关的动态', 'ph.empty.plan': '暂无计划', 'ph.empty.task': '暂无任务', 'ph.empty.asset': '暂无资产', 'ph.empty.library': '暂无资料', 'ph.lib.add': '添加资料', 'ph.lib.addFile': '本地文件引用', 'ph.lib.addWeb': '网页资料', 'ph.lib.name': '名称', 'ph.lib.path': '文件路径', 'ph.lib.url': '网址', 'ph.lib.includeSubpages': '同时加入子页面', 'ph.lib.subpagesHint': '适用于 Confluence / Wiki 等有层级结构的页面', 'ph.lib.subpagesAdded': '已加入 {n} 个页面（含 {m} 个子页面）', 'ph.lib.desc': '描述（可选）', 'ph.lib.empty': '资料库为空，点击"添加资料"开始', 'ph.lib.noChildren': '暂无子页面', 'ph.lib.loadFailed': '加载子页面失败', 'ph.lib.del': '确定要移除资料「', 'ph.lib.delSuffix': '」吗？', 'ph.lib.added': '已加入资料库', 'ph.lib.file': '文件', 'ph.lib.web': '网页', 'ph.lib.generated': '生成文件', 'ph.lib.folder': '文件夹', 'ph.lib.preview': '预览', 'ph.lib.open': '打开', 'ph.lib.reveal': '打开文件位置', 'ph.lib.pin': '置顶', 'ph.lib.unpin': '取消置顶', 'ph.lib.pinned': '已置顶', 'ph.lib.openFailed': '打开失败', 'ph.lib.revealFailed': '定位失败', 'ph.lib.pinFailed': '置顶失败', 'ph.lib.previewFailed': '预览失败', 'ph.lib.binaryFile': '该文件为二进制文件，无法预览', 'ph.lib.truncated': '（内容已截断，仅显示前 200KB）', 'ph.lib.refFromLibrary': '引用资料库', 'ph.lib.refTitle': '引用资料', 'ph.lib.refConfirm': '引用', 'ph.lib.refNone': '请选择要引用的资料', 'ph.lib.addToLibrary': '加入资料库', 'ph.lib.addSubtitle': '把文件、网页或生成产物收进项目资料库', 'ph.lib.browse': '浏览…', 'ph.lib.filePath': '文件路径', 'ph.lib.filePathPh': '输入文件路径，或点「浏览」选择文件夹', 'ph.lib.folderAdded': '已添加 {n} 个文件', 'ph.lib.folderTruncated': '超出上限，仅添加前 500 个', 'ph.lib.namePh': '资料名称', 'ph.lib.descPh': '简要描述这份资料（可选）', 'ph.lib.refHint': '选择要在对话中引用的资料（可多选）', 'ph.lib.searchPh': '搜索资料…', 'ph.composer.ph': '输入消息…',
     'ph.asset.upload': '上传文件', 'ph.asset.mkdir': '新建文件夹', 'ph.asset.search': '搜索文件或文件夹…', 'ph.asset.items': '项', 'ph.asset.loading': '加载中…', 'ph.asset.empty': '暂无资产',
     'ph.asset.filter.all': '全部来源', 'ph.asset.filter.project': '项目文件', 'ph.asset.filter.upload': '上传文件',
     'ph.asset.folder': '文件夹', 'ph.asset.readonly': '只读',
@@ -396,7 +396,7 @@ const I18N = {
     'ph.member.phone': '电话', 'ph.member.email': '邮箱', 'ph.member.role': '职位',
     'ph.asset.source.project': '项目', 'ph.asset.source.upload': '上传',
     'ph.asset.col.name': '名称', 'ph.asset.col.type': '类型', 'ph.asset.col.source': '来源', 'ph.asset.col.mtime': '修改时间', 'ph.asset.col.size': '大小',
-    'ph.asset.preview': '预览', 'ph.asset.delete': '删除', 'ph.asset.delete.confirm': '确定删除「{0}」吗？此操作不可恢复。', 'ph.asset.mkdir.prompt': '请输入文件夹名称：', 'ph.tool.craft': 'Craft', 'ph.tool.auto': '自动', 'ph.tool.skill': '技能', 'ph.tool.connector': '连接器', 'ph.config.title': '项目配置', 'ph.cfg.instruction': '指令', 'ph.cfg.instruction.d': '设定项目背景与规范', 'ph.cfg.connector': '连接器', 'ph.cfg.connector.d': '连接外部服务', 'ph.cfg.expert': '专家', 'ph.cfg.expert.d': '为项目配置专家角色', 'ph.cfg.skill': '技能', 'ph.cfg.skill.d': '配置项目技能', 'ph.cfg.automation': '自动化', 'ph.cfg.automation.d': '让 AI 按计划自动执行', 'ph.cfg.member': '成员', 'ph.cfg.member.d': '管理项目成员，在计划中指定为处理人', 'ph.plan.newTodo': '新建待办', 'ph.plan.addSource': '添加数据源', 'ph.plan.filter.ownership': '全部归属', 'ph.plan.filter.source': '全部来源', 'ph.plan.batch': '批量操作', 'ph.plan.searchPh': '搜索计划', 'ph.plan.col.todo': '待开始', 'ph.plan.col.doing': '进行中', 'ph.plan.col.pause': '暂停', 'ph.plan.col.done': '完成', 'ph.plan.empty': '暂无事项', 'ph.plan.empty.todo': '暂无事项，可从这里开始新建。',
+    'ph.asset.preview': '预览', 'ph.asset.delete': '删除', 'ph.asset.delete.confirm': '确定删除「{0}」吗？此操作不可恢复。', 'ph.asset.delete.failed': '删除失败', 'ph.asset.mkdir.prompt': '请输入文件夹名称：', 'ph.tool.craft': 'Craft', 'ph.tool.auto': '自动', 'ph.tool.skill': '技能', 'ph.tool.connector': '连接器', 'ph.config.title': '项目配置', 'ph.cfg.instruction': '指令', 'ph.cfg.instruction.d': '设定项目背景与规范', 'ph.cfg.connector': '连接器', 'ph.cfg.connector.d': '连接外部服务', 'ph.cfg.expert': '专家', 'ph.cfg.expert.d': '为项目配置专家角色', 'ph.cfg.skill': '技能', 'ph.cfg.skill.d': '配置项目技能', 'ph.cfg.automation': '自动化', 'ph.cfg.automation.d': '让 AI 按计划自动执行', 'ph.cfg.member': '成员', 'ph.cfg.member.d': '管理项目成员，在计划中指定为处理人', 'ph.plan.newTodo': '新建待办', 'ph.plan.addSource': '添加数据源', 'ph.plan.filter.ownership': '全部归属', 'ph.plan.filter.source': '全部来源', 'ph.plan.batch': '批量操作', 'ph.plan.searchPh': '搜索计划', 'ph.plan.col.todo': '待开始', 'ph.plan.col.doing': '进行中', 'ph.plan.col.pause': '暂停', 'ph.plan.col.done': '完成', 'ph.plan.empty': '暂无事项', 'ph.plan.empty.todo': '暂无事项，可从这里开始新建。',
     'preset.butler.t': '指挥家', 'preset.butler.d': '复杂任务自动拆解，只需查看进度和简报',
     'preset.plan.t': 'Plan 模式', 'preset.plan.d': '加载 Plan SOP，按探索→规划→执行→验证流程',
     'preset.goal.t': 'Goal 模式', 'preset.goal.d': '设定目标，自主完成',
@@ -420,6 +420,7 @@ const I18N = {
     'search.placeholder': '搜索会话…', 'conv.new': '新对话',
     'ctx.pin': '置顶', 'ctx.unpin': '取消置顶', 'ctx.rename': '重命名', 'ctx.del': '删除', 'ctx.batchDel': '批量删除', 'common.selectAll': '全选', 'conv.batchSelected': '已选', 'conv.batchDelConfirm': '确定删除选中的 {n} 个会话？',
     'common.close': '关闭', 'common.more': '更多', 'common.optional': '选填', 'common.save': '保存',
+    'common.expand': '展开', 'common.collapse': '收起', 'common.loading': '加载中…', 'common.new': '新建',
     'modal.preset': '预设功能', 'modal.addModel': '添加模型', 'modal.editModel': '编辑模型', 'modal.settings': '配置',
     'modal.customPreset': '自定义预设',
     'modal.editCustomPreset': '编辑任务',
@@ -498,7 +499,7 @@ const I18N = {
     'collab.timeDay': '{n} 天前',
     'page.token.title': '用量', 'page.token.sub': '每会话与累计用量及缓存率',
     'status.connecting': '正在连接…', 'status.ready': '服务在线', 'status.running': '处理中',
-    'status.disconnected': '服务离线', 'status.stopped': '已停止', 'status.idle': '待命',
+    'status.disconnected': '服务离线', 'status.stopped': '已停止', 'status.idle': '待命', 'status.done': '已完成',
     'conv.emptyList': '暂无会话，点「＋ 新对话」开始', 'conv.defaultTitle': '新对话',
     'conv.folderDefault': '未归类', 'conv.folderArchived': 'Archived', 'conv.folderPrompt': '输入文件夹名称', 'conv.folderExists': '文件夹已存在', 'conv.folderEmpty': '空文件夹', 'conv.folderDeleteConfirm': '删除文件夹“{0}”？其中会话将移回未归类', 'conv.folderLocked': '系统文件夹不可修改', 'conv.moveDone': '已移动到 {0}',
     'ctx.moveToFolder': '移动到文件夹', 'ctx.moveArchived': '移到 Archived',
@@ -592,6 +593,8 @@ const I18N = {
     'taskForm.workspace': '工作区', 'taskForm.workspaceDefault': '默认工作区',
     'taskForm.model': '模型', 'taskForm.modelDefault': '默认模型',
     'taskForm.dateRange': '生效日期区间', 'taskForm.dateRangeHint': '留空表示始终生效',
+    'taskForm.notifyChannels': '完成通知通道', 'taskForm.notifyChannelsHint': '默认不通知，勾选则任务完成后通过该通道发消息',
+    'taskForm.notifyContent': '通知内容', 'taskForm.notifyStatusOnly': '仅成功/失败（含失败原因）', 'taskForm.notifyWithResult': '附带执行结果',
     'common.create': '创建',
     'task.createOk': '任务已创建', 'task.promptRequired': '请输入任务指令', 'task.createFail': '创建失败',
     'tok.priceInput': '输入: $', 'tok.priceOutput': '输出: $',
@@ -656,6 +659,7 @@ const I18N = {
     'search.placeholder': 'Search chats…', 'conv.new': 'New chat',
     'ctx.pin': 'Pin', 'ctx.unpin': 'Unpin', 'ctx.rename': 'Rename', 'ctx.del': 'Delete', 'ctx.batchDel': 'Batch Delete', 'common.selectAll': 'Select All', 'conv.batchSelected': 'Selected', 'conv.batchDelConfirm': 'Delete {n} selected sessions?',
     'common.close': 'Close', 'common.more': 'More', 'common.optional': 'Optional', 'common.save': 'Save',
+    'common.expand': 'Expand', 'common.collapse': 'Collapse', 'common.loading': 'Loading…', 'common.new': 'New',
     'modal.preset': 'Presets', 'modal.addModel': 'Add model', 'modal.editModel': 'Edit model', 'modal.settings': 'Settings',
     'modal.customPreset': 'Custom preset',
     'modal.editCustomPreset': 'Edit task',
@@ -734,7 +738,7 @@ const I18N = {
     'collab.timeDay': '{n}d ago',
     'page.token.title': 'Usage', 'page.token.sub': 'Per-session and total usage & cache rate',
     'status.connecting': 'Connecting…', 'status.ready': 'Service online', 'status.running': 'Working…',
-    'status.disconnected': 'Service offline', 'status.stopped': 'Stopped', 'status.idle': 'Standby',
+    'status.disconnected': 'Service offline', 'status.stopped': 'Stopped', 'status.idle': 'Standby', 'status.done': 'Done',
     'conv.emptyList': 'No chats yet — click “＋ New chat”', 'conv.defaultTitle': 'New chat',
     'conv.folderDefault': 'Unfiled', 'conv.folderArchived': 'Archived', 'conv.folderPrompt': 'Enter folder name', 'conv.folderExists': 'Folder already exists', 'conv.folderEmpty': 'Empty folder', 'conv.folderDeleteConfirm': 'Delete folder "{0}"? Conversations will be moved to Unfiled', 'conv.folderLocked': 'System folders cannot be changed', 'conv.moveDone': 'Moved to {0}',
     'ctx.moveToFolder': 'Move to folder', 'ctx.moveArchived': 'Move to Archived',
@@ -828,6 +832,8 @@ const I18N = {
     'taskForm.workspace': 'Workspace', 'taskForm.workspaceDefault': 'Default Workspace',
     'taskForm.model': 'Model', 'taskForm.modelDefault': 'Default Model',
     'taskForm.dateRange': 'Effective Date Range', 'taskForm.dateRangeHint': 'Leave empty for always',
+    'taskForm.notifyChannels': 'Notify Channels on Completion', 'taskForm.notifyChannelsHint': 'No notification by default; check to send a message via that channel when task completes',
+    'taskForm.notifyContent': 'Notify Content', 'taskForm.notifyStatusOnly': 'Success/Failure only (with failure reason)', 'taskForm.notifyWithResult': 'With execution result',
     'common.create': 'Create',
     'task.createOk': 'Task created', 'task.promptRequired': 'Please enter a prompt', 'task.createFail': 'Create failed',
     'tok.priceInput': 'Input: $', 'tok.priceOutput': 'Output: $',
@@ -1116,8 +1122,9 @@ function gaGoPage(key) {
   nav.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n === item));
   pages.forEach(p => p.classList.toggle('active', p.dataset.page === key));
   if (bodyEl) {
-    if (key === 'tasks' || key === 'token' || key === 'services' || key === 'files' || key === 'skillhub') bodyEl.classList.add('rp-collapsed');
-    else bodyEl.classList.remove('rp-collapsed');
+    // 对话列表（右侧栏）仅在聊天页展示；其余页面默认收起，手动切换仍可展开
+    if (key === 'chat') bodyEl.classList.remove('rp-collapsed');
+    else bodyEl.classList.add('rp-collapsed');
   }
   renderSessionList();
   window.gaSetActiveFileComposer?.(key === 'collab' ? 'collab' : 'chat');
@@ -2066,6 +2073,8 @@ const state = {
   pendingFiles: [],
   fileSeq: 0,
   convFolders: [],
+  roundView: null,            // { sessionId, roundIndex } 单轮查看模式
+  expandedSessions: new Set(), // 右侧列表中已展开的会话 id
 };
 const CONV_FOLDER_KEY = 'ga_conv_folders_v1';
 const CONV_FOLDER_COLLAPSE_KEY = 'ga_conv_folder_collapsed_v1';
@@ -3399,11 +3408,11 @@ function renderSessionList() {
         const busy = !!(r && r.busy);
         const sel = batchMode.selected.has(sess.id);
         const pinSvg = sess.pinned ? GA_ICON('pushPinSimple', 'ci-pin') : '';
-        const metaParts = [busy ? t('status.running') : t('status.idle')];
+        const metaParts = [busy ? t('status.running') : (sess.status === 'done' ? t('status.done') : t('status.idle'))];
         if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
         if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? ':' + sess.branch : ''));
         const item = document.createElement('div');
-        item.className = 'conv-item batch' + (sel ? ' selected' : '') + (busy ? '' : ' idle');
+        item.className = 'conv-item batch' + (sel ? ' selected' : '') + (busy ? '' : (sess.status === 'done' ? ' done' : ' idle'));
         item.dataset.id = sess.id;
         item.innerHTML =
           '<input type="checkbox" class="ci-check"' + (sel ? ' checked' : '') + '>' +
@@ -3499,26 +3508,127 @@ function renderSessionList() {
     sessions.forEach(sess => {
       const r = state.runtime.get(sess.id);
       const busy = !!(r && r.busy);
+      const _expanded = state.expandedSessions.has(sess.id);
       const item = document.createElement('div');
-      item.className = 'conv-item' + (currentPage === 'chat' && sess.id === state.activeId ? ' active' : '') + (busy ? '' : ' idle');
+      const statusClass = busy ? '' : (sess.status === 'done' ? ' done' : ' idle');
+      item.className = 'conv-item' + (currentPage === 'chat' && sess.id === state.activeId ? ' active' : '') + statusClass + (_expanded ? ' is-expanded' : '');
       item.dataset.id = sess.id;
       item.title = displayTitle(sess);
       item.draggable = folder.id !== DEFAULT_CONV_FOLDER_ID;
       item.addEventListener('dragstart', () => { dragConvSessionId = sess.id; item.classList.add('is-dragging'); });
       item.addEventListener('dragend', () => { dragConvSessionId = null; item.classList.remove('is-dragging'); document.querySelectorAll('.conv-folder-head.is-drop-target').forEach(el => el.classList.remove('is-drop-target')); });
       const pinSvg = sess.pinned ? GA_ICON('pushPinSimple', 'ci-pin') : '';
-      const metaParts = [busy ? t('status.running') : t('status.idle')];
+      const metaParts = [busy ? t('status.running') : (sess.status === 'done' ? t('status.done') : t('status.idle'))];
       if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
       if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? `:${sess.branch}` : ''));
       item.innerHTML =
+        `<button class="conv-session-toggle" data-session-toggle="1" title="${escapeHtml(t('common.expand'))}" aria-label="${escapeHtml(t('common.expand'))}">${GA_ICON('caretDown')}</button>` +
         `<span class="ci-dot"></span><div class="ci-main">` +
         `<div class="ci-title">${pinSvg}${escapeHtml(displayTitle(sess))}</div>` +
         `<div class="ci-meta">${escapeHtml(metaParts.join(' · '))}</div></div>` +
         `<button class="ci-more" title="${escapeHtml(t('common.more'))}">${GA_ICON('dotsThreeVertical')}</button>`;
       convListEl.appendChild(item);
+      // 折叠展开：列出该会话内「用户主动输入」产生的每一轮
+      if (_expanded && !query && !batchMode) {
+        const rounds = extractRounds(sess);
+        if (!rounds.length) {
+          const ph = document.createElement('div');
+          ph.className = 'conv-round empty';
+          ph.textContent = '（无用户轮次）';
+          convListEl.appendChild(ph);
+        } else {
+          rounds.forEach((rd, idx) => {
+            const rv = state.roundView && state.roundView.sessionId === sess.id && state.roundView.roundIndex === idx;
+            const ri = document.createElement('div');
+            ri.className = 'conv-round' + (rv ? ' active' : '');
+            ri.dataset.sessionId = sess.id;
+            ri.dataset.roundIndex = String(idx);
+            ri.title = rd.label;
+            ri.innerHTML = `<span class="cr-idx">${idx + 1}</span><span class="cr-label">${escapeHtml(rd.label)}</span>`;
+            convListEl.appendChild(ri);
+          });
+        }
+      }
     });
   });
 }
+/* ═══════════════ 单轮查看（右侧会话列表折叠） ═══════════════ */
+// 将一个会话的消息拆分为「轮」：每遇到一条用户主动输入即开启一轮，
+// 轮次 = 该用户消息 + 其后直到下一条用户消息之前的所有消息（助手/系统/错误等）。
+function extractRounds(sess) {
+  const msgs = (sess && sess.messages) || [];
+  const rounds = [];
+  let cur = null;
+  msgs.forEach((m, i) => {
+    if (m && m.role === 'user') {
+      if (cur) rounds.push(cur);
+      cur = { startIdx: i, endIdx: i, label: roundLabel(m), ts: m.ts || 0 };
+    } else if (cur) {
+      cur.endIdx = i;
+    }
+  });
+  if (cur) rounds.push(cur);
+  return rounds;
+}
+function roundLabel(m) {
+  const raw = (typeof m.display === 'string' && m.display.length) ? m.display
+            : (typeof m.content === 'string' ? m.content : '');
+  const text = (raw || '').replace(/\s+/g, ' ').trim();
+  if (!text) return '（图片/附件）';
+  return text.length > 40 ? text.slice(0, 40) + '…' : text;
+}
+// 退出单轮查看：清理状态/样式/横幅（不切换会话）
+function clearRoundView() {
+  if (state.roundView) state.roundView = null;
+  if (bodyEl) bodyEl.classList.remove('round-view');
+  const bar = document.getElementById('round-view-bar');
+  if (bar) bar.hidden = true;
+}
+// 进入单轮查看：主窗口只渲染该轮消息
+function openRoundView(sessionId, roundIndex) {
+  const sess = state.sessions.get(sessionId);
+  if (!sess) return;
+  state.roundView = { sessionId, roundIndex };
+  state.activeId = sessionId;
+  if (sessionId) localStorage.setItem('ga_active', sessionId);
+  if (bodyEl) bodyEl.classList.add('round-view');
+  renderRoundMessages(sess, roundIndex);
+  renderSessionList();
+  const chatNav = nav.querySelector('.nav-item[data-page="chat"]');
+  if (chatNav && !chatNav.classList.contains('active')) chatNav.click();
+}
+// 只渲染某一轮到主消息区
+function renderRoundMessages(sess, roundIndex) {
+  const rounds = extractRounds(sess);
+  const rd = rounds[roundIndex];
+  if (msgsEl) msgsEl.innerHTML = '';
+  if (rd) {
+    for (let i = rd.startIdx; i <= rd.endIdx; i++) {
+      const m = sess.messages[i];
+      if (m) ensureMsgs().appendChild(msgNode(m));
+    }
+  }
+  refreshEmptyState(sess);
+  scrollBottom(true);
+  const bar = document.getElementById('round-view-bar');
+  if (bar) {
+    const txt = bar.querySelector('.rv-text');
+    if (txt) txt.textContent = `正在查看第 ${roundIndex + 1} 轮 / 共 ${rounds.length} 轮`;
+    bar.hidden = false;
+  }
+}
+// 返回完整会话
+function exitRoundView() {
+  const sid = state.roundView ? state.roundView.sessionId : state.activeId;
+  clearRoundView();
+  if (sid) setActiveSession(sid);
+}
+const _roundViewBar = document.getElementById('round-view-bar');
+if (_roundViewBar) {
+  const _rvb = _roundViewBar.querySelector('.rv-back');
+  if (_rvb) _rvb.addEventListener('click', exitRoundView);
+}
+
 async function openResumeModal() {
   const listEl = document.getElementById('resume-list');
   if (!listEl) return;
@@ -3533,11 +3643,11 @@ async function openResumeModal() {
   for (const sess of items) {
     const r = state.runtime.get(sess.id);
     const busy = !!(r && r.busy);
-    const metaParts = [busy ? t('status.running') : t('status.idle')];
+    const metaParts = [busy ? t('status.running') : (sess.status === 'done' ? t('status.done') : t('status.idle'))];
     if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
     if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? `:${sess.branch}` : ''));
     const div = document.createElement('div');
-    div.className = 'conv-item' + (busy ? '' : ' idle');
+    div.className = 'conv-item' + (busy ? '' : (sess.status === 'done' ? ' done' : ' idle'));
     div.innerHTML =
       `<span class="ci-dot"></span><div class="ci-main">` +
       `<div class="ci-title">${escapeHtml(displayTitle(sess))}</div>` +
@@ -3576,11 +3686,11 @@ function renderResumeList() {
   _resumeDisplayed.forEach((sess, i) => {
     const r = state.runtime.get(sess.id);
     const busy = !!(r && r.busy);
-    const metaParts = [busy ? t('status.running') : t('status.idle')];
+    const metaParts = [busy ? t('status.running') : (sess.status === 'done' ? t('status.done') : t('status.idle'))];
     if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
     if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? `:${sess.branch}` : ''));
     const div = document.createElement('div');
-    div.className = 'conv-item' + (i === _resumeIdx ? ' active' : '') + (busy ? '' : ' idle');
+    div.className = 'conv-item' + (i === _resumeIdx ? ' active' : '') + (busy ? '' : (sess.status === 'done' ? ' done' : ' idle'));
     div.innerHTML = '<span class="ci-dot"></span><div class="ci-main"><div class="ci-title">' + escapeHtml(displayTitle(sess)) + '</div><div class="ci-meta">' + escapeHtml(metaParts.join(' · ')) + '</div></div>';
     div.addEventListener('mousedown', (e) => { e.preventDefault(); selectResumeItem(i); });
     el.appendChild(div);
@@ -3662,7 +3772,7 @@ async function newSession(folderId = null) {
   // 继承前一活跃会话的 workspace 绑定，使新建会话不丢失工作区上下文
   const prevId = state.activeId;
   const active = activeSess();
-  const sess = { id: 'local-' + Date.now() + '-' + Math.random().toString(16).slice(2), bridgeSessionId: null, title: '', messages: [], untitled: true, lastActiveTs: Date.now(), folderId: folderId == null ? normalizeSessionFolder(active) : (state.convFolders.some(f => f.id === folderId) ? folderId : DEFAULT_CONV_FOLDER_ID) };
+  const sess = { id: 'local-' + Date.now() + '-' + Math.random().toString(16).slice(2), bridgeSessionId: null, title: '', messages: [], untitled: true, lastActiveTs: Date.now(), expert: null, folderId: folderId == null ? normalizeSessionFolder(active) : (state.convFolders.some(f => f.id === folderId) ? folderId : DEFAULT_CONV_FOLDER_ID) };
   // 乐观 UI: 先把空会话加入列表并立即切换, 让用户即时看到新会话(输入框可用)
   state.sessions.set(sess.id, sess);
   setActiveSession(sess.id);
@@ -4135,19 +4245,25 @@ async function enterProject(name) {
   currentPage = 'project-home';
   nav?.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   pages.forEach(p => p.classList.toggle('active', p.dataset.page === 'project-home'));
-  if (bodyEl) bodyEl.classList.remove('rp-collapsed');
+  if (bodyEl) bodyEl.classList.add('rp-collapsed');
   initProjectHome(name, sess.id);
 }
 
 /* ═══════════════ 项目主页 (project-home) ═══════════════ */
 let phState = { project: '', sessionId: '', tab: 'feed', filter: 'mine', datasources: [], dsLoadedFor: '', dsLoading: false, todos: [], todosLoadedFor: '', todoQuery: '', ownership: 'all', chatView: false, assets: null, assetsLoadedFor: '', assetsLoading: false, assetFilter: 'all', assetQuery: '' };
 var TODO_STATUS_OPTS = ['todo', 'doing', 'pause', 'done'];
+// 将项目名安全地编码进 URL：先解码（兼容已编码/双重编码输入）再编码，保证结果恰好单层编码。
+function encProject(name) {
+  name = name || '';
+  try { name = decodeURIComponent(name); } catch (_) {}
+  return encodeURIComponent(name);
+}
 function ntStatusLabel(k) { return t('ph.plan.col.' + k); }
 
 async function loadProjectTodos(projectName) {
   if (!projectName) { phState.todos = []; return; }
   try {
-    var res = await fetch('/projects/' + encodeURIComponent(projectName) + '/todos', { headers: { 'Accept': 'application/json' } });
+    var res = await fetch('/projects/' + encProject(projectName) + '/todos', { headers: { 'Accept': 'application/json' } });
     var data = await res.json();
     if (res.ok && data && Array.isArray(data.todos)) {
       phState.todos = data.todos;
@@ -4160,7 +4276,7 @@ async function loadProjectTodos(projectName) {
 async function loadProjectMembers(projectName) {
   if (!projectName) { phState.members = []; return; }
   try {
-    var res = await fetch('/projects/' + encodeURIComponent(projectName) + '/members', { headers: { 'Accept': 'application/json' } });
+    var res = await fetch('/projects/' + encProject(projectName) + '/members', { headers: { 'Accept': 'application/json' } });
     var data = await res.json();
     if (res.ok && data && Array.isArray(data.members)) {
       phState.members = data.members;
@@ -4249,7 +4365,7 @@ function openMembersModal() {
     var phone = (document.getElementById('mbr-phone').value || '').trim();
     var email = (document.getElementById('mbr-email').value || '').trim();
     var role = (document.getElementById('mbr-role').value || '').trim();
-    fetch('/projects/' + encodeURIComponent(phState.project) + '/members', {
+    fetch('/projects/' + encProject(phState.project) + '/members', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nick: nick, name: name, phone: phone, email: email, role: role })
@@ -4275,7 +4391,7 @@ function openMembersModal() {
         var m = (phState.members || []).find(function (x) { return x.id === mid; });
         if (m && m[fld] !== val) {
           var payload = {}; payload[fld] = val;
-          fetch('/projects/' + encodeURIComponent(phState.project) + '/members/' + encodeURIComponent(mid), {
+          fetch('/projects/' + encProject(phState.project) + '/members/' + encodeURIComponent(mid), {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
           }).then(function (r) { return r.json(); }).then(function (d) {
             if (d && d.member) { Object.assign(m, d.member); }
@@ -4289,7 +4405,7 @@ function openMembersModal() {
       if (t) {
         var mid = t.dataset.mid;
         if (!confirm('确认删除该成员？')) return;
-        fetch('/projects/' + encodeURIComponent(phState.project) + '/members/' + encodeURIComponent(mid), { method: 'DELETE' })
+        fetch('/projects/' + encProject(phState.project) + '/members/' + encodeURIComponent(mid), { method: 'DELETE' })
           .then(function (r) { return r.json(); }).then(function (d) {
             if (d && d.ok) {
               phState.members = (phState.members || []).filter(function (x) { return x.id !== mid; });
@@ -4316,7 +4432,7 @@ async function loadProjectDatasources(projectName) {
   if (!projectName) return [];
   phState.dsLoading = true;
   try {
-    var resp = await fetch('/projects/' + encodeURIComponent(projectName) + '/datasources');
+    var resp = await fetch('/projects/' + encProject(projectName) + '/datasources');
     var res = await resp.json();
     if (!resp.ok) throw new Error(res.error || '加载失败');
     phState.datasources = Array.isArray(res && res.datasources) ? res.datasources : [];
@@ -4446,10 +4562,10 @@ function renderPhTaskList() {
   return '<div class="ph-task-list">' + items.map(function (sess) {
     var r = state.runtime.get(sess.id);
     var busy = !!(r && r.busy);
-    var metaParts = [busy ? t('status.running') : t('status.idle')];
+    var metaParts = [busy ? t('status.running') : (sess.status === 'done' ? t('status.done') : t('status.idle'))];
     if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
     if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? ':' + sess.branch : ''));
-    return '<div class="conv-item ph-task-item' + (busy ? '' : ' idle') + '" data-ph-task-open="' + escapeHtml(sess.id) + '" data-id="' + escapeHtml(sess.id) + '" role="button" tabindex="0">'
+    return '<div class="conv-item ph-task-item' + (busy ? '' : (sess.status === 'done' ? ' done' : ' idle')) + '" data-ph-task-open="' + escapeHtml(sess.id) + '" data-id="' + escapeHtml(sess.id) + '" role="button" tabindex="0">'
       + '<span class="ci-dot"></span><div class="ci-main">'
       + '<div class="ci-title">' + escapeHtml(displayTitle(sess)) + '</div>'
       + '<div class="ci-meta">' + escapeHtml(metaParts.join(' · ')) + '</div></div>'
@@ -4585,6 +4701,10 @@ function renderPhContent() {
     });
     return;
   }
+  if (phState.tab === 'library') {
+    renderPhLibrary(box);
+    return;
+  }
   if (phState.tab === 'asset') {
     renderPhAssets(box);
     return;
@@ -4593,6 +4713,522 @@ function renderPhContent() {
   box.innerHTML = '<div class="ph-empty"><div class="ph-empty-icon" data-ga-icon="inbox"></div><div class="ph-empty-text">' + escapeHtml(t(emptyKey)) + '</div></div>';
 }
 
+/* ═══════════════ 项目资料库 ═══════════════ */
+async function fetchProjectLibrary(projectName) {
+  var res = await fetch('/projects/' + encProject(projectName) + '/library', { headers: { 'Accept': 'application/json' } });
+  if (!res.ok) return [];
+  var data = await res.json().catch(function () { return {}; });
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+function _libTypeMeta(item) {
+  var type = item.type || 'file';
+  if (type === 'web') return { icon: 'link', label: t('ph.lib.web'), cls: 'ph-lib-web' };
+  if (type === 'generated') return { icon: 'sparkle', label: t('ph.lib.generated'), cls: 'ph-lib-gen' };
+  if (type === 'folder') return { icon: 'folder', label: t('ph.lib.folder'), cls: 'ph-lib-folder' };
+  return { icon: 'paperclip', label: t('ph.lib.file'), cls: 'ph-lib-file' };
+}
+
+// ---- 资料库树形节点渲染 (递归) ----
+var phLibItems = []; // 最近一次渲染的资料库条目（供三点菜单查找 is_dir/pinned）
+function _libNodeHtml(it, byParent) {
+  var meta = _libTypeMeta(it);
+  var id = it.id || '';
+  var kids = (byParent && byParent[id]) || [];
+  var isParent = it.has_children || kids.length > 0;
+  var target = it.path || it.url || '';
+  var openUrl = (it.url && /^https?:\/\//i.test(it.url)) ? it.url : '';
+  var h = '';
+  h += '<div class="ph-lib-node' + (isParent ? ' is-parent' : '') + '" data-lib-node="' + escapeHtml(id) + '">';
+  h += '  <div class="ph-lib-item ' + meta.cls + (openUrl ? ' is-link' : '') + '" data-lib-id="' + escapeHtml(id) + '"' + (openUrl ? ' data-lib-url="' + escapeHtml(openUrl) + '" tabindex="0" role="link"' : '') + '>';
+  if (isParent) {
+    h += '    <button class="ph-lib-twist" type="button" data-lib-twist="' + escapeHtml(id) + '" aria-label="' + t('common.expand') + '">' + gaIcon('caretRight') + '</button>';
+  } else {
+    h += '    <span class="ph-lib-twist ph-lib-twist-leaf"></span>';
+  }
+  h += '    <div class="ph-lib-item-icon"' + (it.type === 'web' && it.url ? ' data-lib-favicon="' + escapeHtml(it.url) + '"' : '') + '>' + gaIcon(meta.icon) + '</div>';
+  h += '    <div class="ph-lib-item-main">';
+  h += '      <div class="ph-lib-item-name">' + escapeHtml(it.name || '') + (openUrl ? '<span class="ph-lib-open" aria-hidden="true">' + gaIcon('arrowUpRight') + '</span>' : '') + '</div>';
+  h += '      <div class="ph-lib-item-target" title="' + escapeHtml(target) + '">' + escapeHtml(target) + '</div>';
+  if (it.desc) h += '      <div class="ph-lib-item-desc">' + escapeHtml(it.desc) + '</div>';
+  h += '    </div>';
+  h += '    <div class="ph-lib-item-side">';
+  if (kids.length) h += '      <span class="ph-lib-count">' + kids.length + '</span>';
+  h += '      <span class="ph-lib-type-badge">' + meta.label + '</span>';
+  if (it.pinned) h += '      <span class="ph-lib-pin" title="' + t('ph.lib.pinned') + '">' + gaIcon('pushPinSimple') + '</span>';
+  h += '      <button class="ph-lib-more" type="button" data-lib-more="' + escapeHtml(id) + '" title="' + t('common.more') + '">' + gaIcon('dotsThreeVertical') + '</button>';
+  h += '      <button class="ph-lib-del" type="button" data-lib-del="' + escapeHtml(id) + '" data-lib-name="' + escapeHtml(it.name || '') + '" title="' + t('common.delete') + '">' + gaIcon('trash') + '</button>';
+  h += '    </div>';
+  h += '  </div>';
+  h += '  <div class="ph-lib-kids" data-lib-kids="' + escapeHtml(id) + '"' + (kids.length ? ' data-loaded="1"' : '') + '>';
+  for (var i = 0; i < kids.length; i++) h += _libNodeHtml(kids[i], byParent);
+  h += '  </div>';
+  h += '</div>';
+  return h;
+}
+
+// ---- 资料库 web 条目 favicon（浏览器 tab 图标）解析 ----
+// 拉取网页在浏览器 tab 上显示的图标作为条目图标；拉取失败则保留默认 link 图标。
+var phLibFaviconCache = {}; // url -> iconUrl | null | 'loading'
+function _applyLibFavicon(iconEl, iconUrl) {
+  if (!iconEl) return;
+  var fallbackHtml = iconEl.innerHTML; // 默认图标（link 等），加载失败时还原
+  var img = new Image();
+  img.className = 'ph-lib-favicon';
+  img.alt = '';
+  img.onerror = function () { iconEl.innerHTML = fallbackHtml; };
+  img.onload = function () { iconEl.innerHTML = ''; iconEl.appendChild(img); };
+  img.src = iconUrl;
+}
+function resolveLibFavicons(root) {
+  if (!root || typeof root.querySelectorAll !== 'function') return;
+  var els = root.querySelectorAll('.ph-lib-item-icon[data-lib-favicon], .ph-lib-pick-icon[data-lib-favicon]');
+  for (var i = 0; i < els.length; i++) {
+    (function (el) {
+      var url = el.getAttribute('data-lib-favicon');
+      if (!url) return;
+      var cached = phLibFaviconCache[url];
+      if (cached === 'loading') return;
+      if (cached) { _applyLibFavicon(el, cached); return; }
+      if (cached === null) return;
+      phLibFaviconCache[url] = 'loading';
+      fetch('/api/favicon?url=' + encodeURIComponent(url))
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          var icon = d && d.icon;
+          phLibFaviconCache[url] = icon || null;
+          if (icon) _applyLibFavicon(el, icon);
+        })
+        .catch(function () { phLibFaviconCache[url] = null; });
+    })(els[i]);
+  }
+}
+
+// ---- 打开条目对应的网页 ----
+function _libOpenUrl(url) {
+  if (!url || !/^https?:\/\//i.test(url)) return;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+// ---- 展开/折叠 + 懒加载子页 ----
+function _libToggleNode(node) {
+  var expanded = node.classList.toggle('expanded');
+  var kids = node.querySelector(':scope > .ph-lib-kids');
+  if (!kids) return;
+  if (!expanded) return;
+  if (kids.children.length || kids.getAttribute('data-loaded') === '1') return;
+  kids.setAttribute('data-loaded', '1');
+  var id = node.getAttribute('data-lib-node');
+  kids.innerHTML = '<div class="ph-lib-kids-status">' + t('common.loading') + '</div>';
+  fetch('/projects/' + encProject(phState.project) + '/library/' + encodeURIComponent(id) + '/children')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      var ch = (data && data.children) || [];
+      if (!ch.length) {
+        kids.innerHTML = '<div class="ph-lib-kids-status ph-lib-kids-empty">' + t('ph.lib.noChildren') + '</div>';
+        return;
+      }
+      var h = '';
+      for (var i = 0; i < ch.length; i++) h += _libNodeHtml(ch[i], {});
+      kids.innerHTML = h;
+      var count = node.querySelector(':scope > .ph-lib-item .ph-lib-count');
+      if (count) count.textContent = String(ch.length);
+      if (typeof gaHydrateIcons === 'function') gaHydrateIcons();
+      resolveLibFavicons(kids);
+    })
+    .catch(function () {
+      kids.removeAttribute('data-loaded');
+      kids.innerHTML = '<div class="ph-lib-kids-status ph-lib-kids-err">' + t('ph.lib.loadFailed') + '</div>';
+    });
+}
+
+async function renderPhLibrary(box) {
+  var projectName = phState.project;
+  if (!projectName) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="ph-lib-loading">' + t('common.loading') + '</div>';
+  var items = [];
+  try { items = await fetchProjectLibrary(projectName); } catch (e) { items = []; }
+  phLibItems = items.slice();
+  // 置顶项排在最前（根与子项统一按 pinned 排序，保证层级内也置顶优先）
+  items.sort(function (a, b) { return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0); });
+  var html = '';
+  html += '<div class="ph-lib-bar">';
+  html += '  <div class="ph-lib-bar-left">';
+  html += '    <span class="ph-lib-count">' + items.length + ' ' + (items.length === 1 ? '项' : '项') + '</span>';
+  html += '  </div>';
+  html += '  <div class="ph-lib-bar-right">';
+  html += '    <button class="ph-lib-btn" id="ph-lib-add-file" type="button">' + gaIcon('paperclip') + '<span>' + t('ph.lib.addFile') + '</span></button>';
+  html += '    <button class="ph-lib-btn" id="ph-lib-add-web" type="button">' + gaIcon('link') + '<span>' + t('ph.lib.addWeb') + '</span></button>';
+  html += '    <button class="ph-lib-btn ph-lib-btn-primary" id="ph-lib-ref" type="button">' + gaIcon('arrowUpRight') + '<span>' + t('ph.lib.refFromLibrary') + '</span></button>';
+  html += '  </div>';
+  html += '</div>';
+  if (!items.length) {
+    html += '<div class="ph-lib-empty">' + gaIcon('books') + '<p>' + t('ph.lib.empty') + '</p></div>';
+  } else {
+    // 按 parent_id 分组, 无 parent_id 的为根节点
+    var byParent = {};
+    var roots = [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (it.parent_id) {
+        if (!byParent[it.parent_id]) byParent[it.parent_id] = [];
+        byParent[it.parent_id].push(it);
+      } else {
+        roots.push(it);
+      }
+    }
+    if (!roots.length) roots = items; // 兜底: 全是孤儿则平铺
+    html += '<div class="ph-lib-list">';
+    for (var j = 0; j < roots.length; j++) html += _libNodeHtml(roots[j], byParent);
+    html += '</div>';
+  }
+  box.innerHTML = html;
+
+  var addFile = document.getElementById('ph-lib-add-file');
+  if (addFile) addFile.onclick = function () { openLibraryAddModal('file'); };
+  var addWeb = document.getElementById('ph-lib-add-web');
+  if (addWeb) addWeb.onclick = function () { openLibraryAddModal('web'); };
+  var refBtn = document.getElementById('ph-lib-ref');
+  if (refBtn) refBtn.onclick = function () { openLibraryRefPicker('project'); };
+  var list = box.querySelector('.ph-lib-list');
+  if (list) {
+    list.addEventListener('click', function (e) {
+      var twist = e.target.closest('[data-lib-twist]');
+      if (twist) {
+        var node = twist.closest('.ph-lib-node');
+        if (node) _libToggleNode(node);
+        return;
+      }
+      var del = e.target.closest('[data-lib-del]');
+      if (del) { removeLibraryItem(del.getAttribute('data-lib-del'), del.getAttribute('data-lib-name')); return; }
+      var more = e.target.closest('[data-lib-more]');
+      if (more) {
+        e.stopPropagation();
+        convMenu.hidden = true; folderMenu.hidden = true; moveMenu.hidden = true; phTaskMenu.hidden = true;
+        openLibMenu(more, more.getAttribute('data-lib-more'));
+        return;
+      }
+      if (e.target.closest('button')) return;
+      var linkItem = e.target.closest('.ph-lib-item[data-lib-url]');
+      if (linkItem) _libOpenUrl(linkItem.getAttribute('data-lib-url'));
+    });
+    list.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var linkItem = (e.target && e.target.closest) ? e.target.closest('.ph-lib-item[data-lib-url]') : null;
+      if (linkItem) { e.preventDefault(); _libOpenUrl(linkItem.getAttribute('data-lib-url')); }
+    });
+  }
+  if (typeof gaHydrateIcons === 'function') gaHydrateIcons();
+  resolveLibFavicons(box);
+}
+
+// ---- 添加资料 modal ----
+var _libAddType = 'file';
+function openLibraryAddModal(type) {
+  _libAddType = type || 'file';
+  var m = document.getElementById('library-add-modal');
+  if (!m) return;
+  _libSyncAddType();
+  var nameEl = document.getElementById('lib-add-name');
+  var pathEl = document.getElementById('lib-add-path');
+  var urlEl = document.getElementById('lib-add-url');
+  var descEl = document.getElementById('lib-add-desc');
+  if (nameEl) nameEl.value = '';
+  if (pathEl) pathEl.value = '';
+  if (urlEl) urlEl.value = '';
+  if (descEl) descEl.value = '';
+  m.hidden = false;
+}
+function _libSyncAddType() {
+  var fileRow = document.getElementById('lib-add-row-file');
+  var webRow = document.getElementById('lib-add-row-web');
+  var subRow = document.getElementById('lib-add-row-subpages');
+  var tabFile = document.getElementById('lib-add-tab-file');
+  var tabWeb = document.getElementById('lib-add-tab-web');
+  if (fileRow) fileRow.hidden = (_libAddType !== 'file');
+  if (webRow) webRow.hidden = (_libAddType !== 'web');
+  if (subRow) subRow.hidden = (_libAddType !== 'web');
+  if (tabFile) tabFile.classList.toggle('active', _libAddType === 'file');
+  if (tabWeb) tabWeb.classList.toggle('active', _libAddType === 'web');
+}
+function setLibraryAddType(type) { _libAddType = type; _libSyncAddType(); }
+
+async function submitAddLibrary() {
+  var projectName = phState.project;
+  if (!projectName) return;
+  var nameEl = document.getElementById('lib-add-name');
+  var descEl = document.getElementById('lib-add-desc');
+  var name = (nameEl && nameEl.value || '').trim();
+  var desc = (descEl && descEl.value || '').trim();
+  var payload = { type: _libAddType, name: name, desc: desc };
+  if (_libAddType === 'web') {
+    var urlEl = document.getElementById('lib-add-url');
+    var url = (urlEl && urlEl.value || '').trim();
+    if (!url) { showToast(t('ph.lib.url')); return; }
+    payload.url = url;
+    if (!name) payload.name = url;
+    var subEl = document.getElementById('lib-add-subpages');
+    if (subEl && subEl.checked) payload.includeChildren = true;
+  } else {
+    var pathEl = document.getElementById('lib-add-path');
+    var path = (pathEl && pathEl.value || '').trim();
+    if (!path) { showToast(t('ph.lib.path')); return; }
+    payload.path = path;
+    if (!name) payload.name = path.split('/').pop() || path;
+  }
+  var body = {};
+  try {
+    var res = await fetch('/projects/' + encProject(projectName) + '/library', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) { showToast('HTTP ' + res.status); return; }
+    try { body = await res.json(); } catch (_) {}
+  } catch (e) { showToast(String(e)); return; }
+  var m = document.getElementById('library-add-modal');
+  if (m) m.hidden = true;
+  if (body.subpages) {
+    showToast(t('ph.lib.subpagesAdded').replace('{n}', String(body.added || 0)).replace('{m}', String(body.subpages || 0)));
+  } else if (body.expanded || body.folder || body.hierarchical) {
+    var msg = t('ph.lib.folderAdded').replace('{n}', String(body.added || 0));
+    if (body.truncated) msg += '（' + t('ph.lib.folderTruncated') + '）';
+    showToast(msg);
+  } else {
+    showToast(t('ph.lib.added'));
+  }
+  var box = document.querySelector('.ph-content');
+  if (box && phState.tab === 'library') renderPhLibrary(box);
+}
+
+async function removeLibraryItem(id, name) {
+  var projectName = phState.project;
+  if (!projectName || !id) return;
+  if (!confirm(t('ph.lib.del') + (name || '') + t('ph.lib.delSuffix'))) return;
+  try {
+    await fetch('/projects/' + encProject(projectName) + '/library/' + encodeURIComponent(id), { method: 'DELETE' });
+  } catch (e) { showToast(String(e)); return; }
+  var box = document.querySelector('.ph-content');
+  if (box && phState.tab === 'library') renderPhLibrary(box);
+}
+
+// ---- 资料库三点菜单（预览 / 打开 / 打开位置 / 置顶）----
+function openLibMenu(anchor, id) {
+  libMenuTarget = id;
+  var it = phLibItems.find(function (x) { return x.id === id; }) || {};
+  var isDir = !!(it.is_dir) || (it.path && /\/$/.test(it.path)) || (it.type === 'folder');
+  var openItem = libMenu.querySelector('[data-act="open"]');
+  if (openItem) openItem.hidden = !!isDir; // 文件夹无「用默认应用打开」选项
+  var pinSpan = libMenu.querySelector('[data-act="pin"] [data-i18n]');
+  if (pinSpan) {
+    var k = it.pinned ? 'ph.lib.unpin' : 'ph.lib.pin';
+    pinSpan.setAttribute('data-i18n', k);
+    pinSpan.textContent = t(k);
+  }
+  var rect = anchor.getBoundingClientRect();
+  placeMenu(libMenu, rect, { side: 'bottom-right' });
+}
+
+// ---- 文件预览弹窗 ----
+async function openLibPreview(id) {
+  var projectName = phState.project;
+  var m = document.getElementById('lib-preview-modal');
+  if (!m) return;
+  var bodyEl = document.getElementById('lib-preview-body');
+  var titleEl = document.getElementById('lib-preview-title');
+  var metaEl = document.getElementById('lib-preview-meta');
+  if (bodyEl) bodyEl.innerHTML = '<div class="ph-lib-loading">' + t('common.loading') + '</div>';
+  if (titleEl) titleEl.textContent = '';
+  if (metaEl) metaEl.textContent = '';
+  m.hidden = false;
+  var data;
+  try {
+    var r = await fetch('/projects/' + encProject(projectName) + '/library/' + encodeURIComponent(id) + '/preview');
+    if (!r.ok) { var em = ''; try { em = (await r.json()).error || ''; } catch (_) {} if (bodyEl) bodyEl.textContent = t('ph.lib.previewFailed') + (em ? ': ' + em : ''); return; }
+    data = await r.json();
+  } catch (err) { if (bodyEl) bodyEl.textContent = String(err); return; }
+  if (titleEl) titleEl.textContent = data.name || '';
+  if (metaEl) metaEl.textContent = data.path || '';
+  if (data.is_dir) {
+    var h = '<div class="lib-preview-dir">';
+    var entries = data.entries || [];
+    if (!entries.length) {
+      h += '<div class="ph-lib-empty ph-lib-empty-sm"><p>' + t('ph.lib.noChildren') + '</p></div>';
+    } else {
+      h += '<ul class="lib-dir-list">';
+      entries.forEach(function (en) {
+        h += '<li class="' + (en.is_dir ? 'is-dir' : '') + '">' + gaIcon(en.is_dir ? 'folder' : 'paperclip') + '<span>' + escapeHtml(en.name) + '</span></li>';
+      });
+      h += '</ul>';
+    }
+    h += '</div>';
+    if (bodyEl) bodyEl.innerHTML = h;
+  } else if (data.is_image) {
+    var imgUrl = '/projects/' + encProject(projectName) + '/library/' + encodeURIComponent(id) + '/raw';
+    if (bodyEl) bodyEl.innerHTML = '<div class="lib-preview-image"><img src="' + encodeURI(imgUrl) + '" alt="' + escapeHtml(data.name || '') + '"></div>';
+  } else if (data.is_pdf) {
+    var pdfUrl = '/projects/' + encProject(projectName) + '/library/' + encodeURIComponent(id) + '/raw';
+    if (bodyEl) bodyEl.innerHTML = '<iframe class="lib-preview-pdf" src="' + encodeURI(pdfUrl) + '" title="' + escapeHtml(data.name || '') + '"></iframe>';
+  } else if (data.is_binary) {
+    if (bodyEl) bodyEl.innerHTML = '<div class="lib-preview-binary">' + gaIcon('fileX') + '<p>' + t('ph.lib.binaryFile') + '</p></div>';
+  } else {
+    var txt = data.content || '';
+    if (data.truncated) txt += '\n\n… ' + t('ph.lib.truncated');
+    if (bodyEl) {
+      var pre = document.createElement('pre');
+      pre.className = 'lib-preview-text';
+      pre.textContent = txt;
+      bodyEl.innerHTML = '';
+      bodyEl.appendChild(pre);
+    }
+  }
+  if (typeof gaHydrateIcons === 'function') gaHydrateIcons();
+}
+
+// ---- 引用资料 picker (多选) ----
+var _libRefCtx = 'project';
+var _libRefSelected = new Set();
+var _libRefItems = [];
+async function openLibraryRefPicker(ctx) {
+  _libRefCtx = ctx || 'project';
+  _libRefSelected = new Set();
+  var m = document.getElementById('library-ref-modal');
+  if (!m) return;
+  var list = document.getElementById('lib-ref-list');
+  if (list) list.innerHTML = '<div class="ph-lib-loading">' + t('common.loading') + '</div>';
+  m.hidden = false;
+  var items = [];
+  try { items = await fetchProjectLibrary(phState.project); } catch (e) { items = []; }
+  _libRefItems = items;
+  renderLibPickerList('');
+  var search = document.getElementById('lib-ref-search');
+  if (search) { search.value = ''; search.focus(); }
+}
+function renderLibPickerList(filter) {
+  var list = document.getElementById('lib-ref-list');
+  if (!list) return;
+  var q = (filter || '').toLowerCase();
+  var shown = _libRefItems.filter(function (it) {
+    if (!q) return true;
+    return ((it.name || '') + ' ' + (it.path || '') + ' ' + (it.url || '') + ' ' + (it.desc || '')).toLowerCase().indexOf(q) >= 0;
+  });
+  if (!shown.length) {
+    list.innerHTML = '<div class="ph-lib-empty ph-lib-empty-sm"><p>' + t('ph.lib.empty') + '</p></div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < shown.length; i++) {
+    var it = shown[i];
+    var meta = _libTypeMeta(it);
+    var sel = _libRefSelected.has(it.id);
+    html += '<div class="ph-lib-pick-item' + (sel ? ' selected' : '') + '" data-lib-pick="' + escapeHtml(it.id) + '">';
+    html += '  <span class="ph-lib-pick-check">' + gaIcon('check') + '</span>';
+    html += '  <span class="ph-lib-pick-icon"' + (it.type === 'web' && it.url ? ' data-lib-favicon="' + escapeHtml(it.url) + '"' : '') + '>' + gaIcon(meta.icon) + '</span>';
+    html += '  <span class="ph-lib-pick-main">';
+    html += '    <span class="ph-lib-pick-name">' + escapeHtml(it.name || '') + '</span>';
+    html += '    <span class="ph-lib-pick-target">' + escapeHtml(it.path || it.url || '') + '</span>';
+    html += '  </span>';
+    html += '</div>';
+  }
+  list.innerHTML = html;
+  if (typeof gaHydrateIcons === 'function') gaHydrateIcons();
+  resolveLibFavicons(list);
+}
+function insertLibraryChip(item, ctx) {
+  var cfg = composerCfg(ctx);
+  var input = cfg && cfg.input;
+  if (!input) return;
+  var seq = ++state.fileSeq;
+  var path = item.path || item.url || '';
+  var label = '@' + (item.name || path);
+  var chip = document.createElement('span');
+  chip.className = 'ph-chip';
+  chip.contentEditable = 'false';
+  chip.dataset.sid = seq;
+  chip.dataset.kind = '@file';
+  chip.textContent = label;
+  input.focus();
+  var sel = window.getSelection();
+  var inserted = false;
+  if (sel && sel.rangeCount) {
+    try {
+      var range = sel.getRangeAt(0);
+      if (input.contains(range.commonAncestorContainer) || input === range.commonAncestorContainer) {
+        range.insertNode(chip);
+        range.setStartAfter(chip);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        inserted = true;
+      }
+    } catch (_) {}
+  }
+  if (!inserted) input.appendChild(chip);
+  state.pendingFiles.push({
+    sid: seq, name: item.name || path, path: path, isImage: false,
+    isAtMention: true, atKind: '@file', ctx: ctx,
+  });
+  var space = document.createTextNode('\u00A0');
+  chip.after(space);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function submitLibraryRef() {
+  if (!_libRefSelected.size) { showToast(t('ph.lib.refNone')); return; }
+  var chosen = _libRefItems.filter(function (it) { return _libRefSelected.has(it.id); });
+  var m = document.getElementById('library-ref-modal');
+  if (m) m.hidden = true;
+  for (var i = 0; i < chosen.length; i++) insertLibraryChip(chosen[i], _libRefCtx);
+}
+
+// ---- 资料库 modal 事件绑定 ----
+(function bindLibraryModals() {
+  function bind(id, fn) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', fn);
+  }
+  bind('lib-add-tab-file', function () { setLibraryAddType('file'); });
+  bind('lib-add-tab-web', function () { setLibraryAddType('web'); });
+  bind('lib-add-confirm', function () { submitAddLibrary(); });
+  bind('lib-add-browse', function () {
+    // 优先用原生文件夹选择器（浏览器 tab 通过 bridge 的 osascript 实现），请求失败才回退文件选择
+    var pathEl = document.getElementById('lib-add-path');
+    fetch('/api/pick-folder', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        // 选到了文件夹 → 填入路径；用户取消（d.cancelled）→ 不做任何事，不再弹文件对话框
+        if (d && d.path && pathEl) pathEl.value = d.path;
+      })
+      .catch(function () { var inp = document.getElementById('lib-add-file-input'); if (inp) inp.click(); });
+  });
+  var fileInput = document.getElementById('lib-add-file-input');
+  if (fileInput) {
+    fileInput.addEventListener('change', function () {
+      var f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      var p = f.path || f.name;
+      var pathEl = document.getElementById('lib-add-path');
+      if (pathEl) pathEl.value = p;
+      var nameEl = document.getElementById('lib-add-name');
+      if (nameEl && !nameEl.value) nameEl.value = f.name;
+    });
+  }
+  bind('lib-ref-confirm', function () { submitLibraryRef(); });
+  var refSearch = document.getElementById('lib-ref-search');
+  if (refSearch) {
+    refSearch.addEventListener('input', function () { renderLibPickerList(refSearch.value.trim()); });
+  }
+  var refList = document.getElementById('lib-ref-list');
+  if (refList) {
+    refList.addEventListener('click', function (e) {
+      var row = e.target.closest('[data-lib-pick]');
+      if (!row) return;
+      var id = row.getAttribute('data-lib-pick');
+      if (_libRefSelected.has(id)) _libRefSelected.delete(id); else _libRefSelected.add(id);
+      row.classList.toggle('selected');
+    });
+  }
+})();
+
 /* ═══════════════ 项目资产 ═══════════════ */
 async function fetchProjectAssets(projectName, force) {
   if (!projectName) return;
@@ -4600,7 +5236,7 @@ async function fetchProjectAssets(projectName, force) {
   phState.assetsLoading = true;
   renderPhAssets(document.querySelector('.ph-content'));
   try {
-    var res = await fetch('/projects/' + encodeURIComponent(projectName) + '/assets', { headers: { 'Accept': 'application/json' } });
+    var res = await fetch('/projects/' + encProject(projectName) + '/assets', { headers: { 'Accept': 'application/json' } });
     var data = await res.json();
     phState.assets = data;
     phState.assetsLoadedFor = projectName;
@@ -4803,15 +5439,22 @@ function _assetUploadClick() {
 }
 
 function _assetMkdirClick() {
-  var name = prompt(t('ph.asset.mkdir.prompt') || 'Folder name:');
+  _assetMkdirClickAsync();
+}
+async function _assetMkdirClickAsync() {
+  var name = await showPromptDialog({
+    title: t('ph.asset.mkdir') || '新建文件夹',
+    message: t('ph.asset.mkdir.prompt') || '请输入文件夹名称：',
+    okText: t('common.confirm') || '确定'
+  });
   if (!name) return;
-  fetch('/projects/' + encodeURIComponent(phState.project) + '/assets/mkdir', {
+  fetch('/projects/' + encProject(phState.project) + '/assets/mkdir', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: name })
   }).then(function (res) { return res.json(); }).then(function () {
     fetchProjectAssets(phState.project, true);
-  }).catch(function (e) { alert('Error: ' + e); });
+  }).catch(function (e) { showToast('Error: ' + e); });
 }
 
 function _assetPreview(row) {
@@ -4824,17 +5467,27 @@ function _assetPreview(row) {
 }
 
 function _assetDelete(row) {
+  _assetDeleteAsync(row);
+}
+async function _assetDeleteAsync(row) {
   var path = row.dataset.path;
   var name = row.dataset.name;
   if (!path) return;
-  if (!confirm((t('ph.asset.delete.confirm') || 'Delete') + ': ' + name + '?')) return;
+  var ok = await showConfirmDialog({
+    title: t('common.delete') || '删除',
+    message: (t('ph.asset.delete.confirm') || '确定删除「{0}」吗？此操作不可恢复。').replace('{0}', name),
+    okText: t('common.delete') || '删除',
+    okKind: 'danger'
+  });
+  if (!ok) return;
   fetch('/api/files/delete', {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path: path })
-  }).then(function (res) { return res.json(); }).then(function () {
+  }).then(function (res) { return res.json(); }).then(function (d) {
+    if (!d || !d.ok) { showToast((t('ph.asset.delete.failed') || '删除失败') + ': ' + ((d && d.error) || 'unknown error')); return; }
     fetchProjectAssets(phState.project, true);
-  }).catch(function (e) { alert('Error: ' + e); });
+  }).catch(function (e) { showToast('Error: ' + e); });
 }
 
 function getFilteredProjectTodos() {
@@ -4918,7 +5571,7 @@ function renderTodoCard(it) {
 async function deleteTodoApi(tid) {
   if (!phState.project || !tid) return false;
   try {
-    var res = await fetch('/projects/' + encodeURIComponent(phState.project) + '/todos/' + encodeURIComponent(tid), { method: 'DELETE' });
+    var res = await fetch('/projects/' + encProject(phState.project) + '/todos/' + encodeURIComponent(tid), { method: 'DELETE' });
     if (res.ok) {
       phState.todos = (phState.todos || []).filter(function (it) { return it.id !== tid; });
       return true;
@@ -4989,7 +5642,7 @@ function bindPhPlan(box) {
 async function updateTodoApi(tid, payload) {
   if (!phState.project || !tid) return null;
   try {
-    var res = await fetch('/projects/' + encodeURIComponent(phState.project) + '/todos/' + encodeURIComponent(tid), {
+    var res = await fetch('/projects/' + encProject(phState.project) + '/todos/' + encodeURIComponent(tid), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload || {})
@@ -5216,7 +5869,7 @@ function openNewTodoModal(colKey) {
     if (!titleEl || !titleEl.value.trim()) return;
     createBtn.disabled = true;
     var payload = { title: titleEl.value.trim(), desc: descEl ? descEl.value : '', status: NT_STATE, assignee: cur.assignee, due: cur.due };
-    fetch('/projects/' + encodeURIComponent(phState.project) + '/todos', {
+    fetch('/projects/' + encProject(phState.project) + '/todos', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     }).then(function (r) { return r.json(); }).then(function (data) {
       if (data && data.todo) {
@@ -6309,6 +6962,7 @@ function runSessionHydrate(sess) {
 
 function setActiveSession(id) {
   setSessionLoading(false);
+  clearRoundView();  // 打开/切换会话即退出单轮查看，恢复完整会话视图
   // 保存旧活跃会话的输入框草稿（切回时恢复），实现每会话独立输入内容
   const _oldSess = activeSess();
   if (_oldSess && _oldSess.id !== id && inputEl) {
@@ -6318,6 +6972,13 @@ function setActiveSession(id) {
   if (id) localStorage.setItem('ga_active', id);  // 持久化当前会话，刷新后固定恢复它
   const sess = state.sessions.get(id);
   if (!sess) return;
+  // 切到"已完成未读"会话 → 标记已读（状态 done → idle）
+  if (sess.status === 'done' && sess.bridgeSessionId) {
+    sess.status = 'idle';
+    fetch(`${BRIDGE_ORIGIN}/session/${encodeURIComponent(sess.bridgeSessionId)}/viewed`, { method: 'POST' }).catch(() => {});
+  }
+  // 方案B：切换会话时同步专家 chip 显示（专家已绑定到会话）
+  if (typeof syncExpertChip === 'function') syncExpertChip(sess);
   // 选中会话 → 从后端读取该会话绑定的 workspace 并同步到前端显示（只读不写，避免用前端缓存值覆盖后端）
   if (sess.bridgeSessionId) {
     window.ga.getSessionWorkspace(sess.bridgeSessionId).then(res => {
@@ -6374,7 +7035,47 @@ async function closeSession(id) {
 const convMenu = document.getElementById('conv-menu');
 const folderMenu = document.getElementById('folder-menu');
 const moveMenu = document.getElementById('move-menu');
+const libMenu = document.getElementById('lib-menu');
 let menuTargetId = null;
+let libMenuTarget = null;
+
+libMenu.addEventListener('click', async function (e) {
+  e.stopPropagation();
+  var actEl = e.target.closest('.ctx-item');
+  var act = actEl && actEl.dataset.act;
+  var id = libMenuTarget;
+  libMenu.hidden = true;
+  if (!id || !act) return;
+  var projectName = phState.project;
+  var base = '/projects/' + encProject(projectName) + '/library/' + encodeURIComponent(id);
+  if (act === 'preview') {
+    openLibPreview(id);
+  } else if (act === 'open') {
+    try {
+      var r = await fetch(base + '/open', { method: 'POST' });
+      if (!r.ok) { var m = ''; try { m = (await r.json()).error || ''; } catch (_) {} showToast(t('ph.lib.openFailed') + (m ? ': ' + m : '')); }
+    } catch (err) { showToast(String(err)); }
+  } else if (act === 'reveal') {
+    try {
+      var r2 = await fetch(base + '/reveal', { method: 'POST' });
+      if (!r2.ok) { var m2 = ''; try { m2 = (await r2.json()).error || ''; } catch (_) {} showToast(t('ph.lib.revealFailed') + (m2 ? ': ' + m2 : '')); }
+    } catch (err) { showToast(String(err)); }
+  } else if (act === 'pin') {
+    var it = phLibItems.find(function (x) { return x.id === id; }) || {};
+    var pinned = !it.pinned;
+    try {
+      var r3 = await fetch(base, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pinned: pinned }) });
+      if (r3.ok) {
+        if (it) it.pinned = pinned;
+        var box = document.querySelector('.ph-content');
+        if (box && phState.tab === 'library') renderPhLibrary(box);
+      } else {
+        var m3 = ''; try { m3 = (await r3.json()).error || ''; } catch (_) {} showToast(t('ph.lib.pinFailed') + (m3 ? ': ' + m3 : ''));
+      }
+    } catch (err) { showToast(String(err)); }
+  }
+});
+
 function placeMenu(menu, rect, opts = {}) {
   if (!menu || !rect) return;
   const gap = opts.gap ?? 4;
@@ -6453,6 +7154,23 @@ convListEl.addEventListener('click', (e) => {
     });
     return;
   }
+  // 会话折叠箭头：展开/收起，不打开会话
+  const sessToggle = e.target.closest('[data-session-toggle="1"]');
+  if (sessToggle) {
+    e.stopPropagation();
+    const sid = sessToggle.closest('.conv-item')?.dataset.id;
+    if (sid) {
+      const sess = state.sessions.get(sid);
+      if (state.expandedSessions.has(sid)) state.expandedSessions.delete(sid);
+      else {
+        state.expandedSessions.add(sid);
+        // 展开时若消息尚未加载则自动拉取，确保轮次有内容（不触发加载动画）
+        if (sess && sessionNeedsHydrate(sess)) hydrateSession(sess).finally(() => renderSessionList());
+      }
+      renderSessionList();
+    }
+    return;
+  }
   const more = e.target.closest('.ci-more');
   if (more) {
     e.stopPropagation();
@@ -6480,6 +7198,13 @@ convListEl.addEventListener('click', (e) => {
     folderMenu.querySelectorAll('[data-act]').forEach(it => { it.hidden = isArchived; });
     const rect = folderMore.getBoundingClientRect();
     placeMenu(folderMenu, rect, { side: 'bottom-right' });
+    return;
+  }
+  // 轮次子项：进入单轮查看（只读该轮，不打开完整会话）
+  const roundEl = e.target.closest('.conv-round');
+  if (roundEl && !roundEl.classList.contains('empty') && roundEl.dataset.sessionId) {
+    e.stopPropagation();
+    openRoundView(roundEl.dataset.sessionId, parseInt(roundEl.dataset.roundIndex, 10) || 0);
     return;
   }
   const it = e.target.closest('.conv-item');
@@ -6675,7 +7400,7 @@ moveMenu.addEventListener('click', (e) => {
   moveMenu.hidden = true;
   convMenu.hidden = true;
 });
-document.addEventListener('click', () => { convMenu.hidden = true; folderMenu.hidden = true; moveMenu.hidden = true; phTaskMenu.hidden = true; });
+document.addEventListener('click', () => { convMenu.hidden = true; folderMenu.hidden = true; moveMenu.hidden = true; phTaskMenu.hidden = true; libMenu.hidden = true; });
 // Close @ and / panels on outside click
 document.addEventListener('click', (e) => {
   if (_atActive && AT_PANEL && !AT_PANEL.contains(e.target) && e.target !== inputEl) {
@@ -6799,6 +7524,8 @@ function applyPollResult(sess, result) {
   for (const msg of (result.messages || [])) upsert(sess, msg, false);
   const busy = result.status === 'running' || !!result.partial;
   setBusy(sess, busy);
+  // 同步后端状态（running/done/idle）；已读(idle)不被滞后的 done 覆盖
+  if (result.status && !(result.status === 'done' && sess.status === 'idle')) sess.status = result.status;
   if (isActive(sess)) {
     applyPlanPayload(sess, result.plan);
     applyLiveModel(result.model, sess);
@@ -7035,6 +7762,7 @@ async function sendPrompt(text) {
       }
     }
     const res = await window.ga.rpc('session/prompt', { sessionId: sid, prompt: composedPrompt, display: text, llmNo: state.llmNo,
+      expert: sess.expert || null,   // 方案B：会话级专家(null=普通模式)
       files: previewFiles, imageMetas: previewImgs.map(im => ({ name: im.name, path: im.path })) });
     if (res?.error) throw new Error(res.error.message || res.error);
     removeUsedPendingFiles(usedFiles);
@@ -7265,8 +7993,104 @@ document.addEventListener('keydown', (e) => {
   }
 }, true /* capture */);
 
+// ── Ctrl+R 反向历史搜索（zsh 风格）──
+let _hsActive = false, _hsQuery = '', _hsMatches = [], _hsIdx = -1, _hsStash = '', _hsBar = null;
+function _hsCreateBar() {
+  if (_hsBar) return _hsBar;
+  _hsBar = document.createElement('div');
+  _hsBar.id = 'hs-bar';
+  _hsBar.style.cssText = 'display:none;padding:4px 10px;margin-bottom:6px;border-radius:8px;'
+    + 'font-size:12px;color:#c4b5fd;background:rgba(124,58,237,0.15);'
+    + 'border:1px solid rgba(124,58,237,0.5);';
+  (inputEl.parentElement || composerEl).insertBefore(_hsBar, inputEl);
+  return _hsBar;
+}
+function _hsShowBar(text) { const b = _hsCreateBar(); b.textContent = text; b.style.display = 'block'; }
+function _hsHideBar() { if (_hsBar) _hsBar.style.display = 'none'; }
+function _hsCompute(q) {
+  q = (q || '').toLowerCase();
+  if (!q) return _history.map((_, i) => i);
+  const out = [];
+  for (let i = 0; i < _history.length; i++) if (_history[i].toLowerCase().includes(q)) out.push(i);
+  return out;
+}
+function _hsSetCaret(offset) {
+  const node = inputEl.firstChild;
+  if (!node) return;
+  const len = node.textContent.length;
+  offset = Math.max(0, Math.min(offset, len));
+  const range = document.createRange();
+  range.setStart(node, offset); range.collapse(true);
+  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+}
+function _hsShow() {
+  if (!_hsMatches.length) {
+    inputEl.textContent = '';
+    _hsShowBar(`\u{1F50D} (reverse-i-search)\`${_hsQuery}\`: 无匹配 — Esc 取消`);
+    return;
+  }
+  let idx = Math.max(0, Math.min(_hsIdx, _hsMatches.length - 1));
+  _hsIdx = idx;
+  const text = _history[_hsMatches[idx]];
+  inputEl.textContent = text;
+  let pos = _hsQuery ? text.toLowerCase().indexOf(_hsQuery.toLowerCase()) : text.length;
+  if (pos < 0) pos = text.length;
+  _hsSetCaret(pos);
+  _hsShowBar(`\u{1F50D} (reverse-i-search)\`${_hsQuery}\`:  [${idx + 1}/${_hsMatches.length}]  Enter确认 · Esc取消 · Ctrl+R下一条`);
+}
+function _hsStart() {
+  if (!_history.length) { _hsShowBar('\u{1F50D} 暂无历史记录可搜索，先发几条消息'); setTimeout(_hsHideBar, 1500); return; }
+  _hsActive = true; _hsQuery = ''; _hsStash = composerText('chat');
+  _historyIdx = -1; _historyDraft = '';   // 退出普通历史翻页模式
+  _hsMatches = _hsCompute(''); _hsIdx = _hsMatches.length - 1; _hsShow();
+}
+function _hsType(ch) { _hsQuery += ch; _hsMatches = _hsCompute(_hsQuery); _hsIdx = _hsMatches.length - 1; _hsShow(); }
+function _hsBackspace() {
+  if (_hsQuery) { _hsQuery = _hsQuery.slice(0, -1); _hsMatches = _hsCompute(_hsQuery); _hsIdx = _hsMatches.length - 1; _hsShow(); }
+  else _hsCancel();
+}
+function _hsCycle() { if (!_hsMatches.length) return; _hsIdx = (_hsIdx - 1 + _hsMatches.length) % _hsMatches.length; _hsShow(); }
+function _hsAccept() { _hsActive = false; _hsQuery = ''; _hsMatches = []; _hsIdx = -1; _hsHideBar(); }
+function _hsCancel() {
+  _hsActive = false; inputEl.textContent = _hsStash;
+  const range = document.createRange(); range.selectNodeContents(inputEl); range.collapse(false);
+  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  _hsQuery = ''; _hsMatches = []; _hsIdx = -1; _hsHideBar();
+}
+
+// IME 组合提交（中文）：整段中文经 compositionend 派发，追加到搜索查询
+inputEl.addEventListener('compositionend', (e) => {
+  if (!_hsActive) return;
+  const d = e.data || '';
+  if (d) _hsType(d);
+});
+
 // Enter to submit (only when no panel is open)
 inputEl.addEventListener('keydown', (e) => {
+  // ── Ctrl+R 反向历史搜索（zsh 风格）：不自动触发，仅 Ctrl+R 进入 ──
+  if (e.ctrlKey && (e.key === 'r' || e.key === 'R')) {
+    e.preventDefault(); e.stopPropagation();
+    if (_hsActive) _hsCycle(); else _hsStart();
+    return;
+  }
+  if (_hsActive) {
+    // IME 组合进行中（如中文输入法）：不拦截、也不 preventDefault，让组合继续；
+    // 中文提交在 compositionend 监听中统一处理。
+    // 注意：WebKit/Safari/Tauri(WKWebView) 首字母按键 isComposing 可能为 false，
+    // 但这类 IME 组合键统一带 keyCode === 229（可选字符键），用它拦截可避免
+    // 把拼音字母（如 d）当可打印字符塞进查询，否则会出现 "d打" 脏查询。
+    if (e.isComposing || e.key === 'Process' || e.keyCode === 229) { return; }
+    e.preventDefault(); e.stopPropagation();
+    if (e.key === 'Enter') { _hsAccept(); return; }
+    if (e.key === 'Escape' || (e.ctrlKey && (e.key === 'g' || e.key === 'G'))) { _hsCancel(); return; }
+    if (e.key === 'Backspace') { _hsBackspace(); return; }
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End'].includes(e.key)) {
+      _hsActive = false; _hsQuery = ''; _hsMatches = []; _hsIdx = -1; _hsHideBar(); return;
+    }
+    if (['Shift','Control','Alt','Meta','CapsLock','Tab','Process'].includes(e.key)) return;
+    if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { _hsType(e.key); return; }
+    _hsCancel(); return;
+  }
   // ── Tab: accept the suggestion placeholder as actual input ──
   // 会话完成后输入框显示推荐的后续问题(data-ph 灰字提示)，
   // 按 Tab 把该提示转为可发送的实际输入，而非跳焦到下一个元素。
@@ -8029,9 +8853,11 @@ function renderSkillList() {
     SKILL_GROUPS.innerHTML = '<div class="slash-empty">No skills found</div>';
     return;
   }
+  const loadedName = getLoadedSkillName(getSkillTargetInput());
   _skillDisplayed.forEach((sk, i) => {
+    const isLoaded = !!loadedName && sk.name === loadedName;
     const item = document.createElement('div');
-    item.className = 'slash-item' + (i === _skillIdx ? ' active' : '');
+    item.className = 'slash-item' + (i === _skillIdx ? ' active' : '') + (isLoaded ? ' loaded' : '');
     item.dataset.idx = i;
     const title = document.createElement('div');
     title.className = 'slash-item-title';
@@ -8047,6 +8873,12 @@ function renderSkillList() {
     desc.textContent = sk.description || '';
     item.appendChild(title);
     if (desc.textContent) item.appendChild(desc);
+    if (isLoaded) {
+      const tick = document.createElement('span');
+      tick.className = 'slash-item-tick';
+      tick.textContent = '已加载';
+      item.appendChild(tick);
+    }
     SKILL_GROUPS.appendChild(item);
   });
 }
@@ -8107,11 +8939,32 @@ function filterSkillList(q) {
   renderSkillList();
 }
 
-function getSkillTargetInput() {
-  // 返回触发源对应的输入框元素
-  if (_skillTrigger === 'cdb') return document.getElementById('cdb-input');
-  if (_skillTrigger === 'ph') return document.getElementById('ph-input');
+function getSkillTargetInput(trigger) {
+  // 返回触发源对应的输入框元素（trigger 缺省时用最近一次触发源）
+  const t = trigger || _skillTrigger;
+  if (t === 'cdb') return document.getElementById('cdb-input');
+  if (t === 'ph') return document.getElementById('ph-input');
   return inputEl;
+}
+
+function getLoadedSkillName(el) {
+  // 输入框当前已加载的技能名（来自「使用技能」前缀），无前缀返回 null
+  if (!el) return null;
+  const m = (el.textContent || '').match(/^【使用技能 ([^\n]*)\n/);
+  return m ? m[1] : null;
+}
+
+function refreshSkillChip(trigger) {
+  // 让对应 skill-chip 反映输入框真实状态：label 显示已加载技能 + .on 点亮（对齐 expert-chip 的选中反馈）
+  const t = trigger || _skillTrigger;
+  const chipId = (t === 'cdb') ? 'cdb-skill-chip' : (t === 'ph') ? 'ph-skill-chip' : 'chat-skill-chip';
+  const chip = document.getElementById(chipId);
+  if (!chip) return;
+  const name = getLoadedSkillName(getSkillTargetInput(t));
+  const label = chip.querySelector('.skill-chip-label');
+  if (label) label.textContent = name || '技能';
+  chip.classList.toggle('on', !!name);
+  chip.title = name ? ('已加载技能：' + name + '（点击可取消）') : '选择技能';
 }
 
 function selectSkillItem() {
@@ -8119,22 +8972,28 @@ function selectSkillItem() {
   if (!sk) return;
   const el = getSkillTargetInput();
   if (el) {
-    // 方案A：一次性 prompt 增强——把「使用技能」前缀写入对应输入框，
-    // 各 composer 发送时会将其随消息一起发出（agent 据注入的 skill 索引读取该 skill 指令）
-    const prefix = `【使用技能 ${sk.name}】\n`;
-    el.focus();
+    const wasLoaded = getLoadedSkillName(el) === sk.name;
     const cur = (el.textContent || '').replace(/^【使用技能 [^\n]*\n/, '');
-    el.textContent = prefix + cur;
-    // 光标移到末尾，便于用户接着输入
-    try {
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(false);
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } catch (_) {}
+    el.focus();
+    if (wasLoaded) {
+      // 再次点击已加载的技能 = 取消加载（对齐 expert picker 的单选切换手感）
+      el.textContent = cur;
+    } else {
+      // 方案A：一次性 prompt 增强——把「使用技能」前缀写入对应输入框，
+      // 各 composer 发送时会将其随消息一起发出（agent 据注入的 skill 索引读取该 skill 指令）
+      el.textContent = `【使用技能 ${sk.name}】\n` + cur;
+      // 光标移到末尾，便于用户接着输入
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch (_) {}
+    }
     try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+    refreshSkillChip(_skillTrigger);
   }
   hideSkillPicker();
 }
@@ -8198,6 +9057,21 @@ document.addEventListener('mousedown', (e) => {
   hideSkillPicker();
 });
 
+// ── 技能 chip 状态同步 ──────────────────────────────────────────────
+// 发送路径直接清空输入框、不 dispatch input，用 MutationObserver 监听
+// 三个输入框的内容变化，保证发送后 chip 可靠复位为「技能」。
+if (typeof MutationObserver !== 'undefined') {
+  const skillInputWatch = new MutationObserver(() => {
+    ['chat', 'cdb', 'ph'].forEach(refreshSkillChip);
+  });
+  ['chat', 'cdb', 'ph'].forEach((t) => {
+    const el = getSkillTargetInput(t);
+    if (el) skillInputWatch.observe(el, { childList: true, subtree: true, characterData: true });
+  });
+}
+// 初始同步一次（如恢复草稿时已含技能前缀的情况）
+['chat', 'cdb', 'ph'].forEach(refreshSkillChip);
+
 // ──────── 专家选择器 (expert picker：镜像 skill-picker，无搜索框，单选切换) ────────
 (function(){
   var EXPERT_PANEL  = document.getElementById('expert-picker-panel');
@@ -8212,7 +9086,9 @@ document.addEventListener('mousedown', (e) => {
     if (_expertLoaded) return Promise.resolve();
     return fetch((window.BRIDGE_ORIGIN || '') + '/api/experts').then(function(r){ return r.json(); }).then(function(d){
       _expertList   = (d && Array.isArray(d.experts)) ? d.experts : [];
-      _expertActive = (d && d.active) || null;
+      // 方案B：专家为会话级，不再用全局锚的 active；初值读当前会话的 expert
+      var sess = (typeof activeSess === 'function') ? activeSess() : null;
+      _expertActive = (sess && sess.expert) || null;
       _expertLoaded = true;
     }).catch(function(){ _expertList = []; });
   }
@@ -8220,6 +9096,20 @@ document.addEventListener('mousedown', (e) => {
   function renderExpertList(){
     if (!EXPERT_GROUPS) return;
     EXPERT_GROUPS.innerHTML = '';
+    // 方案B：有激活专家时，顶部显示"默认模式"取消项
+    if (_expertActive){
+      var clearItem = document.createElement('div');
+      clearItem.className = 'slash-item';
+      clearItem.innerHTML =
+        '<div class="slash-item-title">默认模式（无专家）</div>' +
+        '<div class="slash-item-desc">点击取消当前专家，回到普通对话</div>';
+      clearItem.addEventListener('mousedown', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        clearExpert();
+      });
+      EXPERT_GROUPS.appendChild(clearItem);
+    }
     if (!_expertList.length){
       EXPERT_GROUPS.innerHTML = '<div style="padding:8px 12px;color:var(--dim);font-size:12px;">暂无专家</div>';
       return;
@@ -8242,21 +9132,41 @@ document.addEventListener('mousedown', (e) => {
 
   function selectExpert(name){
     var enabling = !(name === _expertActive);   // 点击当前已激活项=关闭它,回到默认"专家"
-    fetch((window.BRIDGE_ORIGIN || '') + '/api/experts/toggle', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name, enabled: enabling })
-    }).then(function(r){ return r.json(); }).then(function(d){
-      _expertActive = (d && d.active) ? d.active : (enabling ? name : null);
-      updateExpertChip();
-      renderExpertList();
-      hideExpertPicker();
-    }).catch(function(){});
+    // 方案B：会话级专家。不再调全局 toggle(写 pid 锚)，改为写入当前会话的 expert 字段
+    var sess = (typeof activeSess === 'function') ? activeSess() : null;
+    if (sess) {
+      sess.expert = enabling ? name : null;
+      saveSessions();
+    }
+    _expertActive = enabling ? name : null;
+    updateExpertChip();
+    renderExpertList();
+    hideExpertPicker();
+  }
+
+  // 方案B：显式取消专家（"默认模式"按钮调用）
+  function clearExpert(){
+    var sess = (typeof activeSess === 'function') ? activeSess() : null;
+    if (sess) {
+      sess.expert = null;
+      saveSessions();
+    }
+    _expertActive = null;
+    updateExpertChip();
+    renderExpertList();
+    hideExpertPicker();
   }
 
   function updateExpertChip(){
     if (EXPERT_LABEL) EXPERT_LABEL.textContent = _expertActive || '专家';
   }
+
+  // 方案B：切换会话时由外部(setActiveSession)调用，把专家 chip 同步到目标会话的 expert
+  window.syncExpertChip = function(sess){
+    _expertActive = (sess && sess.expert) || null;
+    updateExpertChip();
+    if (_expertLoaded) renderExpertList();
+  };
 
   function showExpertPicker(){
     if (!EXPERT_PANEL) return;
@@ -9328,8 +10238,14 @@ window.ga.onBridgeNotification((msg) => {
     for (const sess of state.sessions.values()) {
       if (sess.bridgeSessionId === msg.sessionId) {
         found = true;
+        if (msg.status) sess.status = msg.status;
         if (msg.status === 'running' || msg.state === 'running') pollSession(sess);
-        if (msg.state === 'idle' || msg.status === 'idle') tokPollBridge();
+        if (msg.state === 'idle' || msg.status === 'idle' || msg.state === 'viewed' || msg.state === 'done') tokPollBridge();
+        // 完成且用户正在看 → 自动标记已读
+        if (msg.status === 'done' && sess.id === state.activeId && currentPage === 'chat') {
+          fetch(`${BRIDGE_ORIGIN}/session/${encodeURIComponent(sess.bridgeSessionId || sess.id)}/viewed`, { method: 'POST' }).catch(() => {});
+          sess.status = 'idle';
+        }
         renderSessionList();
         break;
       }
@@ -9864,11 +10780,45 @@ async function openTaskCreateModal(prefillPrompt, editTask) {
     } catch (e) { /* workspace 列表加载失败时忽略 */ }
     wsSel.value = et.workspace || '';
   }
+  // 动态加载已启用通道，渲染通知通道复选框
+  const notifyChBox = document.getElementById('tc-notify-channels');
+  const notifyContentField = document.getElementById('tc-notify-content-field');
+  const notifyContentSel = document.getElementById('tc-notify-content');
+  if (notifyChBox) {
+    notifyChBox.innerHTML = '';
+    let enabledChs = [];
+    try {
+      const resp = await fetch(`${BRIDGE_ORIGIN}/services/panel`);
+      const pinfo = await resp.json();
+      // panel 返回运行中的服务列表，匹配 wechat / feishu 关键字
+      const svcs = (pinfo && pinfo.services) || pinfo || [];
+      const names = Array.isArray(svcs) ? svcs.map(s => (typeof s === 'string' ? s : (s.name || s.id || ''))).join('\n') : '';
+      if (/wechat|wxapp|微信/i.test(names)) enabledChs.push('wechat');
+      if (/feishu|fsapp|lark|飞书/i.test(names)) enabledChs.push('feishu');
+    } catch (e) { /* panel 探测失败时降级：两个通道都展示 */ enabledChs = ['wechat', 'feishu']; }
+    const chLabels = { wechat: t('taskForm.chWechat') || '微信', feishu: t('taskForm.chFeishu') || '飞书' };
+    const selChs = Array.isArray(et.notify_channels) ? et.notify_channels : [];
+    enabledChs.forEach(ch => {
+      const lbl = document.createElement('label');
+      lbl.className = 'tc2-notify-chip';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.value = ch;
+      cb.checked = selChs.includes(ch);
+      cb.addEventListener('change', () => {
+        if (notifyContentField) notifyContentField.hidden = !notifyChBox.querySelector('input:checked');
+      });
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(' ' + chLabels[ch]));
+      notifyChBox.appendChild(lbl);
+    });
+    if (notifyContentSel) notifyContentSel.value = et.notify_content || 'status_only';
+    if (notifyContentField) notifyContentField.hidden = !selChs.length;
+  }
   // 切换到 task-edit 子页面（类似 project-home 模式，不在侧边栏导航中）
   currentPage = 'task-edit';
   nav?.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   pages.forEach(p => p.classList.toggle('active', p.dataset.page === 'task-edit'));
-  if (bodyEl) bodyEl.classList.remove('rp-collapsed');
+  if (bodyEl) bodyEl.classList.add('rp-collapsed');
   // 设置标题：编辑 vs 新建
   const titleEl = document.getElementById('tc-page-title');
   if (titleEl) titleEl.textContent = _tcEditId ? t('page.tasks.edit') : t('page.tasks.create');
@@ -9961,6 +10911,16 @@ function bindTaskCreateSave() {
     const max_delay_hours = maxDelayRaw ? Math.max(0, parseInt(maxDelayRaw, 10) || 0) : 0;
     const payload = { name: name.trim(), prompt: prompt.trim(), repeat, schedule, max_delay_hours, enabled, model, workspace };
     if (dateRange) payload.date_range = dateRange;
+    // 通知配置：收集选中的通道 + 内容模式
+    const notifyChBox = document.getElementById('tc-notify-channels');
+    const notifyContentSel = document.getElementById('tc-notify-content');
+    if (notifyChBox) {
+      const chs = Array.from(notifyChBox.querySelectorAll('input:checked')).map(cb => cb.value).filter(v => v);
+      if (chs.length) {
+        payload.notify_channels = chs;
+        payload.notify_content = (notifyContentSel && notifyContentSel.value) || 'status_only';
+      }
+    }
     saveBtn.disabled = true;
     try {
       const url = _tcEditId
@@ -10039,6 +10999,40 @@ function _autoShowFormView() {
   if (fv) fv.hidden = false;
 }
 
+// 渲染自动模式通知通道复选框；task 为 null 时清空，否则按 task.notify_channels 回填
+async function _autoRenderNotify(task) {
+  const box = document.getElementById('auto-notify-channels');
+  const contentField = document.getElementById('auto-notify-content-field');
+  const contentSel = document.getElementById('auto-notify-content');
+  if (!box) return;
+  box.innerHTML = '';
+  let enabledChs = [];
+  try {
+    const resp = await fetch(`${BRIDGE_ORIGIN}/services/panel`);
+    const data = await resp.json();
+    const svcs = (data && data.services) || [];
+    enabledChs = svcs.filter(s => s.running && /wechatapp/i.test(s.id)).map(s => 'wechat');
+    const fsChs = svcs.filter(s => s.running && /fsapp/i.test(s.id)).map(s => 'feishu');
+    enabledChs = enabledChs.concat(fsChs);
+  } catch (e) { /* 探测失败时无通道可选 */ }
+  const chLabels = { wechat: '微信', feishu: '飞书' };
+  const selChs = (task && Array.isArray(task.notify_channels)) ? task.notify_channels : [];
+  enabledChs.forEach(ch => {
+    const lbl = document.createElement('label');
+    lbl.className = 'tc2-check-item';
+    lbl.style.marginRight = '12px';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = ch;
+    cb.checked = selChs.includes(ch);
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(' ' + chLabels[ch]));
+    box.appendChild(lbl);
+  });
+  if (contentSel) contentSel.value = (task && task.notify_content) || 'status_only';
+  if (contentField) contentField.hidden = !enabledChs.length;
+}
+
 function _autoResetForm() {
   _autoEditId = null;
   _autoFreqMode = 'cycle';
@@ -10054,6 +11048,8 @@ function _autoResetForm() {
   set('auto-date-end', '');
   set('auto-max-delay', '6');
   set('auto-model', '');
+  // 重置通知通道（清空选中、隐藏内容选项）
+  _autoRenderNotify(null);
   const enSw = document.getElementById('auto-enabled-switch');
   if (enSw) enSw.setAttribute('aria-checked', 'true');
   const advEl = document.getElementById('auto-adv');
@@ -10074,6 +11070,8 @@ function _autoFillForm(task) {
   set('auto-prompt', task.prompt || '');
   set('auto-model', task.model || '');
   set('auto-max-delay', String(task.max_delay_hours ?? 6));
+  // 回填通知通道（异步渲染，task 带 notify 配置）
+  _autoRenderNotify(task);
   // 频率模式
   const repeat = task.repeat || 'daily';
   if (repeat === 'once') {
@@ -10172,6 +11170,16 @@ function _autoCollectPayload() {
   const max_delay_hours = maxDelayRaw ? Math.max(0, parseInt(maxDelayRaw, 10) || 0) : 0;
   const payload = { name: name.trim(), prompt: prompt.trim(), repeat, schedule, max_delay_hours, enabled, model, workspace: _autoWorkspace };
   if (dateRange) payload.date_range = dateRange;
+  // 通知配置：收集选中的通道 + 内容模式
+  const autoChBox = document.getElementById('auto-notify-channels');
+  const autoContentSel = document.getElementById('auto-notify-content');
+  if (autoChBox) {
+    const chs = Array.from(autoChBox.querySelectorAll('input:checked')).map(cb => cb.value).filter(v => v);
+    if (chs.length) {
+      payload.notify_channels = chs;
+      payload.notify_content = (autoContentSel && autoContentSel.value) || 'status_only';
+    }
+  }
   return payload;
 }
 
@@ -11570,6 +12578,7 @@ function bindComposerInRoot(root, opts) {
       return;
     }
     if (act === 'preset') openModal('preset-modal');
+    if (act === 'library') { openLibraryRefPicker(ctx); return; }
   });
 
   input?.addEventListener('keydown', (e) => {
@@ -11696,7 +12705,7 @@ function bindComposerInRoot(root, opts) {
     everConnected: false, reconnecting: false, serviceAvailable: false,
     messages: [], workers: [], runningCount: 0,
     conductorTyping: false, failCount: 0,
-    historyReady: false, reconnectAt: 0, progressOpen: false,
+    historyReady: false, reconnectAt: 0, progressOpen: true,
   };
   let ws, connectTimer, reconnectTick, titleSeq = 0, wsGen = 0, localSeq = 0;
   const titleSeen = new Map();
@@ -12074,8 +13083,109 @@ function bindComposerInRoot(root, opts) {
     return true;
   }
 
+  /* ── 任务历史（持久化，来自 conductor /history API） ── */
+  let histLoading = false, histSearchTimer = null, histClearArmed = false, histClearTimer = null;
+
+  function switchProgTab(tab) {
+    document.querySelectorAll('.collab-prog-tab').forEach(b => b.classList.toggle('is-active', b.dataset.progTab === tab));
+    const live = $('collab-prog-live'), hist = $('collab-prog-history');
+    if (live) live.hidden = tab !== 'live';
+    if (hist) hist.hidden = tab !== 'history';
+    if (tab === 'history') loadHistory();
+  }
+
+  async function loadHistory() {
+    const listEl = $('collab-hist-list');
+    if (!listEl || histLoading) return;
+    histLoading = true;
+    const q = ($('collab-hist-search')?.value || '').trim();
+    try {
+      const res = await fetch(`${CONDUCTOR_ORIGIN}/history?limit=50&q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      renderHistoryList(data.items || [], data.total || 0);
+    } catch (e) {
+      listEl.innerHTML = '<div class="collab-hist-empty">无法连接 Conductor</div>';
+    } finally { histLoading = false; }
+  }
+
+  function cleanReplySum(raw) {
+    // 去掉 "LLM Running (Turn N) ..." 行和 <summary> 标签，取最后一段有意义的内容
+    const lines = raw.split('\n')
+      .filter(l => !/^LLM Running \(Turn \d+\)/.test(l.trim()) && l.trim())
+      .map(l => l.replace(/<\/?summary>/g, '').trim())
+      .filter(Boolean);
+    const last = lines[lines.length - 1] || '';
+    return last.slice(0, 120);
+  }
+
+  function renderHistoryList(items, total) {
+    const listEl = $('collab-hist-list'), empty = $('collab-hist-empty');
+    if (!listEl) return;
+    if (empty) empty.hidden = items.length > 0;
+    const badge = $('collab-hist-badge');
+    if (badge) { badge.hidden = !total; badge.textContent = total > 99 ? '99+' : String(total); }
+    listEl.innerHTML = items.map(h => {
+      const dur = h.duration != null ? (h.duration < 60 ? h.duration + 's' : Math.round(h.duration / 60) + 'min') : '';
+      const title = (h.prompt || '').split('\n')[0].slice(0, 80) || '(无提示词)';
+      return `<article class="collab-hist-card collab-hist-card--${h.status}" data-hid="${esc(h.id)}">
+        <div class="collab-hist-card-top">
+          <span class="collab-hist-dot"></span>
+          <span class="collab-hist-st">${h.status === 'aborted' ? '中断' : '完成'}</span>
+          ${dur ? `<span class="collab-hist-elapsed">${dur}</span>` : ''}
+          <span class="collab-hist-time">${relTime(h.updated_at)}</span>
+        </div>
+        <div class="collab-hist-card-title">${esc(title)}</div>
+        ${h.reply ? `<div class="collab-hist-card-sum">${esc(cleanReplySum(h.reply))}</div>` : ''}
+      </article>`;
+    }).join('');
+    listEl.querySelectorAll('.collab-hist-card').forEach(el => {
+      el.addEventListener('click', () => openHistoryDrawer(el.dataset.hid));
+    });
+  }
+
+  async function openHistoryDrawer(hid) {
+    try {
+      const res = await fetch(`${CONDUCTOR_ORIGIN}/history/${hid}`);
+      if (!res.ok) return;
+      const h = await res.json();
+      closeWorkerDrawer();
+      drawerEl = document.createElement('div');
+      drawerEl.className = 'collab-drawer-wrap';
+      const when = h.updated_at ? new Date(h.updated_at * 1000).toLocaleString() : '';
+      const stTxt = h.status === 'aborted' ? '⚠ 中断' : '✓ 完成';
+      const dur = h.duration != null ? (h.duration < 60 ? h.duration + 's' : Math.round(h.duration / 60) + 'min') : '';
+      const title = (h.prompt || '').split('\n')[0].slice(0, 80) || '(无提示词)';
+      drawerEl.innerHTML = `<div class="collab-drawer-backdrop"></div><aside class="collab-drawer"><div class="collab-drawer-head"><span class="collab-drawer-title">${esc(title)}</span><button class="modal-x collab-drawer-close">${GA_ICON('x')}</button></div><div class="collab-hist-meta"><span class="collab-hist-meta-st collab-hist-st--${h.status}">${stTxt}</span>${dur ? `<span>${dur}</span>` : ''}${when ? `<span>${when}</span>` : ''}</div><div class="collab-drawer-body"><div class="bubble md"></div></div></aside>`;
+      const bubble = drawerEl.querySelector('.collab-drawer-body .bubble');
+      if (bubble) { bubble.innerHTML = renderTurnBody(h.reply || '（无内容）'); postRenderEnhance(bubble); }
+      drawerEl.querySelector('.collab-drawer-backdrop').onclick = closeWorkerDrawer;
+      drawerEl.querySelector('.collab-drawer-close').onclick = closeWorkerDrawer;
+      document.body.appendChild(drawerEl);
+    } catch (e) { /* ignore */ }
+  }
+
+  function clearHistory() {
+    const btn = $('collab-hist-clear');
+    if (!histClearArmed) {
+      histClearArmed = true;
+      if (btn) { btn.classList.add('armed'); btn.title = '再点一次确认清空'; }
+      histClearTimer = setTimeout(() => {
+        histClearArmed = false;
+        if (btn) { btn.classList.remove('armed'); btn.title = '清空历史'; }
+      }, 2500);
+      return;
+    }
+    clearTimeout(histClearTimer);
+    histClearArmed = false;
+    if (btn) { btn.classList.remove('armed'); btn.title = '清空历史'; }
+    fetch(`${CONDUCTOR_ORIGIN}/history`, { method: 'DELETE' }).then(() => loadHistory()).catch(() => {});
+  }
+
   $('collab-retry')?.addEventListener('click', () => { S.failCount = 0; S.reconnecting = false; resetWs(); connect(); });
   $('collab-rail-toggle')?.addEventListener('click', () => toggleProgress());
+  document.querySelectorAll('.collab-prog-tab').forEach(b => b.addEventListener('click', () => switchProgTab(b.dataset.progTab)));
+  $('collab-hist-search')?.addEventListener('input', () => { clearTimeout(histSearchTimer); histSearchTimer = setTimeout(loadHistory, 300); });
+  $('collab-hist-clear')?.addEventListener('click', clearHistory);
   $('collab-prog-close')?.addEventListener('click', () => toggleProgress(false));
 
   window.collabComposer?.init?.(sendText);
@@ -12716,7 +13826,7 @@ function updateFileSelectionUI() {
   });
 }
 function _fileKind(f) {
-  return f.source === 'chat' ? 'upload' : (f.source || 'file');
+  return f.source || 'file';
 }
 function openFilesMenu(btn, path) {
   closeFilesMenu();
@@ -12784,8 +13894,32 @@ async function filesExecDelete(fs) {
   _filesSelected.clear();
   loadFilesPage();
 }
+async function filesExecAddToLibrary(fs) {
+  const projectName = phState.project;
+  if (!projectName) { showToast(t('ph.lib.needProject')); return; }
+  let ok = 0;
+  for (const f of fs) {
+    if (!f || !f.path) continue;
+    try {
+      const res = await fetch('/projects/' + encProject(projectName) + '/library', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'generated', name: f.name, path: f.path, desc: '' }),
+      });
+      if (res.ok) ok++;
+    } catch (e) {}
+  }
+  if (ok > 0) {
+    showToast(t('ph.lib.added'));
+    if (phState.tab === 'library') renderPhLibrary(document.querySelector('.ph-content'));
+  } else {
+    showToast('HTTP error');
+  }
+}
 
-async function filesExecPreview(f) {
+async function filesExecPreview(fs) {
+  const f = Array.isArray(fs) ? fs[0] : fs;
+  if (!f) return;
   const tp = (f.type || '').toLowerCase();
   const imgs = ['jpg','jpeg','png','gif','webp','svg','bmp','ico'];
   if (f.source === 'chat' && (imgs.includes(tp) || tp === 'pdf')) {
@@ -12798,6 +13932,50 @@ async function filesExecPreview(f) {
       else alert(d.error || '无法预览');
     } catch (e) { alert('预览失败: ' + e.message); }
   }
+}
+async function filesExecReviewDiff(fs) {
+  const f = fs[0];
+  if (!f) return;
+  try {
+    const res = await fetch(`${BRIDGE_ORIGIN}/api/files/diff?path=${encodeURIComponent(f.path)}`);
+    const d = await res.json();
+    if (!d.ok) { alert(d.error || '无法获取变更'); return; }
+    if (!d.has_changes) { alert('该文件没有未提交的变更'); return; }
+    openDiffViewer(d.name || f.name, d.diff);
+  } catch (e) { alert('获取变更失败: ' + e.message); }
+}
+function openDiffViewer(name, diffText) {
+  closeFilePreview();
+  const ov = document.createElement('div');
+  ov.className = 'files-preview-overlay';
+  ov.innerHTML = `<div class="files-preview-modal" style="max-width:920px"><div class="files-preview-header"><span class="files-preview-name" title="Review: ${escapeHtml(name)}">Review: ${escapeHtml(name)}</span><button type="button" class="files-preview-close" title="关闭"><span data-ga-icon="x"></span></button></div><div class="files-preview-body" style="display:block;background:#1e1e2e;padding:10px 0;align-items:stretch;justify-content:flex-start"></div></div>`;
+  const body = ov.querySelector('.files-preview-body');
+  const frag = document.createDocumentFragment();
+  for (const line of diffText.split('\n')) {
+    const div = document.createElement('div');
+    div.textContent = line || ' ';
+    div.style.cssText = 'font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.6;padding:0 14px;white-space:pre-wrap;word-break:break-all;color:#cdd6f4;';
+    if (line.startsWith('+') && !line.startsWith('+++')) {
+      div.style.background = 'rgba(166,227,161,0.15)';
+      div.style.color = '#a6e3a1';
+    } else if (line.startsWith('-') && !line.startsWith('---')) {
+      div.style.background = 'rgba(243,139,168,0.15)';
+      div.style.color = '#f38ba8';
+    } else if (line.startsWith('@@')) {
+      div.style.color = '#89b4fa';
+      div.style.marginTop = '8px';
+    } else if (line.startsWith('diff ') || line.startsWith('index ')) {
+      div.style.color = '#6c7086';
+    }
+    frag.appendChild(div);
+  }
+  body.appendChild(frag);
+  document.body.appendChild(ov);
+  _filesRenderIcons(ov);
+  _filesPreviewEl = ov;
+  ov.querySelector('.files-preview-close').addEventListener('click', closeFilePreview);
+  ov.addEventListener('click', (e) => { if (e.target === ov) closeFilePreview(); });
+  document.addEventListener('keydown', _filesPreviewEsc);
 }
 function openFilePreview(kind, name, url, text) {
   closeFilePreview();
@@ -12856,7 +14034,7 @@ function bindProducedFiles(container) {
   });
   _filesRenderIcons(container);
 }
-function openChatFileMenu(btn, f) {
+async function openChatFileMenu(btn, f) {
   closeChatFileMenu();
   const menu = document.createElement('div');
   menu.className = 'files-menu';
@@ -12869,10 +14047,18 @@ function openChatFileMenu(btn, f) {
     menu.appendChild(it);
   };
   if (isFilePreviewable(f.type, f.source)) add(t('files.preview'), 'magnifyingGlass', filesExecPreview);
+  let hasChanges = false;
+  try {
+    const res = await fetch(`${BRIDGE_ORIGIN}/api/files/diff?path=${encodeURIComponent(f.path)}`);
+    const d = await res.json();
+    hasChanges = d.ok && d.has_changes;
+  } catch(e) {}
+  if (hasChanges) add('Review 变更', 'gitFork', filesExecReviewDiff);
   add('打开文件', 'fileText', filesExecOpen);
   add('打开位置', 'folderSimple', filesExecReveal);
   add('复制路径', 'copy', filesExecCopy);
   add('删除', 'trash', filesExecDelete);
+  if (phState.project) add(t('ph.lib.addToLibrary'), 'books', filesExecAddToLibrary);
   document.body.appendChild(menu);
   _filesRenderIcons(menu);
   _chatFileMenuEl = menu;
@@ -13655,8 +14841,16 @@ async function skillHubToggle(name, enabled) {
     if (tabSkills) tabSkills.addEventListener('click', function(){ switchShTab('skills'); });
     var tabPlugins = document.getElementById('sh-tab-plugins');
     if (tabPlugins) tabPlugins.addEventListener('click', function(){ switchShTab('plugins'); });
+    var tabMcp = document.getElementById('sh-tab-mcp');
+    if (tabMcp) tabMcp.addEventListener('click', function(){ switchShTab('mcp'); });
     var dirAddBtn = document.getElementById('sh-pg-dir-add');
     if (dirAddBtn) dirAddBtn.addEventListener('click', addShPluginDir);
+    var mcpAddBtn = document.getElementById('sh-mcp-add-btn');
+    if (mcpAddBtn) mcpAddBtn.addEventListener('click', addMcpServer);
+    var mcpReloadBtn = document.getElementById('sh-mcp-reload-btn');
+    if (mcpReloadBtn) mcpReloadBtn.addEventListener('click', reloadMcpServers);
+    var mcpTransport = document.getElementById('sh-mcp-transport');
+    if (mcpTransport) mcpTransport.addEventListener('change', toggleMcpTransportFields);
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', bindSkillHub);
@@ -13669,19 +14863,27 @@ async function skillHubToggle(name, enabled) {
 function switchShTab(tab) {
   var skillsPane = document.getElementById('sh-skills-pane');
   var pluginsPane = document.getElementById('sh-plugins-pane');
+  var mcpPane = document.getElementById('sh-mcp-pane');
   var tabSkills = document.getElementById('sh-tab-skills');
   var tabPlugins = document.getElementById('sh-tab-plugins');
+  var tabMcp = document.getElementById('sh-tab-mcp');
+  if (skillsPane) skillsPane.hidden = true;
+  if (pluginsPane) pluginsPane.hidden = true;
+  if (mcpPane) mcpPane.hidden = true;
+  if (tabSkills) tabSkills.classList.remove('active');
+  if (tabPlugins) tabPlugins.classList.remove('active');
+  if (tabMcp) tabMcp.classList.remove('active');
   if (tab === 'plugins') {
-    if (skillsPane) skillsPane.hidden = true;
     if (pluginsPane) pluginsPane.hidden = false;
-    if (tabSkills) tabSkills.classList.remove('active');
     if (tabPlugins) tabPlugins.classList.add('active');
     loadShPlugins();
+  } else if (tab === 'mcp') {
+    if (mcpPane) mcpPane.hidden = false;
+    if (tabMcp) tabMcp.classList.add('active');
+    loadMcpServers();
   } else {
     if (skillsPane) skillsPane.hidden = false;
-    if (pluginsPane) pluginsPane.hidden = true;
     if (tabSkills) tabSkills.classList.add('active');
-    if (tabPlugins) tabPlugins.classList.remove('active');
   }
 }
 
@@ -13890,4 +15092,231 @@ async function removeShPluginDir(path) {
     if (window.shToast) shToast('移除失败: ' + e.message);
   }
 }
+
+/* ===== Skill Hub: MCP Tab ===== */
+async function loadMcpServers() {
+  var list = document.getElementById('sh-mcp-list');
+  if (!list) return;
+  list.innerHTML = '<div class="sh-loading">加载中…</div>';
+  try {
+    var res = await fetch('/api/mcp');
+    var data = await res.json();
+    if (!data.success) {
+      list.innerHTML = '<div class="sh-pg-empty sh-pg-error">' + escapeHtml(data.error || '加载失败') + '</div>';
+      return;
+    }
+    renderMcpServers(data.servers || []);
+    var cfgEl = document.getElementById('sh-mcp-cfg-path');
+    if (cfgEl && data.config_path) cfgEl.textContent = data.config_path;
+  } catch (e) {
+    list.innerHTML = '<div class="sh-pg-empty sh-pg-error">加载 MCP 失败: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+var _mcpServersCache = [];
+
+function renderMcpServers(servers) {
+  var list = document.getElementById('sh-mcp-list');
+  if (!list) return;
+  _mcpServersCache = servers || [];
+  if (!_mcpServersCache.length) {
+    list.innerHTML = '<div class="sh-pg-empty">尚未配置 MCP server。使用上方表单添加，或编辑配置文件。</div>';
+    return;
+  }
+  list.innerHTML = _mcpServersCache.map(function (s, idx) {
+    var name = escapeHtml(s.name || '');
+    var transport = s.transport || (s.url ? 'http' : 'stdio');
+    var tBadge = transport === 'http'
+      ? '<span class="sh-pg-tag" style="background:rgba(56,132,255,.15);color:#5aa0ff;">http</span>'
+      : '<span class="sh-pg-tag" style="background:rgba(46,204,113,.15);color:#4cd98b;">stdio</span>';
+    var srcBadge = s.source === 'plugin'
+      ? '<span class="sh-pg-tag" style="background:rgba(255,170,60,.15);color:#ffb054;">plugin</span>'
+      : '<span class="sh-pg-tag">全局</span>';
+    var detail = '';
+    if (s.command) {
+      detail = '<code style="font-size:11px;opacity:.7;display:block;margin-top:6px;word-break:break-all;">' +
+        escapeHtml(s.command + (s.args && s.args.length ? ' ' + s.args.join(' ') : '')) + '</code>';
+    } else if (s.url) {
+      detail = '<code style="font-size:11px;opacity:.7;display:block;margin-top:6px;word-break:break-all;">' + escapeHtml(s.url) + '</code>';
+    }
+    var envCount = s.env ? Object.keys(s.env).length : 0;
+    var envInfo = envCount ? '<span class="sh-pg-tag">' + envCount + ' env</span>' : '';
+    var menuHtml = '<div class="sh-mcp-kebab-wrap">' +
+      '<button class="sh-mcp-kebab" data-mcp-idx="' + idx + '" title="更多操作">⋮</button>' +
+      '<div class="sh-mcp-menu" id="sh-mcp-menu-' + idx + '">' +
+      '<div class="sh-mcp-menu-item" data-action="detail" data-mcp-idx="' + idx + '">详情</div>' +
+      (s.source === 'plugin'
+        ? '<div class="sh-mcp-menu-item disabled" title="plugin 绑定的 server 请在 plugin 配置中管理">移除</div>'
+        : '<div class="sh-mcp-menu-item danger" data-action="remove" data-mcp-idx="' + idx + '">移除</div>') +
+      '</div></div>';
+    return '<div class="sh-pg-dir-item" style="flex-direction:column;align-items:stretch;gap:6px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+      '<strong style="font-size:13px;">' + name + '</strong>' + tBadge + srcBadge + envInfo +
+      '<span style="flex:1;"></span>' + menuHtml +
+      '</div>' + detail +
+      '</div>';
+  }).join('');
+  list.querySelectorAll('.sh-mcp-kebab').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      toggleMcpMenu(this);
+    });
+  });
+  list.querySelectorAll('.sh-mcp-menu-item[data-action]').forEach(function (item) {
+    item.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var idx = parseInt(this.getAttribute('data-mcp-idx'), 10);
+      var srv = _mcpServersCache[idx];
+      closeMcpMenus();
+      if (!srv) return;
+      if (this.getAttribute('data-action') === 'detail') showMcpDetail(srv);
+      else if (this.getAttribute('data-action') === 'remove') removeMcpServer(srv.name);
+    });
+  });
+}
+
+function toggleMcpMenu(btn) {
+  var wrap = btn.parentElement;
+  var menu = wrap.querySelector('.sh-mcp-menu');
+  var wasOpen = menu.classList.contains('open');
+  closeMcpMenus();
+  if (!wasOpen) menu.classList.add('open');
+}
+
+function closeMcpMenus() {
+  document.querySelectorAll('.sh-mcp-menu.open').forEach(function (m) { m.classList.remove('open'); });
+}
+document.addEventListener('click', function () { closeMcpMenus(); });
+
+function showMcpDetail(srv) {
+  var old = document.getElementById('sh-mcp-detail-overlay');
+  if (old) old.remove();
+  var transport = srv.transport || (srv.url ? 'http' : 'stdio');
+  var rows = [
+    ['名称', srv.name || '-'],
+    ['Transport', transport],
+    ['来源', srv.source === 'plugin' ? 'plugin' : '全局配置']
+  ];
+  if (srv.command) rows.push(['Command', srv.command]);
+  if (srv.args && srv.args.length) rows.push(['Args', srv.args.join(' ')]);
+  if (srv.url) rows.push(['URL', srv.url]);
+  if (srv.env && Object.keys(srv.env).length) {
+    Object.keys(srv.env).forEach(function (k) { rows.push(['env: ' + k, srv.env[k]]); });
+  }
+  var rowsHtml = rows.map(function (r) {
+    return '<div class="sh-mcp-detail-row"><span class="sh-mcp-detail-k">' + escapeHtml(r[0]) +
+      '</span><span class="sh-mcp-detail-v">' + escapeHtml(r[1]) + '</span></div>';
+  }).join('');
+  var overlay = document.createElement('div');
+  overlay.id = 'sh-mcp-detail-overlay';
+  overlay.className = 'sh-mcp-detail-overlay';
+  overlay.innerHTML = '<div class="sh-mcp-detail-panel">' +
+    '<div class="sh-mcp-detail-head"><strong>MCP Server 详情</strong>' +
+    '<button class="sh-mcp-detail-close" id="sh-mcp-detail-close">✕</button></div>' +
+    '<div class="sh-mcp-detail-body">' + rowsHtml + '</div></div>';
+  document.body.appendChild(overlay);
+  setTimeout(function () { overlay.classList.add('visible'); }, 20);
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) closeMcpDetail(); });
+  document.getElementById('sh-mcp-detail-close').addEventListener('click', closeMcpDetail);
+}
+
+function closeMcpDetail() {
+  var overlay = document.getElementById('sh-mcp-detail-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('visible');
+  setTimeout(function () { overlay.remove(); }, 150);
+}
+
+function toggleMcpTransportFields() {
+  var sel = document.getElementById('sh-mcp-transport');
+  if (!sel) return;
+  var isHttp = sel.value === 'http';
+  var stdioFields = document.getElementById('sh-mcp-stdio-fields');
+  var httpFields = document.getElementById('sh-mcp-http-fields');
+  if (stdioFields) stdioFields.style.display = isHttp ? 'none' : '';
+  if (httpFields) httpFields.style.display = isHttp ? '' : 'none';
+}
+
+async function addMcpServer() {
+  var name = (document.getElementById('sh-mcp-name').value || '').trim();
+  var transport = document.getElementById('sh-mcp-transport').value;
+  if (!name) { if (window.shToast) shToast('请输入 server 名称'); return; }
+  var config = {};
+  if (transport === 'http') {
+    var url = (document.getElementById('sh-mcp-url').value || '').trim();
+    if (!url) { if (window.shToast) shToast('请输入 URL'); return; }
+    config.url = url;
+  } else {
+    var command = (document.getElementById('sh-mcp-command').value || '').trim();
+    if (!command) { if (window.shToast) shToast('请输入 command'); return; }
+    config.command = command;
+    var argsRaw = (document.getElementById('sh-mcp-args').value || '').trim();
+    if (argsRaw) config.args = argsRaw.split(/\s+/);
+    var envRaw = (document.getElementById('sh-mcp-env').value || '').trim();
+    if (envRaw) {
+      var env = {};
+      envRaw.split(/[\n,]/).forEach(function (pair) {
+        var idx = pair.indexOf('=');
+        if (idx > 0) env[pair.slice(0, idx).trim()] = pair.slice(idx + 1).trim();
+      });
+      if (Object.keys(env).length) config.env = env;
+    }
+  }
+  try {
+    var res = await fetch('/api/mcp/server', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, config: config })
+    });
+    var data = await res.json();
+    if (!data.success) { if (window.shToast) shToast('添加失败: ' + (data.error || '未知错误')); return; }
+    if (window.shToast) shToast('已添加 MCP server: ' + name);
+    document.getElementById('sh-mcp-name').value = '';
+    document.getElementById('sh-mcp-command').value = '';
+    document.getElementById('sh-mcp-args').value = '';
+    document.getElementById('sh-mcp-env').value = '';
+    document.getElementById('sh-mcp-url').value = '';
+    loadMcpServers();
+  } catch (e) {
+    if (window.shToast) shToast('添加失败: ' + e.message);
+  }
+}
+
+async function removeMcpServer(name) {
+  if (!name) return;
+  if (!confirm('确定移除 MCP server "' + name + '"？')) return;
+  try {
+    var res = await fetch('/api/mcp/server/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name })
+    });
+    var data = await res.json();
+    if (!data.success) { if (window.shToast) shToast('移除失败: ' + (data.error || '未知错误')); return; }
+    if (window.shToast) shToast('已移除 MCP server: ' + name);
+    loadMcpServers();
+  } catch (e) {
+    if (window.shToast) shToast('移除失败: ' + e.message);
+  }
+}
+
+async function reloadMcpServers() {
+  var btn = document.getElementById('sh-mcp-reload-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '重载中…'; }
+  try {
+    var res = await fetch('/api/mcp/reload', { method: 'POST' });
+    var data = await res.json();
+    if (data.success) {
+      if (window.shToast) shToast('MCP servers 已热重载');
+    } else {
+      if (window.shToast) shToast('重载失败: ' + (data.error || '未知错误'));
+    }
+    loadMcpServers();
+  } catch (e) {
+    if (window.shToast) shToast('重载失败: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '重载'; }
+  }
+}
+
 window.loadFilesPage = loadFilesPage;

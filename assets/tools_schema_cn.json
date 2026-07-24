@@ -69,5 +69,31 @@
     "name": "start_long_term_update",
     "description": "准备开始提炼记忆。发现值得长期记忆的信息（环境事实/用户偏好/避坑经验）时调用此工具。已记忆更新或在自主流程内时无需调用。超15轮完成的任务必须调用以沉淀经验",
     "parameters": {"type": "object", "properties": {}}}
-  }
+  },
+  {"type": "function", "function": {
+    "name": "code_search",
+    "description": "基于ripgrep的代码内容搜索。按正则匹配返回 文件:行号:内容。比code_run跑grep更省token、更快",
+    "parameters": {"type": "object", "properties": {
+      "pattern": {"type": "string", "description": "搜索的正则表达式（PCRE2语法）"},
+      "path": {"type": "string", "description": "搜索目录或文件，默认当前目录", "default": "."},
+      "include": {"type": "string", "description": "包含的文件glob，如 '*.py'、'*.{js,ts}'，逗号分隔多个"},
+      "exclude": {"type": "string", "description": "排除的glob，如 'node_modules'、'*.min.js'，逗号分隔多个"},
+      "file_pattern": {"type": "string", "description": "仅搜索文件名匹配此glob的文件（如 '*config*'）"},
+      "case_insensitive": {"type": "boolean", "description": "忽略大小写", "default": false},
+      "context_lines": {"type": "integer", "description": "匹配行前后上下文行数(0-5)", "default": 0},
+      "max_results": {"type": "integer", "description": "最大返回匹配行数（默认50，上限200）", "default": 50},
+      "fixed_strings": {"type": "boolean", "description": "将pattern视为字面字符串而非正则", "default": false}},
+      "required": ["pattern"]}
+  }},
+  {"type": "function", "function": {
+    "name": "file_find",
+    "description": "按文件名模式查找文件路径（基于ripgrep --files）。尊重.gitignore",
+    "parameters": {"type": "object", "properties": {
+      "pattern": {"type": "string", "description": "文件名glob模式，如 '*.py'、'*config*'、'test_*.js'"},
+      "path": {"type": "string", "description": "搜索根目录，默认当前目录", "default": "."},
+      "type_filter": {"type": "string", "description": "rg类型过滤：'py','js','rs','go','md','json','yaml'等"},
+      "max_results": {"type": "integer", "description": "最大结果数（默认50，上限200）", "default": 50},
+      "sort_by": {"type": "string", "enum": ["path", "modified"], "description": "按路径排序（默认）或按修改时间（最新在前）", "default": "path"}},
+      "required": ["pattern"]}
+  }}
 ]

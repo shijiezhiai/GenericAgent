@@ -172,6 +172,7 @@ def monitor_display_queue(agent_id: str, dq: "queue.Queue", trigger_when_done: b
             done = item.get("done") or acc
             pool.on_display(agent_id, done, done=True)
             push_cards()
+            task_history.record_done(agent_id)
             if trigger_when_done: conductor.notify({"type": "subagent_done", "id": agent_id, "reply": done})
             break
 
@@ -258,6 +259,84 @@ class SubagentPool:
         return {"id": sid, "status": "keyinfo_injected"}        
 
 pool = SubagentPool()
+
+# ===================== Task History Persistence =====================
+HISTORY_FILE = os.path.join(ROOT, "temp", "conductor_history.json")
+HISTORY_MAX = 200
+
+class TaskHistoryStore:
+    """Persist finished subagent task records to disk."""
+    def __init__(self, path: str = HISTORY_FILE, max_records: int = HISTORY_MAX):
+        self.path = path
+        self.max_records = max_records
+        self.lock = threading.Lock()
+        self.records: List[dict] = []
+        self._load()
+
+    def _load(self):
+        try:
+            if os.path.isfile(self.path):
+                with open(self.path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    self.records = data[:self.max_records]
+        except Exception:
+            self.records = []
+
+    def _save(self):
+        try:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            tmp = self.path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self.records, f, ensure_ascii=False, indent=1)
+            os.replace(tmp, self.path)
+        except Exception as e:
+            print(f"[history] save failed: {e}")
+
+    def record_done(self, sid: str, status_override: str = None):
+        """Persist a finished subagent run as a history record."""
+        s = pool.get(sid)
+        if not s: return
+        reply = clean_log_text(s.reply or "")
+        rec = {
+            "id": short_id(),
+            "agent_id": s.id,
+            "prompt": s.prompt,
+            "reply": reply[-8000:] if len(reply) > 8000 else reply,
+            "status": status_override or s.status,
+            "created_at": s.created_at,
+            "updated_at": s.updated_at,
+            "duration": max(0, s.updated_at - s.created_at),
+        }
+        with self.lock:
+            self.records.insert(0, rec)
+            if len(self.records) > self.max_records:
+                self.records = self.records[:self.max_records]
+            self._save()
+
+    def list(self, limit: int = 50, offset: int = 0, q: str = "") -> dict:
+        with self.lock:
+            items = list(self.records)
+        if q:
+            ql = q.lower()
+            items = [r for r in items if ql in (r.get("prompt") or "").lower() or ql in (r.get("reply") or "").lower()]
+        total = len(items)
+        page = items[offset:offset + limit]
+        out = [{**r, "reply": (r.get("reply") or "")[:300], "truncated": len(r.get("reply") or "") > 300} for r in page]
+        return {"total": total, "items": out}
+
+    def get(self, rid: str) -> Optional[dict]:
+        with self.lock:
+            for r in self.records:
+                if r["id"] == rid: return dict(r)
+        return None
+
+    def clear(self):
+        with self.lock:
+            self.records.clear()
+            self._save()
+
+task_history = TaskHistoryStore()
 
 READMES = {
 "api": f"""\
@@ -498,6 +577,7 @@ def api_subagent_action(sid: str, body: SubagentActionIn):
         s.agent.abort()
         s.status = "stopped"
         s.updated_at = int(time.time())
+        task_history.record_done(sid, status_override="aborted")
         push_cards()
         return {"id": sid, "status": "stopped"}
     return JSONResponse({"error": f"unknown action: {body.action}"}, status_code=400)
@@ -516,6 +596,22 @@ def api_chat(body: ChatIn):
 @app.post("/approval")
 def api_approval(body: ApprovalIn):
     schedule_broadcast({"type": "approval", "item": {"id": short_id(), "prompt": body.prompt, "source": body.source}})
+    return {"ok": True}
+
+# ===================== Task History API =====================
+@app.get("/history")
+def api_history(limit: int = 50, offset: int = 0, q: str = ""):
+    return task_history.list(limit=min(limit, 200), offset=offset, q=q)
+
+@app.get("/history/{rid}")
+def api_history_detail(rid: str):
+    rec = task_history.get(rid)
+    if not rec: return JSONResponse({"error": "not found"}, status_code=404)
+    return rec
+
+@app.delete("/history")
+def api_history_clear():
+    task_history.clear()
     return {"ok": True}
 
 # ===================== Skill Hub API =====================
@@ -674,6 +770,125 @@ def api_uninstall_skill(body: SkillUninstallIn):
     cfg["skills_roots"] = remaining_roots
     _write_full_config(cfg)
     return {"success": True, "name": name}
+
+
+# ─── MCP Server 管理 API ─────────────────────────────────────────────────────────
+
+def _mcp_config_path():
+    p = os.path.join(ROOT, "mcp_servers.json")
+    if os.path.isfile(p):
+        return p
+    alt = os.path.expanduser("~/.config/ga/mcp_servers.json")
+    if os.path.isfile(alt):
+        return alt
+    return p
+
+
+def _mcp_read_config():
+    path = _mcp_config_path()
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        servers = data.get("mcpServers", data) if isinstance(data, dict) else {}
+        return {k: v for k, v in servers.items() if isinstance(v, dict)} if isinstance(servers, dict) else {}
+    except Exception:
+        return {}
+
+
+def _mcp_write_config(servers: dict):
+    path = _mcp_config_path()
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"mcpServers": servers}, f, ensure_ascii=False, indent=2)
+
+
+@app.get("/api/mcp")
+def api_mcp_list():
+    """列出所有 MCP servers（全局 + plugin 绑定）"""
+    servers = []
+    global_cfg = _mcp_read_config()
+    for name, cfg in global_cfg.items():
+        servers.append({
+            "name": name, "source": "global",
+            "transport": "http" if cfg.get("url") else "stdio",
+            "command": cfg.get("command", ""), "args": cfg.get("args", []),
+            "url": cfg.get("url", ""), "env": cfg.get("env", {}),
+        })
+    try:
+        sys.path.insert(0, ROOT) if ROOT not in sys.path else None
+        from plugins import plugin_loader as _pl
+        for p in _pl._get_plugins():
+            mcp = p.get("mcp") or {}
+            if not isinstance(mcp, dict):
+                continue
+            pname = p.get("name", "")
+            for sname, scfg in mcp.items():
+                if not isinstance(scfg, dict):
+                    continue
+                servers.append({
+                    "name": f"{pname}/{sname}", "source": f"plugin:{pname}",
+                    "transport": "http" if scfg.get("url") else "stdio",
+                    "command": scfg.get("command", ""), "args": scfg.get("args", []),
+                    "url": scfg.get("url", ""), "env": scfg.get("env", {}),
+                })
+    except Exception:
+        pass
+    return {"success": True, "servers": servers, "config_path": _mcp_config_path()}
+
+
+class McpServerIn(BaseModel):
+    name: str
+    config: dict = {}
+
+
+@app.post("/api/mcp/server")
+def api_mcp_add(body: McpServerIn):
+    """添加全局 MCP server"""
+    name = body.name.strip()
+    if not name:
+        return JSONResponse({"success": False, "error": "name is required"}, status_code=400)
+    config = body.config
+    if not config or not (config.get("command") or config.get("url")):
+        return JSONResponse({"success": False, "error": "config must have 'command' or 'url'"}, status_code=400)
+    servers = _mcp_read_config()
+    if name in servers:
+        return JSONResponse({"success": False, "error": f"server '{name}' already exists"}, status_code=409)
+    servers[name] = config
+    _mcp_write_config(servers)
+    return {"success": True, "name": name, "message": f"server '{name}' added"}
+
+
+class McpServerNameIn(BaseModel):
+    name: str
+
+
+@app.post("/api/mcp/server/remove")
+def api_mcp_remove(body: McpServerNameIn):
+    """移除全局 MCP server"""
+    name = body.name.strip()
+    if not name:
+        return JSONResponse({"success": False, "error": "name is required"}, status_code=400)
+    servers = _mcp_read_config()
+    if name not in servers:
+        return JSONResponse({"success": False, "error": f"server '{name}' not found"}, status_code=404)
+    del servers[name]
+    _mcp_write_config(servers)
+    return {"success": True, "name": name, "message": f"server '{name}' removed"}
+
+
+@app.post("/api/mcp/reload")
+def api_mcp_reload():
+    """热重载所有 MCP servers"""
+    try:
+        sys.path.insert(0, ROOT) if ROOT not in sys.path else None
+        from plugins import plugin_loader as _pl
+        tools, tool_map, clients = _pl.reload_mcp_servers()
+        return {"success": True, "message": f"reloaded, {len(tools)} tools available"}
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
 
 @app.websocket("/ws")
 async def websocket(ws: WebSocket):

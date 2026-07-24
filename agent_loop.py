@@ -47,9 +47,14 @@ class BaseHandler:
                     _res = _c.call_tool(_orig, args)
                     _txt = ""
                     if isinstance(_res, dict):
-                        for _p in (_res.get("content") or []):
-                            if isinstance(_p, dict) and _p.get("type") == "text":
-                                _txt += _p.get("text", "")
+                        # P2: 优先取 structuredContent（2025-11-25 spec），fallback 到 content[].text
+                        _sc = _res.get("structuredContent")
+                        if _sc is not None:
+                            _txt = json.dumps(_sc, ensure_ascii=False) if not isinstance(_sc, str) else _sc
+                        else:
+                            for _p in (_res.get("content") or []):
+                                if isinstance(_p, dict) and _p.get("type") == "text":
+                                    _txt += _p.get("text", "")
                         if _res.get("isError"):
                             _txt = f"⚠️ MCP 工具返回错误: {_txt}"
                     else:
@@ -147,6 +152,39 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
             if len(handler._done_hooks) == 0 or exit_reason.get('result', '') == 'EXITED': break
             next_prompts.add(handler._done_hooks.pop(0))
         next_prompt = handler.turn_end_callback(response, tool_calls, tool_results, turn, '\n'.join(next_prompts), exit_reason)
+        # LSP diagnostics：检测文件编辑工具，通知 LSP 并注入诊断信息
+        try:
+            _lsp_clients = getattr(handler.parent, 'lsp_clients', None) or {}
+            if _lsp_clients:
+                _edited_files = []
+                for _tc in tool_calls:
+                    _tn, _ta = _tc['tool_name'], _tc['args']
+                    if _tn in ('file_write', 'file_patch') and _ta.get('path'):
+                        _edited_files.append(_ta['path'])
+                if _edited_files:
+                    import os as _os
+                    _diag_lines = []
+                    for _fp in _edited_files:
+                        _ap = _os.path.abspath(_fp)
+                        if not _os.path.isfile(_ap):
+                            continue
+                        try:
+                            _text = open(_ap, 'r', encoding='utf-8', errors='replace').read()
+                        except Exception:
+                            continue
+                        for _lc in _lsp_clients.values():
+                            if not _lc.handles_extension(_ap):
+                                continue
+                            _lc.did_change(_ap, _text)
+                    import time as _time; _time.sleep(0.3)  # wait for async diagnostics
+                    for _lc in _lsp_clients.values():
+                        _d = _lc.format_diagnostics()
+                        if _d:
+                            _diag_lines.append(_d)
+                    if _diag_lines:
+                        next_prompt += '\n\n' + '\n'.join(_diag_lines)
+        except Exception:
+            pass
         _hook('turn_after', locals())
         messages = [{"role": "user", "content": next_prompt, "tool_results": tool_results}]   # just new message, history is kept in *Session
     if exit_reason: handler.turn_end_callback(response, tool_calls, tool_results, turn, '', exit_reason)

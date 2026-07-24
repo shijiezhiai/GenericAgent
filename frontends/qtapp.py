@@ -459,6 +459,28 @@ def _save_history(history: list):
         json.dump(history, f, ensure_ascii=False, indent=2)
 
 
+# ── 输入历史（已发送指令），供 Ctrl+R 反向搜索使用 ──────────────────────────
+INPUT_HISTORY_FILE = "temp/ga_input_history.json"
+INPUT_HISTORY_MAX = 200
+
+
+def _load_input_history() -> list:
+    try:
+        with open(INPUT_HISTORY_FILE, "r", encoding="utf-8") as f:
+            d = json.load(f)
+            return d if isinstance(d, list) else []
+    except Exception:
+        return []
+
+
+def _save_input_history(history: list) -> None:
+    os.makedirs(os.path.dirname(INPUT_HISTORY_FILE), exist_ok=True)
+    tmp = INPUT_HISTORY_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(history[-INPUT_HISTORY_MAX:], f, ensure_ascii=False)
+    os.replace(tmp, INPUT_HISTORY_FILE)
+
+
 def _build_prompt_with_uploads(prompt: str, files: list) -> tuple:
     """
     files: list of {'name': str, 'type': str, 'raw': bytes}
@@ -1051,6 +1073,16 @@ class ChatPanel(QWidget):
         self._history: list[dict] = _load_history()
         self._pending_files: list[dict] = []  # {'name','type','raw'}
         self._settings_health_checked = False
+        # 输入历史（已发送指令），供 Ctrl+R 反向搜索使用
+        self._input_history: list[str] = _load_input_history()
+        self._hs_active = False
+        self._hs_query = ""
+        self._hs_matches: list = []
+        self._hs_idx = -1
+        self._hs_stash = ""
+        # IME 组合状态：避免把拼音字母当可打印字符塞进查询（否则出现 "d打"）
+        self._hs_ime_composing = False
+        self._hs_ime_just_committed = ""
         self._channel_mgr = ChannelManager()
 
         # 重启后自动恢复上次启用的消息通道（凭证已持久化，可无缝重连）
@@ -1586,6 +1618,15 @@ class ChatPanel(QWidget):
                 selection-background-color: rgba(124,58,237,0.4);
             }}
         """)
+        # Ctrl+R 反向历史搜索提示条（默认隐藏）
+        self._hs_hint = QLabel("")
+        self._hs_hint.setStyleSheet(
+            f"color: {C['accent']}; background: rgba(124,58,237,0.12);"
+            f" border: 1px solid {C['accent_bdr']}; border-radius: 6px;"
+            " padding: 3px 8px; font-size: 11px;"
+        )
+        self._hs_hint.hide()
+        card_ly.addWidget(self._hs_hint)
         self._input.installEventFilter(self)
         self._input.textChanged.connect(self._on_text_changed)
         card_ly.addWidget(self._input)
@@ -1901,10 +1942,21 @@ class ChatPanel(QWidget):
             if obj is self._search_input and event.key() == Qt.Key_Escape:
                 self._hide_search()
                 return True
-            if obj is self._input and event.key() in (Qt.Key_Return, Qt.Key_Enter):
-                if not (event.modifiers() & Qt.ShiftModifier):
-                    self._handle_send()
+            if obj is self._input:
+                # Ctrl+R 反向历史搜索模式（zsh 风格）：不自动触发，仅 Ctrl+R 进入
+                if self._hs_active:
+                    return self._hs_event(event)
+                if event.key() == Qt.Key_R and (event.modifiers() & Qt.ControlModifier):
+                    self._hs_start()
                     return True
+                if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                    if not (event.modifiers() & Qt.ShiftModifier):
+                        self._handle_send()
+                        return True
+        # IME 输入法事件：中文经 inputMethodEvent 提交，单独捕获，避免拼音字母混入查询
+        if event.type() == QEvent.InputMethod and obj is self._input and self._hs_active:
+            self._hs_ime_event(event)
+            return True
         # 搜索框失焦时关闭搜索
         if event.type() == QEvent.FocusOut and obj is self._search_input:
             # 延迟关闭，等待点击事件处理完毕
@@ -1914,6 +1966,159 @@ class ChatPanel(QWidget):
     def _on_text_changed(self):
         n = len(self._input.toPlainText())
         self._char_lbl.setText(f"{n} / 2000")
+
+    # ── Ctrl+R 反向历史搜索（zsh 风格）──
+    def _record_input_history(self, text: str) -> None:
+        text = (text or "").strip()
+        if not text:
+            return
+        if self._input_history and self._input_history[-1] == text:
+            return
+        self._input_history.append(text)
+        if len(self._input_history) > INPUT_HISTORY_MAX:
+            self._input_history = self._input_history[-INPUT_HISTORY_MAX:]
+        _save_input_history(self._input_history)
+
+    def _hs_compute(self, query: str) -> list:
+        q = (query or "").lower()
+        if not q:
+            return list(range(len(self._input_history)))
+        return [i for i, h in enumerate(self._input_history) if q in h.lower()]
+
+    def _hs_show(self) -> None:
+        if not self._hs_matches:
+            self._input.setPlainText("")
+            self._hs_update_prompt(0, 0, empty=True)
+            return
+        idx = max(0, min(self._hs_idx, len(self._hs_matches) - 1))
+        self._hs_idx = idx
+        text = self._input_history[self._hs_matches[idx]]
+        self._input.setPlainText(text)
+        pos = text.lower().find(self._hs_query.lower()) if self._hs_query else len(text)
+        if pos < 0:
+            pos = len(text)
+        cursor = self._input.textCursor()
+        cursor.setPosition(pos)
+        self._input.setTextCursor(cursor)
+        self._hs_update_prompt(idx + 1, len(self._hs_matches))
+
+    def _hs_update_prompt(self, cur: int, total: int, empty: bool = False) -> None:
+        if not hasattr(self, "_hs_hint"):
+            return
+        if empty:
+            self._hs_hint.setText(f"🔍 (reverse-i-search)`{self._hs_query}`: 无匹配 — Esc 取消")
+        else:
+            self._hs_hint.setText(
+                f"🔍 (reverse-i-search)`{self._hs_query}`:  [{cur}/{total}]"
+                f"  Enter确认 · Esc取消 · Ctrl+R下一条"
+            )
+        self._hs_hint.show()
+
+    def _hs_start(self) -> None:
+        if not self._input_history:
+            if hasattr(self, "_hs_hint"):
+                self._hs_hint.setText("🔍 暂无历史记录可搜索，先发几条消息")
+                self._hs_hint.show()
+            return
+        self._hs_active = True
+        self._hs_query = ""
+        self._hs_stash = self._input.toPlainText()
+        self._hs_ime_composing = False
+        self._hs_ime_just_committed = ""
+        self._hs_matches = self._hs_compute("")
+        self._hs_idx = len(self._hs_matches) - 1
+        self._hs_show()
+
+    def _hs_type(self, ch: str) -> None:
+        self._hs_query += ch
+        self._hs_matches = self._hs_compute(self._hs_query)
+        self._hs_idx = len(self._hs_matches) - 1
+        self._hs_show()
+
+    def _hs_backspace(self) -> None:
+        if self._hs_query:
+            self._hs_query = self._hs_query[:-1]
+            self._hs_matches = self._hs_compute(self._hs_query)
+            self._hs_idx = len(self._hs_matches) - 1
+            self._hs_show()
+        else:
+            self._hs_cancel()
+
+    def _hs_cycle(self) -> None:
+        if not self._hs_matches:
+            return
+        self._hs_idx = (self._hs_idx - 1) % len(self._hs_matches)
+        self._hs_show()
+
+    def _hs_accept(self) -> None:
+        self._hs_active = False
+        self._hs_query = ""
+        self._hs_matches = []
+        self._hs_idx = -1
+        self._hs_ime_composing = False
+        self._hs_ime_just_committed = ""
+        if hasattr(self, "_hs_hint"):
+            self._hs_hint.hide()
+
+    def _hs_cancel(self) -> None:
+        self._hs_active = False
+        self._input.setPlainText(self._hs_stash)
+        self._hs_query = ""
+        self._hs_matches = []
+        self._hs_idx = -1
+        self._hs_ime_composing = False
+        self._hs_ime_just_committed = ""
+        if hasattr(self, "_hs_hint"):
+            self._hs_hint.hide()
+
+    def _hs_event(self, event) -> bool:
+        key = event.key()
+        mods = event.modifiers()
+        text = event.text()
+        # IME 已在 inputMethodEvent 中提交中文；若随后跟一个 Key_Unknown 的按键，
+        # 视为同一提交的残留，跳过避免重复把中文写两次
+        if self._hs_ime_just_committed and key == Qt.Key_Unknown:
+            self._hs_ime_just_committed = ""
+            return True
+        # IME 组合进行中（拼音阶段）：所有组合键一律吞掉，不追加到查询，
+        # 否则会出现 "d打" 这类「拼音首字母 + 中文」的脏查询
+        if self._hs_ime_composing:
+            return True
+        if key in (Qt.Key_Return, Qt.Key_Enter) and not (mods & Qt.ShiftModifier):
+            self._hs_accept(); return True
+        if key == Qt.Key_Escape or (key == Qt.Key_G and (mods & Qt.ControlModifier)):
+            self._hs_cancel(); return True
+        if key == Qt.Key_R and (mods & Qt.ControlModifier):
+            self._hs_cycle(); return True
+        if key == Qt.Key_Backspace:
+            self._hs_backspace(); return True
+        # 方向键 / Home / End：退出搜索并保留匹配文本，让光标移动
+        if key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right, Qt.Key_Home, Qt.Key_End):
+            self._hs_active = False
+            self._hs_query = ""; self._hs_matches = []; self._hs_idx = -1
+            if hasattr(self, "_hs_hint"):
+                self._hs_hint.hide()
+            return False
+        # IME 组合进行中（无文本且 key 为 Key_Unknown）：吞掉，不追加也不取消
+        if key == Qt.Key_Unknown and not text:
+            return True
+        # 可打印字符 / IME 提交：event.text() 携带整段中文（可能多字符），
+        # key 通常为 Key_Unknown（0），故不再用 len(text)==1 限制
+        if text and not (mods & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)):
+            if all(c.isprintable() and c not in "\r\n\t" for c in text):
+                self._hs_type(text); return True
+            return True  # 含不可打印字符则仅吞掉，不取消
+        # 其它键：取消搜索并吞掉，避免误触发
+        self._hs_cancel(); return True
+
+    def _hs_ime_event(self, event) -> None:
+        # 输入法组合事件：仅捕获「提交」文本（中文），拼音组合阶段（preedit）不写入查询
+        commit = event.commitString()
+        preedit = event.preeditString()
+        if commit:
+            self._hs_type(commit)
+            self._hs_ime_just_committed = commit
+        self._hs_ime_composing = bool(preedit)
 
     # ── file attachment ────────────────────────────────────────────────────────
     def _attach_files(self):
@@ -1999,6 +2204,7 @@ class ChatPanel(QWidget):
         files = self._pending_files.copy()
         if not text and not files:
             return
+        self._record_input_history(text)  # 记录已发送指令，供 Ctrl+R 搜索
 
         if text.startswith("/"):
             self._input.clear()
