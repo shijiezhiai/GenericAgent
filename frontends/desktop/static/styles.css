@@ -4770,3 +4770,142 @@ textarea.lib-input{ resize:vertical; min-height:66px; }
   color:var(--on-accent,#fff);
   transform:scale(1.08);
 }
+
+/* ═══════════ Markdown 编辑器（大文本框 编辑/预览 切换） ═══════════ */
+.mded{ width:100%; }
+.mded-bar{
+  display:flex; align-items:center; gap:10px;
+  margin:0 2px 6px;
+  opacity:.78; transition:opacity .18s ease;
+}
+.mded:focus-within .mded-bar, .mded-bar:hover{ opacity:1; }
+.mded-hint{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:11px; letter-spacing:.03em; color:var(--muted);
+  user-select:none;
+}
+.mded-hint::before{
+  content:''; width:5px; height:5px; border-radius:50%;
+  background:var(--accent);
+  animation:mdedPulse 2.4s ease-in-out infinite;
+}
+@keyframes mdedPulse{
+  0%,100%{ opacity:.35; transform:scale(.85); }
+  50%{ opacity:.9; transform:scale(1); }
+}
+.mded-count{
+  margin-left:auto; font-size:11px; color:var(--muted);
+  font-variant-numeric:tabular-nums; letter-spacing:.02em;
+}
+.mded-toggle{
+  display:inline-flex; gap:2px; padding:2px;
+  margin-left:auto;
+  background:color-mix(in srgb, var(--muted) 10%, transparent);
+  border:1px solid var(--line-soft);
+  border-radius:8px;
+}
+.mded-count + .mded-toggle{ margin-left:0; }
+.mded-toggle button{
+  border:none; cursor:pointer; background:transparent;
+  font-family:inherit; font-size:12px; line-height:1;
+  padding:4px 11px; border-radius:6px;
+  color:var(--muted);
+  transition:color .15s ease, background .18s ease, box-shadow .18s ease, transform .1s ease;
+}
+.mded-toggle button:hover{ color:var(--txt); }
+.mded-toggle button:active{ transform:scale(.95); }
+.mded-toggle button.active{
+  background:var(--panel); color:var(--accent); font-weight:600;
+  box-shadow:0 1px 4px rgba(0,0,0,.14);
+}
+.mded-body{ position:relative; }
+.mded-body > textarea{
+  position:relative; z-index:1; display:block; margin:0;
+  background:transparent !important;
+  color:transparent !important;
+  -webkit-text-fill-color:transparent;
+  caret-color:var(--accent);
+}
+.mded-body > textarea::placeholder{ -webkit-text-fill-color:var(--muted); opacity:.75; }
+.mded-body > textarea::selection{
+  background:color-mix(in srgb, var(--accent) 28%, transparent);
+  color:transparent; -webkit-text-fill-color:transparent;
+}
+.mded-overlay{
+  position:absolute; inset:0; z-index:0;
+  margin:0; overflow:hidden; pointer-events:none;
+  white-space:pre-wrap; word-wrap:break-word; overflow-wrap:break-word;
+  background:var(--field-bg);
+  color:var(--txt);
+  border-style:solid; border-color:transparent !important;
+}
+.mded-preview{
+  overflow:auto; padding:10px 14px;
+  border:1px solid var(--line); border-radius:8px;
+  background:var(--field-bg);
+  font-size:13.5px; line-height:1.7; color:var(--txt);
+  animation:mdedFade .2s cubic-bezier(.2,.7,.3,1);
+}
+@keyframes mdedFade{ from{ opacity:0; transform:translateY(3px); } to{ opacity:1; transform:none; } }
+.mded-preview > :first-child{ margin-top:0; }
+.mded-preview > :last-child{ margin-bottom:0; }
+.mded-preview p{ margin:0 0 8px; }
+.mded-preview h1,.mded-preview h2,.mded-preview h3,.mded-preview h4,.mded-preview h5,.mded-preview h6{ margin:14px 0 6px; font-weight:600; line-height:1.35; }
+.mded-preview h1{ font-size:1.35em; } .mded-preview h2{ font-size:1.22em; } .mded-preview h3{ font-size:1.1em; }
+.mded-preview ul,.mded-preview ol{ margin:0 0 8px; padding-left:22px; }
+.mded-preview li{ margin:2px 0; }
+.mded-preview blockquote{
+  margin:0 0 8px; padding:5px 12px;
+  border-left:3px solid var(--accent);
+  background:color-mix(in srgb, var(--accent) 7%, transparent);
+  border-radius:0 6px 6px 0; color:var(--muted);
+}
+.mded-preview code{
+  font-family:var(--font-mono); font-size:.88em;
+  background:color-mix(in srgb, var(--muted) 16%, transparent);
+  padding:1px 5px; border-radius:4px;
+}
+.mded-preview a{ color:var(--accent); text-decoration:none; border-bottom:1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.mded-preview a:hover{ border-bottom-color:var(--accent); }
+.mded-preview hr{ border:none; border-top:1px solid var(--line-soft); margin:12px 0; }
+.mded-preview table{ border-collapse:collapse; margin:0 0 8px; font-size:.95em; }
+.mded-preview th,.mded-preview td{ border:1px solid var(--line); padding:4px 9px; }
+.mded-preview th{ background:color-mix(in srgb, var(--muted) 10%, transparent); }
+.mded-preview img{ max-width:100%; border-radius:6px; }
+.mded-preview .code-block{ margin:0 0 8px; }
+.mded-empty{ color:var(--muted); font-style:italic; font-size:12.5px; }
+/* —— 编辑态语法高亮 token —— */
+.mded-tok-heading{ color:var(--accent); font-weight:700; }
+.mded-tok-hash{ color:var(--accent); opacity:.5; }
+.mded-tok-bold{ font-weight:700; }
+.mded-tok-em{ font-style:italic; }
+.mded-tok-del{ text-decoration:line-through; opacity:.55; }
+.mded-tok-code{
+  color:color-mix(in srgb, var(--accent) 72%, var(--txt));
+  background:color-mix(in srgb, var(--muted) 14%, transparent);
+  border-radius:3px;
+}
+.mded-tok-codeblock{ color:color-mix(in srgb, var(--accent) 55%, var(--txt)); }
+.mded-tok-fence{ color:var(--muted); opacity:.7; }
+.mded-tok-link{ color:var(--accent); }
+.mded-tok-url{ color:var(--muted); font-size:.92em; }
+.mded-tok-img{ color:var(--muted); font-style:italic; }
+.mded-tok-quote{ color:var(--muted); }
+.mded-tok-qmark{ color:var(--accent); opacity:.65; font-weight:600; }
+.mded-tok-list{ color:var(--accent); font-weight:600; }
+.mded-tok-task{ color:var(--accent); }
+.mded-tok-hr{ color:var(--muted); opacity:.65; }
+/* —— 紧凑 Markdown 展示（资料库条目描述等） —— */
+.md-compact{ font-size:12.5px; line-height:1.55; }
+.md-compact > :first-child{ margin-top:0; }
+.md-compact > :last-child{ margin-bottom:0; }
+.md-compact p{ margin:0 0 4px; }
+.md-compact ul,.md-compact ol{ margin:0 0 4px; padding-left:20px; }
+.md-compact code{
+  font-family:var(--font-mono); font-size:.88em;
+  background:color-mix(in srgb, var(--muted) 16%, transparent);
+  padding:0 4px; border-radius:3px;
+}
+.md-compact pre{ margin:4px 0; }
+.md-compact blockquote{ margin:0 0 4px; padding:2px 10px; border-left:2px solid var(--accent); color:var(--muted); }
+.md-compact h1,.md-compact h2,.md-compact h3{ font-size:1em; font-weight:600; margin:0 0 3px; }
