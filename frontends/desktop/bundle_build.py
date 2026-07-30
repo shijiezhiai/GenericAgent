@@ -138,6 +138,16 @@ def step_wheels():
     if not os.path.exists(py):
         step_python()
     wheels_dir = os.path.join(RUNTIME, "wheels")
+    # 关键：先清掉旧 wheels（含 _dupes 子目录），避免跨次构建累积同名多版本
+    # 包，导致 install_macos.sh 里 `pip install *.whl` 出现 ResolutionImpossible。
+    if os.path.isdir(wheels_dir):
+        for name in os.listdir(wheels_dir):
+            p = os.path.join(wheels_dir, name)
+            if name.endswith(".whl") or name == "_dupes":
+                if os.path.isdir(p):
+                    shutil.rmtree(p)
+                else:
+                    os.remove(p)
     os.makedirs(wheels_dir, exist_ok=True)
     log("收集 wheels: " + ", ".join(CORE_DEPS))
     subprocess.run(
@@ -165,6 +175,45 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 echo "GAPROGRESS|deps"
+# 去重：同一包只保留最新版本，避免 wheels/ 残留多版本同名包导致 ResolutionImpossible。
+# 用纯标准库解析 wheel 文件名（嵌入式 python 没有顶层 packaging 模块），
+# 版本按数字段比较，兼容 0.140.13 vs 0.141.1 这类比较。
+"$PY" - "$WHEELDIR" <<'PYEOF'
+import os, glob, sys
+def parse(fname):
+    base = fname[:-4] if fname.endswith(".whl") else fname
+    parts = base.split("-")
+    if len(parts) < 5:
+        return None
+    return parts[0].lower(), parts[1]
+def verkey(v):
+    out = []
+    for x in v.split("."):
+        out.append((0, x.zfill(8)) if x.isdigit() else (1, x))
+    return out
+wheels = glob.glob(os.path.join(sys.argv[1], "*.whl"))
+best = {}
+for f in wheels:
+    p = parse(os.path.basename(f))
+    if not p:
+        continue
+    name, ver = p
+    if name not in best or verkey(ver) > verkey(best[name]):
+        best[name] = ver
+keep = set()
+for f in wheels:
+    p = parse(os.path.basename(f))
+    if not p:
+        keep.add(f); continue
+    name, ver = p
+    if ver == best[name]:
+        keep.add(f)
+dup = os.path.join(sys.argv[1], "_dupes")
+for f in wheels:
+    if f not in keep:
+        os.makedirs(dup, exist_ok=True)
+        os.rename(f, os.path.join(dup, os.path.basename(f)))
+PYEOF
 "$PY" -m pip install --no-index --upgrade "$WHEELDIR"/*.whl
 echo "GAPROGRESS|done"
 """

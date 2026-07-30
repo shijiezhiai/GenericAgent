@@ -191,24 +191,40 @@ fn ensure_writable_runtime() -> Option<PathBuf> {
     let dst_app = base.join("app");
     let dst_py = base.join("python");
     let version_file = base.join(".app-clone-version");
-    let need_copy = match std::fs::read_to_string(&version_file) {
+
+    // app 源码随构建版本变化重克隆（含用户数据 stash/restore）。
+    let app_need_copy = match std::fs::read_to_string(&version_file) {
         Ok(v) if v.trim() == env!("GA_BUILD_ID") => false,
         _ => true,
     };
-    if need_copy {
+    // python 只在「不存在或从未成功 prepare」时克隆，避免覆盖已装 wheels 的可写副本
+    // （否则每次升级重克隆都会清掉 wheels，还得重装）。prepare 成功标记见 prepared_marker()。
+    let py_need_copy = !dst_py.join("bin").join("python3").exists()
+        || !dst_py.join(".prepared").exists();
+
+    let mut ok = true;
+
+    if app_need_copy {
         // 升级重克隆会整体删掉 dst_app，但其中的用户数据（会话历史 temp/、定时任务、
         // 运行期演化的 memory/、mykey.py 等）必须跨版本保留：先挪到 hold 目录，克隆后挪回。
         let hold = base.join(".upgrade-hold");
         let _ = std::fs::remove_dir_all(&hold);
         let preserved = stash_user_data(&dst_app, &hold);
-        if !clone_dir(&src_app, &dst_app) || !clone_dir(&src_py, &dst_py) {
-            restore_user_data(&hold, &dst_app, &preserved);
-            return None;
+        if !clone_dir(&src_app, &dst_app) {
+            ok = false;
         }
         restore_user_data(&hold, &dst_app, &preserved);
         let _ = std::fs::remove_dir_all(&hold);
-        let _ = std::fs::write(&version_file, env!("GA_BUILD_ID"));
     }
+
+    if py_need_copy && !clone_dir(&src_py, &dst_py) {
+        ok = false;
+    }
+
+    if !ok {
+        return None;
+    }
+    let _ = std::fs::write(&version_file, env!("GA_BUILD_ID"));
     Some(dst_app)
 }
 
@@ -531,12 +547,20 @@ fn bundle_root() -> Option<PathBuf> {
     None
 }
 
-/// Marker written after a successful offline prepare. Must live in a writable dir: the
-/// in-bundle runtime/ is read-only, so writing .prepared there silently fails and
-/// needs_first_run_prepare() stays true (re-running prepare on every launch). We put it
-/// under the app-support dir (same place as the writable app clone).
+/// Marker written after a successful offline prepare. Must live INSIDE the writable
+/// python clone (app-support/python/.prepared), NOT in the app-support root:
+/// - the in-bundle runtime/ is read-only, so writing it there silently fails;
+/// - more importantly, ensure_writable_runtime() does a clean replace of app-support/python
+///   on upgrade, which would wipe a root-level marker and wrongly skip re-prepare.
+/// With the marker inside python/, a clean re-clone removes it -> needs_first_run_prepare
+/// becomes true -> run_offline_prepare re-installs wheels into the fresh copy.
 fn prepared_marker() -> Option<PathBuf> {
-    Some(dirs::data_dir()?.join("GenericAgent").join(".prepared"))
+    Some(
+        dirs::data_dir()?
+            .join("GenericAgent")
+            .join("python")
+            .join(".prepared"),
+    )
 }
 
 /// True when this is a self-contained bundle whose python env has not been prepared yet
@@ -699,6 +723,8 @@ fn spawn_gateway(python_path: &str, project_dir: &str) {
         root: PathBuf::from(project_dir),
         port: 14168,
         conductor_port: 8900,
+        cdp_port: 18765,  // TMWebDriver (CDP browser bridge) upstream, folded as /cdp
+        grok_port: 15433, // supergrok_proxy upstream, folded as /proxy
         fallback: String::new(),
         legacy_port: 14169,
         kernel_python: python_path.to_string(),
