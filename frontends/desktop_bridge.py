@@ -81,10 +81,25 @@ _SNAP_SKIP_DIRS = {'.git', '__pycache__', 'node_modules', '.venv', 'venv',
 _SNAP_SKIP_SUFFIX = ('.pyc', '.pyo', '.log', '.tmp')
 _SNAP_MAX_DEPTH = 5
 _SNAP_MAX_FILES = 2000
+_SNAP_TEXT_LIMIT = 256 * 1024
+_ARTIFACT_DIFF_LIMIT = 16000
+
+
+def _snapshot_file(path: str) -> dict:
+    stat = os.stat(path)
+    item = {"mtime_ns": stat.st_mtime_ns, "size": stat.st_size, "text": None}
+    if stat.st_size <= _SNAP_TEXT_LIMIT:
+        try:
+            raw = Path(path).read_bytes()
+            if b'\0' not in raw:
+                item["text"] = raw.decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            pass
+    return item
 
 
 def _snapshot_cwd(cwd: str) -> dict:
-    """遍历cwd,返回 {相对路径: mtime} 快照。忽略常见噪音目录,限制深度/数量防爆。"""
+    """遍历 cwd，返回可生成 artifact diff 的轻量快照。"""
     snap = {}
     base = os.path.abspath(cwd)
     if not os.path.isdir(base):
@@ -105,7 +120,7 @@ def _snapshot_cwd(cwd: str) -> dict:
                 rel = os.path.join(rel_dp, fn) if rel_dp != '.' else fn
                 fp = os.path.join(dirpath, fn)
                 try:
-                    snap[rel] = os.path.getmtime(fp)
+                    snap[rel] = _snapshot_file(fp)
                 except OSError:
                     pass
                 if len(snap) >= _SNAP_MAX_FILES:
@@ -115,18 +130,44 @@ def _snapshot_cwd(cwd: str) -> dict:
     return snap
 
 
+def _artifact_diff(rel: str, old_text: Optional[str], new_text: Optional[str]) -> tuple:
+    if old_text is None or new_text is None:
+        return "", 0, 0
+    import difflib
+    lines = list(difflib.unified_diff(
+        old_text.splitlines(), new_text.splitlines(),
+        fromfile=f"a/{rel}" if old_text else "/dev/null",
+        tofile=f"b/{rel}" if new_text else "/dev/null",
+        lineterm="",
+    ))
+    additions = sum(1 for line in lines if line.startswith('+') and not line.startswith('+++'))
+    deletions = sum(1 for line in lines if line.startswith('-') and not line.startswith('---'))
+    diff = "\n".join(lines)
+    if len(diff) > _ARTIFACT_DIFF_LIMIT:
+        diff = diff[:_ARTIFACT_DIFF_LIMIT] + "\n... [diff truncated]"
+    return diff, additions, deletions
+
+
 def _diff_cwd(before: dict, cwd: str) -> list:
-    """对比执行前后快照,返回新增/修改文件列表 [{name,path,type}]。path为绝对路径。"""
+    """返回结构化产出物：状态、大小、unified diff 与增删行统计。"""
     after = _snapshot_cwd(cwd)
     base = os.path.abspath(cwd)
     out = []
-    for rel, mtime in after.items():
-        if rel not in before or before[rel] < mtime:
-            ext = os.path.splitext(rel)[1].lstrip('.').lower()
-            abs_path = os.path.join(base, rel)
-            out.append({"name": os.path.basename(rel), "path": abs_path, "type": ext})
-    # 排序: 按名字
-    out.sort(key=lambda x: x["name"])
+    for rel in sorted(set(before) | set(after)):
+        old, new = before.get(rel), after.get(rel)
+        if old and new and old["mtime_ns"] == new["mtime_ns"] and old["size"] == new["size"]:
+            continue
+        change = "created" if old is None else "deleted" if new is None else "modified"
+        old_text = old.get("text") if old else ""
+        new_text = new.get("text") if new else ""
+        diff, additions, deletions = _artifact_diff(rel, old_text, new_text)
+        ext = os.path.splitext(rel)[1].lstrip('.').lower()
+        out.append({
+            "name": os.path.basename(rel), "path": os.path.join(base, rel), "type": ext,
+            "relative_path": rel, "change": change, "size": (new or old).get("size", 0),
+            "diff": diff, "additions": additions, "deletions": deletions,
+            "previewable": new is not None,
+        })
     return out
 
 
@@ -161,6 +202,7 @@ class Session:
     plan_path: str = ""
     workspace: str = ""
     project: str = ""
+    folder_id: str = ""        # 对话所属文件夹（服务端共享，替代 per-origin localStorage）
     llm_history: Optional[List[dict]] = None
 
 
@@ -191,6 +233,7 @@ class AgentManager:
         self.sessions: Dict[str, Session] = {}
         self.active_session_id: Optional[str] = None
         self._sessions_file = Path(self.ga_root) / "temp" / "desktop_sessions.json"
+        self._conv_folders_file = Path(self.ga_root) / "temp" / "conv_folders.json"
         self._load_sessions()
 
     @property
@@ -217,6 +260,7 @@ class AgentManager:
                                 "plan_path": s.plan_path or "",
                                 "workspace": s.workspace or "",
                                 "project": s.project or "",
+                                "folder_id": s.folder_id or "",
                                 "llm_history": llm_hist})
             self._sessions_file.write_text(json.dumps(arr, ensure_ascii=False, default=str), encoding="utf-8")
         except Exception as e:
@@ -242,6 +286,7 @@ class AgentManager:
                                    item["id"], item.get("plan_path") or ""),
                                workspace=item.get("workspace", ""),
                                project=item.get("project", ""),
+                               folder_id=item.get("folder_id", ""),
                                status="idle", agent=None,
                                llm_history=item.get("llm_history"))
                 self.sessions[sess.id] = sess
@@ -249,6 +294,46 @@ class AgentManager:
                 self.active_session_id = max(self.sessions.values(), key=lambda s: s.updated_at).id
         except Exception as e:
             print(f"[bridge] load sessions failed: {e}", file=sys.stderr)
+
+    def _load_conv_folders(self) -> List[dict]:
+        """读取对话文件夹定义（服务端共享）。返回规范化的 folder 列表。"""
+        try:
+            f = self._conv_folders_file
+            if not f.exists():
+                return []
+            raw = json.loads(f.read_text(encoding="utf-8"))
+            if not isinstance(raw, list):
+                return []
+            out = []
+            for it in raw:
+                if not it or not it.get("id"):
+                    continue
+                name = str(it.get("name") or "").strip()
+                if not name:
+                    continue
+                out.append({
+                    "id": str(it["id"]),
+                    "name": name,
+                    "locked": bool(it.get("locked")),
+                    "sort_order": int(it.get("sort_order", 0) or 0),
+                })
+            return out
+        except Exception as e:
+            print(f"[bridge] load conv_folders failed: {e}", file=sys.stderr)
+            return []
+
+    def _save_conv_folders(self, folders: List[dict]):
+        try:
+            f = self._conv_folders_file
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(json.dumps(folders, ensure_ascii=False, default=str), encoding="utf-8")
+        except Exception as e:
+            print(f"[bridge] save conv_folders failed: {e}", file=sys.stderr)
+
+    def _conv_folder_assignments(self) -> Dict[str, str]:
+        """从各 session 汇总 folder_id 分配（sid -> folderId）。"""
+        with self.lock:
+            return {sid: (s.folder_id or "") for sid, s in self.sessions.items() if s.folder_id}
 
     def _datasources_file(self):
         return Path(self.ga_root) / "temp" / "desktop_datasources.json"
@@ -1249,6 +1334,7 @@ class AgentManager:
             "model": self._live_model(sess),
             "workspace": sess.workspace or "",
             "project": sess.project or "",
+            "folderId": sess.folder_id or "",
             "branch": self._workspace_branch(sess.workspace) if sess.workspace else "",
         }
         if include_messages:
@@ -1721,11 +1807,15 @@ _SERVICE_KEYS: Dict[str, tuple] = {
 # 服务 -> 单例/监听端口映射。bridge 重启后, 上次启动的子进程会变成孤儿
 # (PPID=1) 仍占着 bind 端口, 导致新实例 bind 失败 (Errno 48 / 单例锁冲突),
 # watchdog 重试 5 次耗尽后放弃。start_service 前用此映射清理孤儿。
+# conductor/scheduler 端口可用 env 覆盖(并行部署第二套实例时必须改,
+# 否则 _reap_orphan 会按端口 kill 掉另一套实例的进程)。
+CONDUCTOR_PORT = int(os.environ.get("CONDUCTOR_PORT", "8900"))
+SCHEDULER_LOCK_PORT = int(os.environ.get("GA_SCHEDULER_LOCK_PORT", "45762"))
 _SERVICE_PORTS: Dict[str, int] = {
     "frontends/wechatapp.py": 19531,    # socket 单例锁
     "frontends/wecomapp.py": 19531,     # socket 单例锁 (与微信共用)
-    "frontends/conductor.py": 8900,     # uvicorn 监听
-    "reflect/scheduler.py": 45762,      # socket 单例锁 (agentmain --reflect)
+    "frontends/conductor.py": CONDUCTOR_PORT,       # uvicorn 监听
+    "reflect/scheduler.py": SCHEDULER_LOCK_PORT,    # socket 单例锁 (agentmain --reflect)
 }
 
 
@@ -2075,7 +2165,11 @@ class ServiceManager:
             except Exception as e:
                 tag = f"exception {type(e).__name__}: {e}"
             print(f"[autostart] {sid}: {tag}", file=sys.stderr)
-        # 恢复用户重启前启用的IM通道
+        # 恢复用户重启前启用的IM通道。GA_NO_IM_AUTOSTART=1 跳过
+        # (并行测试第二套实例时防止 IM 机器人重复收发消息)。
+        if os.environ.get("GA_NO_IM_AUTOSTART"):
+            print("[autostart-im] skipped (GA_NO_IM_AUTOSTART)", file=sys.stderr)
+            return
         for sid in sorted(self._autostart_set):
             try:
                 res = self.start_service(sid)
@@ -2522,9 +2616,67 @@ async def patch_session_handler(request):
         sess.untitled = bool(data["untitled"])
     if "plan_scan_baseline" in data:
         sess.plan_scan_baseline = int(data["plan_scan_baseline"])
+    if "folder_id" in data:
+        fid = str(data["folder_id"] or "")
+        sess.folder_id = fid[:64]
     sess.updated_at = time.time()
     manager._persist()
     return json_ok({"ok": True, "session": manager.snapshot(sess, include_messages=False)})
+
+
+# ── 对话文件夹（服务端共享，替代 per-origin localStorage）─────────────────
+async def conv_folders_get_handler(request):
+    with manager.lock:
+        folders = manager._load_conv_folders()
+        assignments = manager._conv_folder_assignments()
+    return json_ok({"folders": folders, "assignments": assignments})
+
+
+async def conv_folders_put_handler(request):
+    data = await read_json(request)
+    raw_folders = data.get("folders")
+    if not isinstance(raw_folders, list):
+        return json_ok({"ok": False, "error": "folders 字段必须是数组"}, status=400)
+    SYS = {"default", "archived"}
+    folders = []
+    seen = set()
+    for it in raw_folders:
+        if not it or not it.get("id"):
+            continue
+        fid = str(it["id"])
+        name = str(it.get("name") or "").strip()
+        if not name:
+            continue
+        # 系统文件夹(default/archived)只允许由客户端以锁定态上报，不允许改名/删除
+        locked = bool(it.get("locked")) or fid in SYS
+        if fid in SYS:
+            name = "default" if fid == "default" else "archived"
+        if fid in seen:
+            continue
+        seen.add(fid)
+        folders.append({"id": fid, "name": name, "locked": locked,
+                        "sort_order": int(it.get("sort_order", 0) or 0)})
+    manager._save_conv_folders(folders)
+    # 可选：批量更新会话所属文件夹
+    assignments = data.get("assignments")
+    changed = False
+    if isinstance(assignments, dict):
+        valid_ids = {f["id"] for f in folders} | SYS
+        with manager.lock:
+            for sid, fid in assignments.items():
+                sess = manager.sessions.get(sid)
+                if not sess:
+                    continue
+                fid = str(fid or "")
+                if fid and fid not in valid_ids:
+                    fid = ""
+                if sess.folder_id != fid:
+                    sess.folder_id = fid
+                    changed = True
+        if changed:
+            manager._persist()
+    return json_ok({"ok": True, "folders": folders,
+                    "assignments": manager._conv_folder_assignments()})
 
 
 async def prompt_handler(request):
@@ -2807,6 +2959,26 @@ async def pick_folder_handler(request):
         proc = await asyncio.create_subprocess_exec(
             "osascript", "-e",
             'POSIX path of (choose folder with prompt "选择要加入资料库的文件夹")',
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        out, _err = await asyncio.wait_for(proc.communicate(), timeout=300)
+        path = out.decode("utf-8", "replace").strip()
+        if proc.returncode != 0 or not path:
+            return json_ok({"path": "", "cancelled": True})
+        return json_ok({"path": path.rstrip("/"), "cancelled": False})
+    except asyncio.TimeoutError:
+        return json_ok({"path": "", "cancelled": True})
+    except Exception as e:
+        return web.json_response({"error": "picker failed: %s" % e}, status=500, headers=cors_headers())
+
+
+async def pick_file_handler(request):
+    """POST /api/pick-file - 弹出 macOS 原生文件选择对话框，返回所选单个文件的绝对路径。
+    供「添加文件资料库」时选择单个本地文件（而非整个文件夹）。用户取消或失败均返回 cancelled。"""
+    import asyncio
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "osascript", "-e",
+            'POSIX path of (choose file with prompt "选择要加入资料库的本地文件")',
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         out, _err = await asyncio.wait_for(proc.communicate(), timeout=300)
         path = out.decode("utf-8", "replace").strip()
@@ -3299,7 +3471,9 @@ async def project_experts_get_handler(request):
         return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
     experts_file = os.path.join(pdir, '.experts.json')
     experts = []
+    configured = False
     if os.path.isfile(experts_file):
+        configured = True
         try:
             with open(experts_file, encoding='utf-8') as f:
                 loaded = json.load(f)
@@ -3307,7 +3481,9 @@ async def project_experts_get_handler(request):
                 experts = [str(e) for e in loaded]
         except (OSError, json.JSONDecodeError):
             pass
-    return json_ok({"name": name, "experts": experts})
+    # configured=False 表示未显式配置（默认全部专家启用）；
+    # configured=True 且 experts=[] 表示「显式不选任何专家」。
+    return json_ok({"name": name, "experts": experts, "configured": configured})
 
 
 # ── 资料库条目操作：置顶 / 默认应用打开 / 定位 / 预览 ──
@@ -3459,8 +3635,10 @@ async def project_library_preview_handler(request):
            if '.' in os.path.basename(path) else '')
     IMG_EXTS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg',
                 'avif', 'heic', 'heif', 'tif', 'tiff'}
+    MD_EXTS = {'md', 'markdown', 'mdx'}
     is_image = ext in IMG_EXTS
     is_pdf = ext == 'pdf'
+    is_markdown = ext in MD_EXTS
     max_bytes = 200 * 1024
     try:
         with open(path, 'rb') as f:
@@ -3479,7 +3657,7 @@ async def project_library_preview_handler(request):
         return web.json_response({"error": "read failed: %s" % e}, status=500, headers=cors_headers())
     return json_ok({"is_dir": False, "name": item.get("name"), "path": path,
                     "size": size, "is_binary": is_binary, "is_image": is_image,
-                    "is_pdf": is_pdf, "ext": ext,
+                    "is_pdf": is_pdf, "is_markdown": is_markdown, "ext": ext,
                     "truncated": truncated, "content": content})
 
 
@@ -3644,7 +3822,10 @@ async def favicon_handler(request):
 
 async def project_experts_update_handler(request):
     """更新已建项目绑定的 experts 列表（PUT /projects/{name}/experts）。
-    body: {"experts": ["name", ...]}  空列表=删除绑定（恢复全部启用）。
+
+    body 二选一：
+      - {"reset": true}                      删除绑定文件，恢复默认（全部专家启用）
+      - {"experts": ["name", ...]}           显式设置；空列表=「不选任何专家」，非空=启用的子集
     """
     name = request.match_info.get("name", "")
     if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
@@ -3653,21 +3834,26 @@ async def project_experts_update_handler(request):
     if not os.path.isdir(pdir):
         return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
     data = await read_json(request)
+    experts_file = os.path.join(pdir, '.experts.json')
+    # reset=true：恢复默认全部启用
+    if data.get("reset") is True:
+        try:
+            if os.path.isfile(experts_file):
+                os.remove(experts_file)
+        except OSError as e:
+            return web.json_response({"error": f"write failed: {e}"}, status=500, headers=cors_headers())
+        return json_ok({"ok": True, "name": name, "experts": [], "configured": False})
     experts = data.get("experts")
     if not isinstance(experts, list):
         return web.json_response({"error": "experts must be a list"}, status=400, headers=cors_headers())
+    # 空列表 = 显式「不选任何专家」；非空 = 显式启用的子集。均落地为文件，不再删除。
     clean = [e for e in (str(e).strip() for e in experts) if e]
-    experts_file = os.path.join(pdir, '.experts.json')
     try:
-        if clean:
-            with open(experts_file, 'w', encoding='utf-8') as f:
-                json.dump(clean, f, ensure_ascii=False)
-        else:
-            if os.path.isfile(experts_file):
-                os.remove(experts_file)
+        with open(experts_file, 'w', encoding='utf-8') as f:
+            json.dump(clean, f, ensure_ascii=False)
     except OSError as e:
         return web.json_response({"error": f"write failed: {e}"}, status=500, headers=cors_headers())
-    return json_ok({"ok": True, "name": name, "experts": clean})
+    return json_ok({"ok": True, "name": name, "experts": clean, "configured": True})
 
 
 async def project_workspace_update_handler(request):
@@ -5197,6 +5383,50 @@ async def files_read_handler(request):
         return json_ok({"ok": False, "error": str(e)})
 
 
+async def files_raw_handler(request):
+    """GET /api/files/raw?path=... - stream a file's raw bytes for inline preview
+    (images/PDF/binaries). Same allowlist as files_read, but returns the bytes
+    with the correct content-type so the browser can render them instead of
+    showing the JSON wrapper used for text-only previews."""
+    from urllib.parse import unquote
+    import mimetypes
+    raw = unquote(request.query.get("path") or "")
+    ga_root = Path(DEFAULT_GA_ROOT)
+    try:
+        p = Path(raw)
+        if not p.is_absolute():
+            p = ga_root / p
+        target = p.resolve()
+        upload_root = (ga_root / "temp" / "desktop_uploads").resolve()
+        sche_root = (ga_root / "sche_tasks").resolve()
+        chat_files_root = resolve_chat_files_dir(ga_root).resolve()
+        in_upload = upload_root in target.parents or target == upload_root
+        in_sche = sche_root in target.parents or target == sche_root
+        in_chat = chat_files_root in target.parents or target == chat_files_root
+        in_ga = _preview_allowed_under_ga_root(target, ga_root)
+        if not (in_upload or in_sche or in_chat or in_ga):
+            return web.Response(status=403, text="path outside allowed directories", headers=cors_headers())
+        if not target.exists() or not target.is_file():
+            return web.Response(status=404, text="file not found", headers=cors_headers())
+        size = target.stat().st_size
+        if size > 25 * 1024 * 1024:
+            return web.Response(status=413, text="file too large to preview", headers=cors_headers())
+        ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        _EXT_CT = {'.pdf': 'application/pdf', '.svg': 'image/svg+xml',
+                   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                   '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+                   '.ico': 'image/x-icon'}
+        ctype = _EXT_CT.get(target.suffix.lower(), ctype)
+        data = target.read_bytes()
+        return web.Response(
+            body=data,
+            content_type=ctype,
+            headers={"Content-Disposition": "inline", "Cache-Control": "no-cache"},
+        )
+    except Exception as e:
+        return web.Response(status=500, text="read failed: %s" % e, headers=cors_headers())
+
+
 async def files_diff_handler(request):
     """GET /api/files/diff?path=... - get git diff for a file (uncommitted changes vs HEAD)."""
     import asyncio
@@ -5811,6 +6041,9 @@ def create_app():
     app.router.add_post("/session/{sid}/viewed", viewed_handler)
     app.router.add_post("/session/{sid}/restore", restore_handler)
     app.router.add_post("/session/{sid}/suggest", suggest_handler)
+    # 对话文件夹（服务端共享）
+    app.router.add_get("/conv-folders", conv_folders_get_handler)
+    app.router.add_put("/conv-folders", conv_folders_put_handler)
     app.router.add_get("/projects", projects_list_handler)
     app.router.add_post("/projects", project_create_handler)
     app.router.add_get("/projects/{name}/instruction", project_instruction_get_handler)
@@ -5879,9 +6112,11 @@ def create_app():
     app.router.add_get("/api/files/list", files_list_handler)
     app.router.add_get("/api/files/browse", files_browse_handler)
     app.router.add_post("/api/pick-folder", pick_folder_handler)
+    app.router.add_post("/api/pick-file", pick_file_handler)
     app.router.add_delete("/api/files/delete", files_delete_handler)
     app.router.add_post("/api/files/copy", files_copy_handler)
     app.router.add_get("/api/files/read", files_read_handler)
+    app.router.add_get("/api/files/raw", files_raw_handler)
     app.router.add_get("/api/files/diff", files_diff_handler)
     app.router.add_post("/api/files/favorite", files_favorite_handler)
     app.router.add_get("/api/files/favorites", files_favorites_handler)
@@ -6139,7 +6374,18 @@ def create_app():
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )
 
+    async def ga_ports_handler(request):
+        # 动态下发本实例实际端口, 前端据此拼 BRIDGE/CONDUCTOR origin。
+        # 并行部署第二套实例(BRIDGE_PORT/CONDUCTOR_PORT env)时前端自动跟随。
+        bridge_port = int(os.environ.get("BRIDGE_PORT", "14168"))
+        body = f"window.GA_PORTS={{bridge:{bridge_port},conductor:{CONDUCTOR_PORT}}};"
+        return web.Response(
+            text=body, content_type="application/javascript",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
+
     app.router.add_get("/", index_handler)
+    app.router.add_get("/ga-ports.js", ga_ports_handler)
     app.router.add_static("/", static_dir, show_index=False)
 
     async def datasource_autosync_loop():

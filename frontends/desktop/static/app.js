@@ -6,9 +6,12 @@
 /* ═══════════════ 端口/URL 常量 ═══════════════
    bridge / conductor 的端口和 origin 都集中在这里。要换端口、要切同源、
    要让 bridge 代理 conductor —— 改这一块即可,下面所有 URL 引用全都跟着走。
-   *_ORIGIN 不带尾巴 path,调用方自己拼 "/sessions" "/ws" 等。 */
-const BRIDGE_PORT = 14168;
-const CONDUCTOR_PORT = 8900;
+   *_ORIGIN 不带尾巴 path,调用方自己拼 "/sessions" "/ws" 等。
+   端口来源优先级: bridge 动态下发的 ga-ports.js (window.GA_PORTS, 跟随
+   BRIDGE_PORT/CONDUCTOR_PORT env, 并行部署第二套实例时自动正确)
+   → 页面自身 location.port (静态文件即 bridge 服务的) → 默认 14168/8900。 */
+const BRIDGE_PORT = (window.GA_PORTS && window.GA_PORTS.bridge) || Number(location.port) || 14168;
+const CONDUCTOR_PORT = (window.GA_PORTS && window.GA_PORTS.conductor) || 8900;
 const BRIDGE_ORIGIN = `${location.protocol}//${location.hostname}:${BRIDGE_PORT}`;
 const BRIDGE_WS_ORIGIN = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:${BRIDGE_PORT}`;
 const CONDUCTOR_ORIGIN = `${location.protocol}//${location.hostname}:${CONDUCTOR_PORT}`;
@@ -386,7 +389,7 @@ const I18N = {
     'project.title': '项目', 'project.subtitle': '多人协同打造超级团队', 'project.newBtn': '新建项目', 'project.myProjects': '我的项目', 'project.searchPh': '搜索项目', 'project.fromTemplate': '从模版创建', 'project.menuTitle': '更多操作', 'project.promptName': '请输入项目名称', 'project.addedAgo': '添加于 {0} 前', 'project.justNow': '刚刚', 'project.minAgo': '{0} 分钟前', 'project.hourAgo': '{0} 小时前', 'project.dayAgo': '{0} 天前', 'project.monAgo': '{0} 个月前', 'project.yearAgo': '{0} 年前',
     'project.create': '新建项目', 'project.name': '项目名称', 'project.template': '选择模板', 'project.tplBlank': '不使用模板', 'project.instruction': '指令', 'project.instructionPh': '输入项目背景、规范或系统提示词…', 'project.instructionHint': '可选。作为项目指令写入 CLAUDE.md，进入项目后自动生效。', 'project.createBtn': '创建', 'project.nameRequired': '请输入项目名称', 'project.tplOverwrite': '切换模板将覆盖当前指令内容，是否继续？', 'project.skills': '技能', 'project.skillsHint': '可选。选择该项目启用的 Skills，未勾选的不会被注入。留空则启用全部。', 'project.skillsLoading': '加载中…', 'project.skillsNone': '未发现可用技能', 'project.editSkills': '编辑技能', 'project.skillsSaved': '技能已保存，新会话生效', 'project.rename': '重命名', 'project.renamePrompt': '输入新的项目名称', 'project.renameErr': '重命名失败', 'project.delete': '删除项目', 'project.deleteConfirm': '确定要删除项目「{0}」吗？此操作不可恢复。', 'project.deleteErr': '删除失败', 'project.nameInvalid': '名称不能包含 / \\ 或以 . 开头', 'project.workspace': '工作区', 'project.wsNone': '无绑定', 'project.wsExisting': '使用已有工作区', 'project.wsNew': '新建工作区', 'project.wsPathPh': '输入新工作区的完整路径…', 'project.wsHint': '新建工作区时会自动注册到工作区列表。', 'project.wsSelectErr': '请选择一个已有工作区', 'project.wsPathErr': '请输入新工作区路径', 'project.wsSaved': '工作区已更新', 'project.wsCurrent': '当前工作区', 'project.addSkill': '添加技能', 'project.skillsSearchPh': '搜索技能…', 'project.skillsActiveHint': '已启用的技能；点击 × 可移除。清空表示启用全部技能。', 'project.expertsLoading': '加载中…', 'project.expertNone': '暂无专家', 'project.expertsNone': '未发现可用专家', 'project.expertsSaved': '专家已保存，新会话生效', 'project.addExpert': '添加专家', 'project.expertsSearchPh': '搜索专家…',
     'project.tpl.req.t': '产品需求全流程', 'project.tpl.req.d': '从需求采集到评审的完整流程', 'project.tpl.research.t': '市场调研与竞品分析', 'project.tpl.research.d': '行业趋势、用户洞察与竞品对比', 'project.tpl.kb.t': '团队知识库', 'project.tpl.kb.d': '沉淀团队经验与协作规范', 'project.tpl.delivery.t': '项目交付', 'project.tpl.delivery.d': '里程碑、交付物与验收管理', 'project.tpl.bug.t': 'Bug 跟踪测试验收', 'project.tpl.bug.d': '缺陷记录、复现与回归验证',
-    'ph.invite': '邀请', 'ph.tab.feed': '动态', 'ph.tab.plan': '计划', 'ph.tab.task': '任务', 'ph.tab.asset': '资产', 'ph.tab.library': '资料库', 'ph.filter.mine': '与我相关', 'ph.filter.member': '成员动态', 'ph.empty.feed': '暂无与我有关的动态', 'ph.empty.plan': '暂无计划', 'ph.empty.task': '暂无任务', 'ph.empty.asset': '暂无资产', 'ph.empty.library': '暂无资料', 'ph.lib.add': '添加资料', 'ph.lib.addFile': '本地文件引用', 'ph.lib.addWeb': '网页资料', 'ph.lib.name': '名称', 'ph.lib.path': '文件路径', 'ph.lib.url': '网址', 'ph.lib.includeSubpages': '同时加入子页面', 'ph.lib.subpagesHint': '适用于 Confluence / Wiki 等有层级结构的页面', 'ph.lib.subpagesAdded': '已加入 {n} 个页面（含 {m} 个子页面）', 'ph.lib.desc': '描述（可选）', 'ph.lib.empty': '资料库为空，点击"添加资料"开始', 'ph.lib.noChildren': '暂无子页面', 'ph.lib.loadFailed': '加载子页面失败', 'ph.lib.del': '确定要移除资料「', 'ph.lib.delSuffix': '」吗？', 'ph.lib.added': '已加入资料库', 'ph.lib.file': '文件', 'ph.lib.web': '网页', 'ph.lib.generated': '生成文件', 'ph.lib.folder': '文件夹', 'ph.lib.preview': '预览', 'ph.lib.open': '打开', 'ph.lib.reveal': '打开文件位置', 'ph.lib.pin': '置顶', 'ph.lib.unpin': '取消置顶', 'ph.lib.pinned': '已置顶', 'ph.lib.openFailed': '打开失败', 'ph.lib.revealFailed': '定位失败', 'ph.lib.pinFailed': '置顶失败', 'ph.lib.previewFailed': '预览失败', 'ph.lib.binaryFile': '该文件为二进制文件，无法预览', 'ph.lib.truncated': '（内容已截断，仅显示前 200KB）', 'ph.lib.refFromLibrary': '引用资料库', 'ph.lib.refTitle': '引用资料', 'ph.lib.refConfirm': '引用', 'ph.lib.refNone': '请选择要引用的资料', 'ph.lib.addToLibrary': '加入资料库', 'ph.lib.addSubtitle': '把文件、网页或生成产物收进项目资料库', 'ph.lib.browse': '浏览…', 'ph.lib.filePath': '文件路径', 'ph.lib.filePathPh': '输入文件路径，或点「浏览」选择文件夹', 'ph.lib.folderAdded': '已添加 {n} 个文件', 'ph.lib.folderTruncated': '超出上限，仅添加前 500 个', 'ph.lib.namePh': '资料名称', 'ph.lib.descPh': '简要描述这份资料（可选）', 'ph.lib.refHint': '选择要在对话中引用的资料（可多选）', 'ph.lib.searchPh': '搜索资料…', 'ph.composer.ph': '输入消息…', 'md.edit': '编辑', 'md.preview': '预览', 'md.hint': '支持 Markdown', 'md.empty': '（无内容）',
+    'ph.invite': '邀请', 'ph.tab.feed': '动态', 'ph.tab.plan': '计划', 'ph.tab.task': '任务', 'ph.tab.asset': '资产', 'ph.tab.library': '资料库', 'ph.filter.mine': '与我相关', 'ph.filter.member': '成员动态', 'ph.empty.feed': '暂无与我有关的动态', 'ph.empty.plan': '暂无计划', 'ph.empty.task': '暂无任务', 'ph.empty.asset': '暂无资产', 'ph.empty.library': '暂无资料', 'ph.lib.add': '添加资料', 'ph.lib.addFile': '本地文件引用', 'ph.lib.addWeb': '网页资料', 'ph.lib.name': '名称', 'ph.lib.path': '文件路径', 'ph.lib.url': '网址', 'ph.lib.includeSubpages': '同时加入子页面', 'ph.lib.subpagesHint': '适用于 Confluence / Wiki 等有层级结构的页面', 'ph.lib.subpagesAdded': '已加入 {n} 个页面（含 {m} 个子页面）', 'ph.lib.desc': '描述（可选）', 'ph.lib.empty': '资料库为空，点击"添加资料"开始', 'ph.lib.noChildren': '暂无子页面', 'ph.lib.loadFailed': '加载子页面失败', 'ph.lib.del': '确定要移除资料「', 'ph.lib.delSuffix': '」吗？', 'ph.lib.added': '已加入资料库', 'ph.lib.file': '文件', 'ph.lib.web': '网页', 'ph.lib.generated': '生成文件', 'ph.lib.folder': '文件夹', 'ph.lib.preview': '预览', 'ph.lib.open': '打开', 'ph.lib.reveal': '打开文件位置', 'ph.lib.pin': '置顶', 'ph.lib.unpin': '取消置顶', 'ph.lib.pinned': '已置顶', 'ph.lib.openFailed': '打开失败', 'ph.lib.revealFailed': '定位失败', 'ph.lib.pinFailed': '置顶失败', 'ph.lib.previewFailed': '预览失败', 'ph.lib.binaryFile': '该文件为二进制文件，无法预览', 'ph.lib.truncated': '（内容已截断，仅显示前 200KB）', 'ph.lib.refFromLibrary': '引用资料库', 'ph.lib.refTitle': '引用资料', 'ph.lib.refConfirm': '引用', 'ph.lib.refNone': '请选择要引用的资料', 'ph.lib.addToLibrary': '加入资料库', 'ph.lib.addSubtitle': '把文件、网页或生成产物收进项目资料库', 'ph.lib.browse': '浏览…', 'ph.lib.browseFile': '选择文件…', 'ph.lib.browseFolder': '选择文件夹…', 'ph.lib.filePath': '文件路径', 'ph.lib.filePathPh': '输入文件路径，或点「选择文件」/「选择文件夹」', 'ph.lib.folderAdded': '已添加 {n} 个文件', 'ph.lib.folderTruncated': '超出上限，仅添加前 500 个', 'ph.lib.namePh': '资料名称', 'ph.lib.descPh': '简要描述这份资料（可选）', 'ph.lib.refHint': '选择要在对话中引用的资料（可多选）', 'ph.lib.searchPh': '搜索资料…', 'ph.composer.ph': '输入消息…', 'md.edit': '编辑', 'md.preview': '预览', 'md.hint': '支持 Markdown', 'md.empty': '（无内容）',
     'ph.asset.upload': '上传文件', 'ph.asset.mkdir': '新建文件夹', 'ph.asset.search': '搜索文件或文件夹…', 'ph.asset.items': '项', 'ph.asset.loading': '加载中…', 'ph.asset.empty': '暂无资产',
     'ph.asset.filter.all': '全部来源', 'ph.asset.filter.project': '项目文件', 'ph.asset.filter.upload': '上传文件',
     'ph.asset.folder': '文件夹', 'ph.asset.readonly': '只读',
@@ -2281,17 +2284,63 @@ function normalizeConvFolders(raw) {
   }
   return Array.from(map.values());
 }
-function loadConvFolders() {
+// 对话文件夹：服务端为权威源（跨 Tauri / 浏览器多 origin 共享）。
+// 首次部署时若服务端尚无数据但 localStorage 有，自动迁移过去。
+async function loadConvFolders() {
+  state._folderSyncInit = false;
+  try {
+    const res = await fetch(`${BRIDGE_ORIGIN}/conv-folders`);
+    if (res.ok) {
+      const data = await res.json();
+      const srvFolders = (data.folders && data.folders.length) ? data.folders : null;
+      if (srvFolders) {
+        state.convFolders = normalizeConvFolders(srvFolders);
+        if (data.assignments) state._syncedFolder = data.assignments;
+        state._folderSyncInit = true;
+        try { convFolderCollapsed = JSON.parse(localStorage.getItem(CONV_FOLDER_COLLAPSE_KEY) || '{}') || {}; } catch { convFolderCollapsed = {}; }
+        return;
+      }
+      // server empty -> migrate from localStorage (only the 14168-origin client holds it)
+      const local = localStorage.getItem(CONV_FOLDER_KEY);
+      if (local) {
+        try {
+          const localFolders = normalizeConvFolders(JSON.parse(local));
+          const meta = JSON.parse(localStorage.getItem('ga_session_meta') || '{}');
+          const assignments = {};
+          for (const sid in meta) { const fid = meta[sid] && meta[sid].folderId; if (fid) assignments[sid] = fid; }
+          await fetch(`${BRIDGE_ORIGIN}/conv-folders`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folders: localFolders, assignments })
+          });
+          state.convFolders = localFolders;
+          state._syncedFolder = assignments;
+          state._folderSyncInit = true;
+          try { localStorage.removeItem(CONV_FOLDER_KEY); localStorage.removeItem('ga_session_meta'); } catch (_) {}
+        } catch (_) {
+          state.convFolders = normalizeConvFolders(JSON.parse(local));
+          state._syncedFolder = {};
+        }
+        try { convFolderCollapsed = JSON.parse(localStorage.getItem(CONV_FOLDER_COLLAPSE_KEY) || '{}') || {}; } catch { convFolderCollapsed = {}; }
+        return;
+      }
+    }
+  } catch (_) { /* 服务端不可达，回退 localStorage */ }
   try { state.convFolders = normalizeConvFolders(JSON.parse(localStorage.getItem(CONV_FOLDER_KEY) || '[]')); }
   catch { state.convFolders = defaultConvFolders(); }
   try { convFolderCollapsed = JSON.parse(localStorage.getItem(CONV_FOLDER_COLLAPSE_KEY) || '{}') || {}; }
   catch { convFolderCollapsed = {}; }
 }
 function saveConvFolders() {
-  const rows = normalizeConvFolders(state.convFolders).map(f => ({ id: f.id, name: f.name, locked: !!f.locked }));
+  const rows = normalizeConvFolders(state.convFolders).map((f, i) => ({ id: f.id, name: f.name, locked: !!f.locked, sort_order: f.sort_order ?? i }));
   state.convFolders = rows;
+  // 本地缓存（兼容回退）
   localStorage.setItem(CONV_FOLDER_KEY, JSON.stringify(rows));
   localStorage.setItem(CONV_FOLDER_COLLAPSE_KEY, JSON.stringify(convFolderCollapsed || {}));
+  // 服务端为权威源
+  fetch(`${BRIDGE_ORIGIN}/conv-folders`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folders: rows })
+  }).catch(() => {});
 }
 function getConvFolderName(id) {
   const hit = state.convFolders.find(f => f.id === (id || DEFAULT_CONV_FOLDER_ID));
@@ -2322,7 +2371,7 @@ function createConvFolder(name) {
     toast(t('conv.folderExists'));
     return null;
   }
-  const folder = { id: 'folder-' + Date.now() + '-' + Math.random().toString(16).slice(2, 8), name: val, locked: false };
+  const folder = { id: 'folder-' + Date.now() + '-' + Math.random().toString(16).slice(2, 8), name: val, locked: false, sort_order: state.convFolders.length };
   state.convFolders.push(folder);
   saveConvFolders();
   return folder;
@@ -2377,6 +2426,23 @@ function saveSessions() {
     byId[id] = { folderId: normalizeSessionFolder(sess) };
   });
   localStorage.setItem('ga_session_meta', JSON.stringify(byId));
+  // 首次仅建立基线（不回灌服务端，避免对全部会话各发一次 PATCH）
+  if (!state._folderSyncInit) {
+    state._syncedFolder = {};
+    state.sessions.forEach((sess) => { if (sess.bridgeSessionId) state._syncedFolder[sess.id] = normalizeSessionFolder(sess); });
+    state._folderSyncInit = true;
+    return;
+  }
+  // 之后仅推送 folderId 发生变化的会话
+  if (!state._syncedFolder) state._syncedFolder = {};
+  state.sessions.forEach((sess) => {
+    if (!sess.bridgeSessionId) return;
+    const fid = normalizeSessionFolder(sess);
+    if (state._syncedFolder[sess.id] !== fid) {
+      patchSession(sess, { folder_id: fid });
+      state._syncedFolder[sess.id] = fid;
+    }
+  });
 }
 function patchSession(sess, fields) {
   if (!sess.bridgeSessionId) return;
@@ -2405,7 +2471,7 @@ async function loadSessions(opts = {}) {
         pinned: s.pinned ?? false, lastActiveTs: s.updatedAt || s.createdAt,
         updatedAt: s.updatedAt || s.createdAt,
         workspace: s.workspace || '', branch: s.branch || '',
-        folderId: meta[s.id]?.folderId || DEFAULT_CONV_FOLDER_ID,
+        folderId: s.folderId || meta[s.id]?.folderId || DEFAULT_CONV_FOLDER_ID,
       };
       merged.title = s.title;
       merged.untitled = s.untitled ?? true;
@@ -2416,7 +2482,7 @@ async function loadSessions(opts = {}) {
       merged.branch = s.branch || merged.branch || '';
       merged.project = s.project || merged.project || '';
       if (!merged.bridgeSessionId) merged.bridgeSessionId = s.id;
-      merged.folderId = meta[s.id]?.folderId || merged.folderId || DEFAULT_CONV_FOLDER_ID;
+      merged.folderId = s.folderId || meta[s.id]?.folderId || merged.folderId || DEFAULT_CONV_FOLDER_ID;
       remoteSessions.push(merged);
     }
     // stale 清理：删除远程存在但无内容的空会话（刷新/初始化时清理垃圾）。
@@ -3689,6 +3755,9 @@ function renderSessionList() {
       const r = state.runtime.get(sess.id);
       const busy = !!(r && r.busy);
       const _expanded = state.expandedSessions.has(sess.id);
+      const rounds = extractRounds(sess);
+      // 无轮次或仅一轮时，展开/折叠没有意义，不显示折叠箭头
+      const showToggle = rounds.length >= 2;
       const item = document.createElement('div');
       const statusClass = busy ? '' : (sess.status === 'done' ? ' done' : ' idle');
       item.className = 'conv-item' + (currentPage === 'chat' && sess.id === state.activeId ? ' active' : '') + statusClass + (_expanded ? ' is-expanded' : '');
@@ -3702,14 +3771,14 @@ function renderSessionList() {
       if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
       if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? `:${sess.branch}` : ''));
       item.innerHTML =
-        `<button class="conv-session-toggle" data-session-toggle="1" title="${escapeHtml(t('common.expand'))}" aria-label="${escapeHtml(t('common.expand'))}">${GA_ICON('caretDown')}</button>` +
+        (showToggle ? `<button class="conv-session-toggle" data-session-toggle="1" title="${escapeHtml(t('common.expand'))}" aria-label="${escapeHtml(t('common.expand'))}">${GA_ICON('caretDown')}</button>` : '') +
         `<span class="ci-dot"></span><div class="ci-main">` +
         `<div class="ci-title">${pinSvg}${escapeHtml(displayTitle(sess))}</div>` +
         `<div class="ci-meta">${escapeHtml(metaParts.join(' · '))}</div></div>` +
         `<button class="ci-more" title="${escapeHtml(t('common.more'))}">${GA_ICON('dotsThreeVertical')}</button>`;
       convListEl.appendChild(item);
-      // 折叠展开：列出该会话内「用户主动输入」产生的每一轮
-      if (_expanded && !query && !batchMode) {
+      // 折叠展开：列出该会话内「用户主动输入」产生的每一轮（仅当可展开时）
+      if (showToggle && _expanded && !query && !batchMode) {
         const rounds = extractRounds(sess);
         if (!rounds.length) {
           const ph = document.createElement('div');
@@ -4666,7 +4735,10 @@ async function initProjectHome(name, sessionId) {
   phState.dsLoadedFor = '';
   // 面包屑项目名
   const crumbName = document.getElementById('ph-project-name');
-  if (crumbName) crumbName.textContent = name;
+  if (crumbName) { crumbName.textContent = name; crumbName.title = name; }
+  // 面包屑「项目」可点击 → 返回项目列表页
+  const crumbProject = document.getElementById('ph-crumb-project');
+  if (crumbProject) crumbProject.onclick = function () { gaGoPage('project'); };
   // Tab 切换
   document.querySelectorAll('.ph-tab').forEach(function (tab) {
     tab.onclick = function () {
@@ -5252,6 +5324,18 @@ async function openLibPreview(id) {
     if (bodyEl) bodyEl.innerHTML = '<iframe class="lib-preview-pdf" src="' + encodeURI(pdfUrl) + '" title="' + escapeHtml(data.name || '') + '"></iframe>';
   } else if (data.is_binary) {
     if (bodyEl) bodyEl.innerHTML = '<div class="lib-preview-binary">' + gaIcon('fileX') + '<p>' + t('ph.lib.binaryFile') + '</p></div>';
+  } else if (data.is_markdown) {
+    var md = data.content || '';
+    if (data.truncated) md += '\n\n… ' + t('ph.lib.truncated');
+    if (bodyEl) {
+      var mdw = document.createElement('div');
+      mdw.className = 'lib-preview-md';
+      mdw.innerHTML = renderMarkdown(md);
+      bodyEl.innerHTML = '';
+      bodyEl.appendChild(mdw);
+      if (typeof postRenderEnhance === 'function') postRenderEnhance(mdw);
+      if (typeof gaHydrateIcons === 'function') gaHydrateIcons();
+    }
   } else {
     var txt = data.content || '';
     if (data.truncated) txt += '\n\n… ' + t('ph.lib.truncated');
@@ -5371,15 +5455,25 @@ function submitLibraryRef() {
   bind('lib-add-tab-web', function () { setLibraryAddType('web'); });
   bind('lib-add-confirm', function () { submitAddLibrary(); });
   bind('lib-add-browse', function () {
-    // 优先用原生文件夹选择器（浏览器 tab 通过 bridge 的 osascript 实现），请求失败才回退文件选择
+    // 选择单个本地文件（优先原生文件选择器，请求失败才回退浏览器 file input）
+    var pathEl = document.getElementById('lib-add-path');
+    fetch('/api/pick-file', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        // 选到了文件 → 填入路径；用户取消（d.cancelled）→ 不做任何事
+        if (d && d.path && pathEl) pathEl.value = d.path;
+      })
+      .catch(function () { var inp = document.getElementById('lib-add-file-input'); if (inp) inp.click(); });
+  });
+  bind('lib-add-browse-folder', function () {
+    // 选择整个文件夹（后端会展开为资料树），保留原文件夹选择能力
     var pathEl = document.getElementById('lib-add-path');
     fetch('/api/pick-folder', { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        // 选到了文件夹 → 填入路径；用户取消（d.cancelled）→ 不做任何事，不再弹文件对话框
         if (d && d.path && pathEl) pathEl.value = d.path;
       })
-      .catch(function () { var inp = document.getElementById('lib-add-file-input'); if (inp) inp.click(); });
+      .catch(function () {});
   });
   var fileInput = document.getElementById('lib-add-file-input');
   if (fileInput) {
@@ -5538,7 +5632,7 @@ function renderPhAssets(box) {
       var icon = isWs ? '🗂️' : (f.type === 'dir' ? '📁' : fileIcon(ext));
       var typeLabel = isWs ? 'Workspace' : (f.type === 'dir' ? (t('ph.asset.folder') || 'Folder') : (ext || 'file').toUpperCase());
       var sourceLabel = isWs ? 'Workspace' : (f.source === 'upload' ? (t('ph.asset.source.upload') || 'Upload') : (t('ph.asset.source.project') || 'Project'));
-      html += '<tr class="pa-row' + (isWs ? ' pa-row-ws' : '') + '" data-path="' + escapeHtml(f.path || '') + '" data-name="' + escapeHtml(f.name || '') + '" data-source="' + escapeHtml(f.source || '') + '">';
+      html += '<tr class="pa-row' + (isWs ? ' pa-row-ws' : '') + '" data-path="' + escapeHtml(f.path || '') + '" data-name="' + escapeHtml(f.name || '') + '" data-source="' + escapeHtml(f.source || '') + '" data-type="' + escapeHtml(f.type || '') + '">';
       html += '<td class="pa-col-check">';
       if (!isWs) html += '<input type="checkbox" class="pa-check">';
       html += '</td>';
@@ -5639,12 +5733,57 @@ async function _assetMkdirClickAsync() {
 }
 
 function _assetPreview(row) {
+  // 用应用内弹窗渲染（同源相对路径），避免 window.open 到系统浏览器新标签页
+  // 在 Tauri / localhost IPv6 解析等环境下连不上硬编码的 localhost:14168
+  openAssetPreview(row);
+}
+
+// 资产预览弹窗：图片/PDF 内联渲染，文本渲染为纯文本，未知二进制回退下载
+async function openAssetPreview(row) {
   var path = row.dataset.path;
   var name = row.dataset.name;
   if (!path) return;
-  // 目录不预览
-  if (row.querySelector('.pa-icon').textContent === '📁') return;
-  window.open('/api/files/read?path=' + encodeURIComponent(path), '_blank');
+  // 目录不预览（用可靠的类型字段判断，而非图标字形，避免未知扩展名被误判为目录）
+  if ((row.dataset.type || '') === 'dir') return;
+  var m = document.getElementById('asset-preview-modal');
+  if (!m) return;
+  var bodyEl = document.getElementById('asset-preview-body');
+  var titleEl = document.getElementById('asset-preview-title');
+  var metaEl = document.getElementById('asset-preview-meta');
+  if (titleEl) titleEl.textContent = name || '';
+  if (metaEl) metaEl.textContent = path || '';
+  if (bodyEl) bodyEl.innerHTML = '<div class="ph-lib-loading">' + escapeHtml(t('common.loading')) + '</div>';
+  m.hidden = false;
+  var ext = _assetFileExt(name || '').toLowerCase();
+  var rawUrl = '/api/files/raw?path=' + encodeURIComponent(path);
+  var imgExt = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico'];
+  if (imgExt.indexOf(ext) >= 0) {
+    if (bodyEl) bodyEl.innerHTML = '<div class="lib-preview-image"><img src="' + encodeURI(rawUrl) + '" alt="' + escapeHtml(name || '') + '"></div>';
+    return;
+  }
+  if (ext === 'pdf') {
+    if (bodyEl) bodyEl.innerHTML = '<iframe class="lib-preview-pdf" src="' + encodeURI(rawUrl) + '" title="' + escapeHtml(name || '') + '"></iframe>';
+    return;
+  }
+  // 文本：拉取 JSON 内容渲染；非文本/读取失败则回退到下载
+  try {
+    var res = await fetch('/api/files/read?path=' + encodeURIComponent(path));
+    var d = await res.json();
+    if (!d || !d.ok) {
+      if (bodyEl) bodyEl.innerHTML = '<div class="lib-preview-binary">' + gaIcon('fileX') + '<p>' + escapeHtml(t('ph.lib.binaryFile')) + '</p><a class="lib-preview-dl" href="' + encodeURI(rawUrl) + '" download="' + escapeHtml(name || '') + '">' + escapeHtml(t('common.download') || '下载文件') + '</a></div>';
+      return;
+    }
+    var txt = d.content || '';
+    if (bodyEl) {
+      var pre = document.createElement('pre');
+      pre.className = 'lib-preview-text';
+      pre.textContent = txt;
+      bodyEl.innerHTML = '';
+      bodyEl.appendChild(pre);
+    }
+  } catch (err) {
+    if (bodyEl) bodyEl.textContent = String(err);
+  }
 }
 
 function _assetDelete(row) {
@@ -6947,9 +7086,10 @@ async function _peLoadAll() {
 }
 
 function _peEnabledNames(cur) {
-  var ex = (cur && typeof cur.experts !== 'undefined') ? cur.experts : null;
-  if (!Array.isArray(ex) || ex.length === 0) return _peState.all.map(function (e) { return e.name; });
-  return ex;
+  // 未显式配置（configured=false 或缺省）= 默认全部专家启用
+  if (!(cur && cur.configured)) return _peState.all.map(function (e) { return e.name; });
+  var ex = (cur && typeof cur.experts !== 'undefined') ? cur.experts : [];
+  return Array.isArray(ex) ? ex : [];
 }
 
 async function renderProjectExperts(name) {
@@ -6986,8 +7126,8 @@ async function removePeExpert(nm) {
     var cur = await window.ga.rpc('projects/experts_get', { name: _peState.name });
     var enabled = _peEnabledNames(cur);
     var newSet = enabled.filter(function (x) { return x !== nm; });
-    var params = { name: _peState.name };
-    if (newSet.length > 0) params.experts = newSet;
+    // 始终下发完整列表（含空数组=显式不选任何专家），不再因空集而跳过
+    var params = { name: _peState.name, experts: newSet };
     await window.ga.rpc('projects/experts_update', params);
     await renderProjectExperts();
     if (window.gaToast) window.gaToast(t('project.expertsSaved'));
@@ -7042,7 +7182,8 @@ async function submitPePicker() {
     var sel = Object.keys(_peState.selected);
     var allNames = _peState.all.map(function (e) { return e.name; });
     var isAll = allNames.length > 0 && allNames.every(function (n) { return _peState.selected[n]; });
-    var params = { name: _peState.name, experts: isAll ? [] : sel };
+    // 全选=恢复默认（reset 删除绑定文件，等价于全部启用）；否则下发当前选择（空数组=显式不选任何专家）
+    var params = isAll ? { name: _peState.name, reset: true } : { name: _peState.name, experts: sel };
     await window.ga.rpc('projects/experts_update', params);
     _psHide('pe-picker-modal');
     await renderProjectExperts();
@@ -9100,6 +9241,8 @@ async function showSkillPicker(trigger) {
   hideSlashPanel();
   var _ep = document.getElementById('expert-picker-panel');
   if (_ep) _ep.hidden = true;
+  var _pp = document.getElementById('plugin-picker-panel');
+  if (_pp) _pp.hidden = true;
   if (SKILL_SEARCH) { SKILL_SEARCH.focus(); SKILL_SEARCH.select(); }
 }
 
@@ -9135,7 +9278,7 @@ function getSkillTargetInput(trigger) {
 function getLoadedSkillName(el) {
   // 输入框当前已加载的技能名（来自「使用技能」前缀），无前缀返回 null
   if (!el) return null;
-  const m = (el.textContent || '').match(/^【使用技能 ([^\n]*)\n/);
+  const m = (el.textContent || '').match(/^【使用技能 ([^】\n]*)】\n/);
   return m ? m[1] : null;
 }
 
@@ -9248,6 +9391,7 @@ document.addEventListener('mousedown', (e) => {
 if (typeof MutationObserver !== 'undefined') {
   const skillInputWatch = new MutationObserver(() => {
     ['chat', 'cdb', 'ph'].forEach(refreshSkillChip);
+    ['chat', 'cdb', 'ph'].forEach(refreshPluginChip);
   });
   ['chat', 'cdb', 'ph'].forEach((t) => {
     const el = getSkillTargetInput(t);
@@ -9256,6 +9400,223 @@ if (typeof MutationObserver !== 'undefined') {
 }
 // 初始同步一次（如恢复草稿时已含技能前缀的情况）
 ['chat', 'cdb', 'ph'].forEach(refreshSkillChip);
+['chat', 'cdb', 'ph'].forEach(refreshPluginChip);
+
+// ==================== Plugin Picker (插件选择，镜像 Skill Picker) ====================
+const PLUGIN_PANEL = document.getElementById('plugin-picker-panel');
+const PLUGIN_GROUPS = document.getElementById('plugin-picker-groups');
+const PLUGIN_SEARCH = document.getElementById('plugin-picker-search');
+let _pluginCmds = [];        // 可用 plugin 列表（来自 /api/plugins 的 external）
+let _pluginDisplayed = [];   // 当前过滤后显示的列表
+let _pluginIdx = -1;         // 当前选中索引
+let _pluginTrigger = 'chat'; // 触发源: chat/cdb/ph
+
+function getLoadedPluginName(el) {
+  // 输入框当前已选用的插件名（来自「使用插件」前缀），无前缀返回 null
+  if (!el) return null;
+  const m = (el.textContent || '').match(/【使用插件 ([^】\n]*)】/);
+  return m ? m[1] : null;
+}
+
+function setPluginPrefix(el, name) {
+  // 写入/清除插件前缀；与技能前缀共存（技能前缀在前，插件前缀随后）
+  let txt = (el.textContent || '').replace(/【使用插件 [^】\n]*】\n?/, '');
+  if (name) {
+    const sm = txt.match(/^【使用技能 [^\n]*\n/);
+    const head = sm ? sm[0] : '';
+    txt = head + `【使用插件 ${name}】\n` + txt.slice(head.length);
+  }
+  el.textContent = txt;
+}
+
+function renderPluginList() {
+  if (!PLUGIN_GROUPS) return;
+  PLUGIN_GROUPS.innerHTML = '';
+  if (_pluginDisplayed.length === 0) {
+    PLUGIN_GROUPS.innerHTML = '<div class="slash-empty">No plugins found</div>';
+    return;
+  }
+  const loadedName = getLoadedPluginName(getSkillTargetInput(_pluginTrigger));
+  _pluginDisplayed.forEach((p, i) => {
+    const isLoaded = !!loadedName && p.name === loadedName;
+    const item = document.createElement('div');
+    item.className = 'slash-item' + (i === _pluginIdx ? ' active' : '') + (isLoaded ? ' loaded' : '');
+    item.dataset.idx = i;
+    const title = document.createElement('div');
+    title.className = 'slash-item-title';
+    title.textContent = p.name || '';
+    const tag = p.version ? ('v' + p.version) : (p.skills ? (p.skills + ' skills') : '');
+    if (tag) {
+      const cat = document.createElement('span');
+      cat.className = 'slash-item-cat';
+      cat.textContent = tag;
+      title.appendChild(cat);
+    }
+    const desc = document.createElement('div');
+    desc.className = 'slash-item-desc';
+    desc.textContent = p.description || '';
+    item.appendChild(title);
+    if (desc.textContent) item.appendChild(desc);
+    if (isLoaded) {
+      const tick = document.createElement('span');
+      tick.className = 'slash-item-tick';
+      tick.textContent = '已选用';
+      item.appendChild(tick);
+    }
+    PLUGIN_GROUPS.appendChild(item);
+  });
+}
+
+async function ensurePluginCmds() {
+  try {
+    const resp = await fetch(`${BRIDGE_ORIGIN || ''}/api/plugins`, { credentials: 'include' });
+    const data = await resp.json();
+    const ext = Array.isArray(data && data.external) ? data.external : [];
+    _pluginCmds = ext.filter(p => p && p.name).map(p => ({
+      name: p.name,
+      description: p.description || '',
+      version: p.version || '',
+      skills: Array.isArray(p.skills) ? p.skills.length : 0,
+    }));
+  } catch (e) {
+    _pluginCmds = [];
+  }
+}
+
+async function showPluginPicker(trigger) {
+  _pluginTrigger = trigger || 'chat';
+  await ensurePluginCmds();
+  if (PLUGIN_SEARCH) PLUGIN_SEARCH.value = '';
+  _pluginDisplayed = _pluginCmds.slice();
+  _pluginIdx = _pluginDisplayed.length > 0 ? 0 : -1;
+  renderPluginList();
+  if (!PLUGIN_PANEL) return;
+  var anchorId = (_pluginTrigger === 'cdb') ? 'cdb-composer-anchor'
+              : (_pluginTrigger === 'ph') ? 'ph-composer-anchor'
+              : 'chat-composer-anchor';
+  var anchor = document.getElementById(anchorId);
+  if (anchor && PLUGIN_PANEL.parentNode !== anchor) {
+    anchor.appendChild(PLUGIN_PANEL);
+  }
+  PLUGIN_PANEL.hidden = false;
+  hideSlashPanel();
+  hideSkillPicker();
+  var _ep = document.getElementById('expert-picker-panel');
+  if (_ep) _ep.hidden = true;
+  if (PLUGIN_SEARCH) { PLUGIN_SEARCH.focus(); PLUGIN_SEARCH.select(); }
+}
+
+function hidePluginPicker() {
+  if (PLUGIN_PANEL) PLUGIN_PANEL.hidden = true;
+  _pluginIdx = -1;
+}
+
+function filterPluginList(q) {
+  const query = (q || '').trim().toLowerCase();
+  if (!query) {
+    _pluginDisplayed = _pluginCmds.slice();
+  } else {
+    _pluginDisplayed = _pluginCmds.filter(p =>
+      (p.name || '').toLowerCase().includes(query) ||
+      (p.description || '').toLowerCase().includes(query));
+  }
+  _pluginIdx = _pluginDisplayed.length > 0 ? 0 : -1;
+  renderPluginList();
+}
+
+function refreshPluginChip(trigger) {
+  const t = trigger || _pluginTrigger;
+  const chipId = (t === 'cdb') ? 'cdb-plugin-chip' : (t === 'ph') ? 'ph-plugin-chip' : 'chat-plugin-chip';
+  const chip = document.getElementById(chipId);
+  if (!chip) return;
+  const name = getLoadedPluginName(getSkillTargetInput(t));
+  const label = chip.querySelector('.skill-chip-label');
+  if (label) label.textContent = name || '插件';
+  chip.classList.toggle('on', !!name);
+  chip.title = name ? ('已选用插件：' + name + '（点击可取消）') : '选择插件';
+}
+
+function selectPluginItem() {
+  const p = _pluginDisplayed[_pluginIdx];
+  if (!p) return;
+  const el = getSkillTargetInput(_pluginTrigger);
+  if (el) {
+    const wasLoaded = getLoadedPluginName(el) === p.name;
+    el.focus();
+    // 再次点击已选用的插件 = 取消（对齐 skill picker 的单选切换手感）
+    setPluginPrefix(el, wasLoaded ? null : p.name);
+    if (!wasLoaded) {
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch (_) {}
+    }
+    try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+    refreshPluginChip(_pluginTrigger);
+  }
+  hidePluginPicker();
+}
+
+if (PLUGIN_SEARCH) {
+  PLUGIN_SEARCH.addEventListener('input', () => { filterPluginList(PLUGIN_SEARCH.value); });
+  PLUGIN_SEARCH.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (_pluginDisplayed.length === 0) return;
+      _pluginIdx = (_pluginIdx + 1) % _pluginDisplayed.length;
+      renderPluginList();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (_pluginDisplayed.length === 0) return;
+      _pluginIdx = (_pluginIdx - 1 + _pluginDisplayed.length) % _pluginDisplayed.length;
+      renderPluginList();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      selectPluginItem();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      hidePluginPicker();
+    }
+  });
+}
+
+if (PLUGIN_GROUPS) {
+  PLUGIN_GROUPS.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.slash-item');
+    if (!item) return;
+    e.preventDefault();
+    _pluginIdx = Number(item.dataset.idx);
+    selectPluginItem();
+  });
+}
+
+// 绑定 3 个 plugin-chip 按钮
+['chat-plugin-chip', 'cdb-plugin-chip', 'ph-plugin-chip'].forEach(id => {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  const trigger = id.startsWith('chat') ? 'chat' : (id.startsWith('cdb') ? 'cdb' : 'ph');
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (PLUGIN_PANEL && !PLUGIN_PANEL.hidden) {
+      hidePluginPicker();
+      return;
+    }
+    showPluginPicker(trigger);
+  });
+});
+
+// 外部点击关闭 plugin picker
+document.addEventListener('mousedown', (e) => {
+  if (!PLUGIN_PANEL || PLUGIN_PANEL.hidden) return;
+  if (PLUGIN_PANEL.contains(e.target)) return;
+  if (e.target.closest('#chat-plugin-chip') || e.target.closest('#cdb-plugin-chip') || e.target.closest('#ph-plugin-chip')) return;
+  hidePluginPicker();
+});
 
 // ──────── 专家选择器 (expert picker：镜像 skill-picker，无搜索框，单选切换) ────────
 (function(){
@@ -9372,6 +9733,7 @@ if (typeof MutationObserver !== 'undefined') {
       e.stopPropagation();
       if (EXPERT_PANEL && !EXPERT_PANEL.hidden){ hideExpertPicker(); return; }
       hideSkillPicker();
+      hidePluginPicker();
       hideSlashPanel();
       showExpertPicker();
     });
@@ -10404,6 +10766,7 @@ if (chatPanel) {
 window.ga.onBridgeReady(async () => {
   state.bridgeReady = true;
   syncPlanPollTimer();
+  startReconcile(); // 状态对账兜底:纠正 WS 通知丢失导致的灰色“假完成”卡死
   refreshStatusLabel();
   if (!state.activeId) { refreshEmptyState(null); }
   await loadModelProfiles();
@@ -10423,7 +10786,11 @@ window.ga.onBridgeNotification((msg) => {
     for (const sess of state.sessions.values()) {
       if (sess.bridgeSessionId === msg.sessionId) {
         found = true;
-        if (msg.status) sess.status = msg.status;
+        // 前端运行时正在跑(busy)时,拒绝被滞后的终态通知(done/idle/viewed)覆盖。
+        // 多会话并发/WS 乱序下,这类通知可能晚于 bridge 实际仍在运行的状态到达,
+        // 一旦覆盖就会把“真在跑”的会话误标成灰色完成点。
+        const _rtBusy = rt(sess).busy;
+        if (msg.status && !(_rtBusy && msg.status !== 'running' && msg.status !== 'cancelled' && msg.status !== 'error')) sess.status = msg.status;
         if (msg.status === 'running' || msg.state === 'running') pollSession(sess);
         if (msg.state === 'idle' || msg.status === 'idle' || msg.state === 'viewed' || msg.state === 'done') tokPollBridge();
         // 完成且用户正在看 → 自动标记已读
@@ -10443,6 +10810,34 @@ window.ga.onBridgeNotification((msg) => {
     }
   }
 });
+/* 状态对账兜底：会话状态完全依赖 WS 事件驱动,一旦 running 通知丢失/乱序,
+   会话会永久卡在 done/idle 的灰色“完成”态而 bridge 实际仍在跑(间歇 bug 根因)。
+   每隔几秒用权威的 /session poll 的 status 校正一次“看起来完成”的近期会话;
+   若 bridge 实际仍在 running 则 setBusy(true) 并重启 pollSession。 */
+let _reconcileTimer = null;
+const _RECONCILE_MS = 6000;
+const _RECONCILE_MAX_AGE = 7 * 86400 * 1000; // 仅校正近 7 天活跃过的会话,避免无谓轮询历史
+async function reconcileSessions() {
+  if (!state.bridgeReady) return;
+  for (const sess of state.sessions.values()) {
+    const r = rt(sess);
+    if (r.busy || r.polling || r._hydrating) continue;
+    // 只对“看起来完成/残留 running”的会话兜底;跳过明确已读(idle)/错误/取消,减少噪音
+    if (sess.status !== 'done' && sess.status !== 'running') continue;
+    if (!sess.lastActiveTs || Date.now() - sess.lastActiveTs > _RECONCILE_MAX_AGE) continue;
+    try {
+      const result = await fetchSessionPoll(sess, { after: r.lastId, limit: 1 });
+      const busy = applyPollResult(sess, result); // 用权威 status 校正 sess.status 与 r.busy
+      if (busy && !rt(sess).polling) pollSession(sess);
+    } catch (_) { /* 单会话失败不影响整体对账 */ }
+  }
+  renderSessionList();
+}
+function startReconcile() {
+  if (_reconcileTimer) return;
+  _reconcileTimer = setInterval(reconcileSessions, _RECONCILE_MS);
+  reconcileSessions();
+}
 window.ga.onBridgeError((err) => { console.warn('[bridge error]', err); });
 window.ga.onBridgeClosed(() => {
   state.bridgeReady = false;
@@ -12689,7 +13084,7 @@ if (chanListEl) {
 
 /* ═══════════════ 启动 ═══════════════ */
 (async () => {
-loadConvFolders();
+await loadConvFolders();
 await loadSessions();
 applyAppearance(appearance, plainUi, { persist: false });
 applyTheme(theme, { persist: false });
@@ -13270,6 +13665,7 @@ function bindComposerInRoot(root, opts) {
 
   /* ── 任务历史（持久化，来自 conductor /history API） ── */
   let histLoading = false, histSearchTimer = null, histClearArmed = false, histClearTimer = null;
+  let sessionHid = null, sessionSubId = null, sessionSeed = null, sessionReplyEl = null, sessionPollTimer = null;
 
   function switchProgTab(tab) {
     document.querySelectorAll('.collab-prog-tab').forEach(b => b.classList.toggle('is-active', b.dataset.progTab === tab));
@@ -13328,25 +13724,114 @@ function bindComposerInRoot(root, opts) {
     });
   }
 
+  /* ── 历史记录 → 页内可续聊会话（替代右侧抽屉） ── */
+  function addSessionDivider(body, text) {
+    const d = document.createElement('div');
+    d.className = 'collab-session-divider'; d.textContent = text;
+    body.appendChild(d); scrollSession();
+  }
+  function addSessionMsg(body, text, role) {
+    const toMsg = window.gaCollabItemToMsg, render = window.gaMsgNode;
+    let el;
+    if (toMsg && render) el = render(toMsg({ role: role, msg: text, ts: Date.now() / 1000 }));
+    else { el = document.createElement('div'); el.className = 'msg ' + (role === 'user' ? 'me' : 'ai'); el.innerHTML = '<div class="bubble md">' + esc(text) + '</div>'; }
+    body.appendChild(el); scrollSession(); return el;
+  }
+  function scrollSession() { const b = $('collab-session-body'); if (b) b.scrollTop = b.scrollHeight; }
+  function stopSessionPoll() { if (sessionPollTimer) { clearInterval(sessionPollTimer); sessionPollTimer = null; } }
+  function startSessionPoll() {
+    stopSessionPoll();
+    if (!sessionSubId) return;
+    const id = sessionSubId;
+    sessionPollTimer = setInterval(async () => {
+      if (sessionSubId !== id) { stopSessionPoll(); return; }
+      try {
+        const res = await fetch(`${CONDUCTOR_ORIGIN}/subagent/${id}?max_len=6000`);
+        if (!res.ok) return;
+        const s = await res.json();
+        if (sessionReplyEl && s.reply) {
+          const toMsg = window.gaCollabItemToMsg, render = window.gaMsgNode;
+          if (toMsg && render) {
+            const fresh = render(toMsg({ role: 'conductor', msg: s.reply, ts: Date.now() / 1000 }));
+            sessionReplyEl.replaceWith(fresh); sessionReplyEl = fresh;
+          } else if (sessionReplyEl.querySelector('.bubble')) {
+            sessionReplyEl.querySelector('.bubble').innerHTML = esc(s.reply);
+          }
+          scrollSession();
+        }
+        if (s.status !== 'running') stopSessionPoll();
+      } catch (e) { /* keep polling */ }
+    }, 900);
+  }
   async function openHistoryDrawer(hid) {
     try {
       const res = await fetch(`${CONDUCTOR_ORIGIN}/history/${hid}`);
       if (!res.ok) return;
       const h = await res.json();
-      closeWorkerDrawer();
-      drawerEl = document.createElement('div');
-      drawerEl.className = 'collab-drawer-wrap';
-      const when = h.updated_at ? new Date(h.updated_at * 1000).toLocaleString() : '';
-      const stTxt = h.status === 'aborted' ? '⚠ 中断' : '✓ 完成';
-      const dur = h.duration != null ? (h.duration < 60 ? h.duration + 's' : Math.round(h.duration / 60) + 'min') : '';
-      const title = (h.prompt || '').split('\n')[0].slice(0, 80) || '(无提示词)';
-      drawerEl.innerHTML = `<div class="collab-drawer-backdrop"></div><aside class="collab-drawer"><div class="collab-drawer-head"><span class="collab-drawer-title">${esc(title)}</span><button class="modal-x collab-drawer-close">${GA_ICON('x')}</button></div><div class="collab-hist-meta"><span class="collab-hist-meta-st collab-hist-st--${h.status}">${stTxt}</span>${dur ? `<span>${dur}</span>` : ''}${when ? `<span>${when}</span>` : ''}</div><div class="collab-drawer-body"><div class="bubble md"></div></div></aside>`;
-      const bubble = drawerEl.querySelector('.collab-drawer-body .bubble');
-      if (bubble) { bubble.innerHTML = renderTurnBody(h.reply || '（无内容）'); postRenderEnhance(bubble); }
-      drawerEl.querySelector('.collab-drawer-backdrop').onclick = closeWorkerDrawer;
-      drawerEl.querySelector('.collab-drawer-close').onclick = closeWorkerDrawer;
-      document.body.appendChild(drawerEl);
+      stopSessionPoll();
+      sessionHid = hid; sessionSubId = null; sessionSeed = null; sessionReplyEl = null;
+      const overlay = $('collab-session'), body = $('collab-session-body');
+      if (!overlay || !body) return;
+      $('collab-session-title').textContent = ((h.prompt || '').split('\n')[0] || '(无提示词)').slice(0, 60);
+      body.innerHTML = '';
+      addSessionDivider(body, '历史会话 · ' + (h.updated_at ? new Date(h.updated_at * 1000).toLocaleString() : ''));
+      addSessionMsg(body, h.prompt || '(无提示词)', 'user');
+      addSessionMsg(body, h.reply || '（无内容）', 'conductor');
+      const rBtn = $('collab-session-resume');
+      rBtn.style.display = ''; rBtn.disabled = false; rBtn.textContent = '继续对话';
+      $('collab-session-input').disabled = true;
+      $('collab-session-send').disabled = true;
+      overlay.hidden = false;
     } catch (e) { /* ignore */ }
+  }
+  async function resumeCollabSession() {
+    if (!sessionHid) return;
+    const btn = $('collab-session-resume');
+    btn.disabled = true; btn.textContent = '续接中…';
+    try {
+      const res = await fetch(`${CONDUCTOR_ORIGIN}/history/${sessionHid}/resume`, { method: 'POST' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      btn.style.display = 'none';
+      $('collab-session-input').disabled = false;
+      $('collab-session-send').disabled = false;
+      const body = $('collab-session-body');
+      if (!data.recreated) {
+        sessionSubId = data.id;
+        addSessionDivider(body, '续接会话（复用原会话）');
+        sessionReplyEl = addSessionMsg(body, '（生成中…）', 'conductor');
+        startSessionPoll();
+      } else {
+        sessionSeed = data.seed || null;
+        addSessionDivider(body, '续接会话（已重建，等待你的第一条消息）');
+      }
+    } catch (e) { btn.disabled = false; btn.textContent = '继续对话'; }
+  }
+  async function sendCollabSession() {
+    const input = $('collab-session-input');
+    const msg = input.value.trim();
+    if (!msg || (!sessionSubId && !sessionSeed)) return;
+    const body = $('collab-session-body');
+    addSessionMsg(body, msg, 'user');
+    input.value = ''; input.focus();
+    sessionReplyEl = addSessionMsg(body, '（生成中…）', 'conductor');
+    try {
+      if (sessionSubId) {
+        fetch(`${CONDUCTOR_ORIGIN}/subagent/${sessionSubId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'input', msg }) });
+        startSessionPoll();
+      } else if (sessionSeed) {
+        const combined = '【续接历史任务】你之前做过这个任务：\n' + sessionSeed.prompt + '\n\n你之前的完成结果是：\n' + sessionSeed.reply + '\n\n【用户现在的要求】\n' + msg;
+        const res = await fetch(`${CONDUCTOR_ORIGIN}/subagent`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: combined }) });
+        const data = await res.json();
+        sessionSubId = data.id || null; sessionSeed = null;
+        startSessionPoll();
+      }
+    } catch (e) { if (sessionReplyEl) { const b = sessionReplyEl.querySelector('.bubble'); if (b) b.innerHTML = '发送失败: ' + esc(e.message); } }
+  }
+  function exitCollabSession() {
+    stopSessionPoll();
+    sessionHid = null; sessionSubId = null; sessionSeed = null; sessionReplyEl = null;
+    const overlay = $('collab-session'); if (overlay) overlay.hidden = true;
   }
 
   function clearHistory() {
@@ -13367,6 +13852,10 @@ function bindComposerInRoot(root, opts) {
   }
 
   $('collab-retry')?.addEventListener('click', () => { S.failCount = 0; S.reconnecting = false; resetWs(); connect(); });
+  $('collab-session-back')?.addEventListener('click', exitCollabSession);
+  $('collab-session-resume')?.addEventListener('click', resumeCollabSession);
+  $('collab-session-send')?.addEventListener('click', sendCollabSession);
+  $('collab-session-input')?.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendCollabSession(); } });
   $('collab-rail-toggle')?.addEventListener('click', () => toggleProgress());
   document.querySelectorAll('.collab-prog-tab').forEach(b => b.addEventListener('click', () => switchProgTab(b.dataset.progTab)));
   $('collab-hist-search')?.addEventListener('input', () => { clearTimeout(histSearchTimer); histSearchTimer = setTimeout(loadHistory, 300); });
@@ -14133,25 +14622,17 @@ function openDiffViewer(name, diffText) {
   closeFilePreview();
   const ov = document.createElement('div');
   ov.className = 'files-preview-overlay';
-  ov.innerHTML = `<div class="files-preview-modal" style="max-width:920px"><div class="files-preview-header"><span class="files-preview-name" title="Review: ${escapeHtml(name)}">Review: ${escapeHtml(name)}</span><button type="button" class="files-preview-close" title="关闭"><span data-ga-icon="x"></span></button></div><div class="files-preview-body" style="display:block;background:#1e1e2e;padding:10px 0;align-items:stretch;justify-content:flex-start"></div></div>`;
+  ov.innerHTML = `<div class="files-preview-modal diff-viewer"><div class="files-preview-header"><span class="files-preview-name" title="Review: ${escapeHtml(name)}">Review: ${escapeHtml(name)}</span><button type="button" class="files-preview-close" title="关闭"><span data-ga-icon="x"></span></button></div><div class="files-preview-body diff-viewer-body"></div></div>`;
   const body = ov.querySelector('.files-preview-body');
   const frag = document.createDocumentFragment();
   for (const line of diffText.split('\n')) {
     const div = document.createElement('div');
     div.textContent = line || ' ';
-    div.style.cssText = 'font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.6;padding:0 14px;white-space:pre-wrap;word-break:break-all;color:#cdd6f4;';
-    if (line.startsWith('+') && !line.startsWith('+++')) {
-      div.style.background = 'rgba(166,227,161,0.15)';
-      div.style.color = '#a6e3a1';
-    } else if (line.startsWith('-') && !line.startsWith('---')) {
-      div.style.background = 'rgba(243,139,168,0.15)';
-      div.style.color = '#f38ba8';
-    } else if (line.startsWith('@@')) {
-      div.style.color = '#89b4fa';
-      div.style.marginTop = '8px';
-    } else if (line.startsWith('diff ') || line.startsWith('index ')) {
-      div.style.color = '#6c7086';
-    }
+    div.className = 'diff-line';
+    if (line.startsWith('+') && !line.startsWith('+++')) div.classList.add('diff-add');
+    else if (line.startsWith('-') && !line.startsWith('---')) div.classList.add('diff-del');
+    else if (line.startsWith('@@')) div.classList.add('diff-hunk');
+    else if (line.startsWith('diff ') || line.startsWith('index ')) div.classList.add('diff-meta');
     frag.appendChild(div);
   }
   body.appendChild(frag);
@@ -14190,13 +14671,20 @@ function closeFilePreview() {
 let _chatFileMenuEl = null;
 function renderProducedFilesHtml(files) {
   if (!Array.isArray(files) || !files.length) return '';
-  let html = '<div class="chat-produced-files">';
+  const totalAdd = files.reduce((n, f) => n + Number(f.additions || 0), 0);
+  const totalDel = files.reduce((n, f) => n + Number(f.deletions || 0), 0);
+  let html = `<div class="artifact-summary"><span data-ga-icon="gitFork"></span><strong>本轮产出</strong><span>${files.length} 个文件</span><span class="artifact-stat add">+${totalAdd}</span><span class="artifact-stat del">-${totalDel}</span></div><div class="chat-produced-files">`;
+  const labels = { created: '新增', modified: '修改', deleted: '删除' };
   for (const f of files) {
     const tp = (f.type || '').toLowerCase();
     const icon = _chatFileIcon(tp);
-    html += `<div class="chat-produced-file" data-path="${encodeURIComponent(f.path)}" data-name="${encodeURIComponent(f.name)}" data-type="${encodeURIComponent(tp)}">
+    const change = f.change || 'modified';
+    const diff = f.diff || '';
+    const sub = `${labels[change] || change} · +${Number(f.additions || 0)} -${Number(f.deletions || 0)}`;
+    html += `<div class="chat-produced-file change-${escapeHtml(change)}" data-path="${encodeURIComponent(f.path || '')}" data-name="${encodeURIComponent(f.name || '')}" data-type="${encodeURIComponent(tp)}" data-diff="${encodeURIComponent(diff)}" data-previewable="${f.previewable === false ? 0 : 1}">
       <span class="cpf-icon" data-ga-icon="${icon}"></span>
-      <span class="cpf-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+      <span class="cpf-meta"><span class="cpf-name" title="${escapeHtml(f.relative_path || f.name)}">${escapeHtml(f.name)}</span><span class="cpf-sub">${escapeHtml(sub)}</span></span>
+      ${diff ? '<button type="button" class="cpf-diff-btn" title="查看 unified diff"><span data-ga-icon="gitDiff"></span></button>' : ''}
       <button type="button" class="cpf-menu-btn" title="更多操作"><span data-ga-icon="dotsThreeVertical"></span></button>
     </div>`;
   }
@@ -14212,8 +14700,10 @@ function _chatFileIcon(tp) {
 function bindProducedFiles(container) {
   if (!container) return;
   container.querySelectorAll('.chat-produced-file').forEach(el => {
-    const f = { path: decodeURIComponent(el.dataset.path || ''), name: decodeURIComponent(el.dataset.name || ''), type: decodeURIComponent(el.dataset.type || ''), source: 'chat' };
-    el.addEventListener('click', (e) => { if (e.target.closest('.cpf-menu-btn')) return; filesExecPreview(f); });
+    const f = { path: decodeURIComponent(el.dataset.path || ''), name: decodeURIComponent(el.dataset.name || ''), type: decodeURIComponent(el.dataset.type || ''), diff: decodeURIComponent(el.dataset.diff || ''), change: el.classList.contains('change-deleted') ? 'deleted' : '', source: 'chat' };
+    el.addEventListener('click', (e) => { if (e.target.closest('.cpf-menu-btn, .cpf-diff-btn')) return; if (el.dataset.previewable !== '0') filesExecPreview(f); });
+    const diffBtn = el.querySelector('.cpf-diff-btn');
+    if (diffBtn) diffBtn.addEventListener('click', (e) => { e.stopPropagation(); openDiffViewer(f.name, decodeURIComponent(el.dataset.diff || '')); });
     const btn = el.querySelector('.cpf-menu-btn');
     if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); openChatFileMenu(btn, f); });
   });
@@ -14232,13 +14722,16 @@ async function openChatFileMenu(btn, f) {
     menu.appendChild(it);
   };
   if (isFilePreviewable(f.type, f.source)) add(t('files.preview'), 'magnifyingGlass', filesExecPreview);
-  let hasChanges = false;
-  try {
-    const res = await fetch(`${BRIDGE_ORIGIN}/api/files/diff?path=${encodeURIComponent(f.path)}`);
-    const d = await res.json();
-    hasChanges = d.ok && d.has_changes;
-  } catch(e) {}
-  if (hasChanges) add('Review 变更', 'gitFork', filesExecReviewDiff);
+  if (f.diff) add('查看 unified diff', 'gitFork', () => openDiffViewer(f.name, f.diff));
+  else {
+    let hasChanges = false;
+    try {
+      const res = await fetch(`${BRIDGE_ORIGIN}/api/files/diff?path=${encodeURIComponent(f.path)}`);
+      const d = await res.json();
+      hasChanges = d.ok && d.has_changes;
+    } catch(e) {}
+    if (hasChanges) add('Review 变更', 'gitFork', filesExecReviewDiff);
+  }
   add('打开文件', 'fileText', filesExecOpen);
   add('打开位置', 'folderSimple', filesExecReveal);
   add('复制路径', 'copy', filesExecCopy);
@@ -14543,8 +15036,11 @@ function fileIcon(type) {
     mp3:'🎵',wav:'🎵',flac:'🎵',
     mp4:'🎬',avi:'🎬',mov:'🎬',
     csv:'📊',xlsx:'📊',xls:'📊',
+    sh:'🐚',bash:'🐚',zsh:'🐚',jq:'📜',cfg:'⚙️',conf:'⚙️',ini:'⚙️',env:'🔧',
   };
-  return map[(type||'').toLowerCase()]||'📁';
+  // 注意：📁 仅用于“目录”，文件类型一律不应回退到文件夹图标。
+  // 未知扩展名用通用文档图标，避免与目录图标混淆。
+  return map[(type||'').toLowerCase()]||'📄';
 }
 
 function formatFileSize(bytes) {

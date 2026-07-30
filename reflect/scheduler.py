@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 try: _lock
 except NameError:
     _lock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
-    _lock.bind(('127.0.0.1', 45762)); _lock.listen(1)
+    _lock.bind(('127.0.0.1', int(os.environ.get('GA_SCHEDULER_LOCK_PORT', '45762')))); _lock.listen(1)
 
 INTERVAL = 120
 ONCE = False

@@ -265,6 +265,213 @@ def smart_format(data, max_str_len=100, omit_str=' ... '):
     if len(data) < max_str_len + len(omit_str)*2: return data
     return f"{data[:max_str_len//2]}{omit_str}{data[-max_str_len//2:]}"
 
+# ── git_checkpoint 辅助函数 ──────────────────────────────────────────────────
+_GIT_TIMEOUT = 30
+_GIT_CKPT_PREFIX = "ga-ckpt-"
+
+def _git_run(args, repo_dir, timeout=_GIT_TIMEOUT, check=True, input_data=None):
+    """Run a git command in repo_dir. Returns (returncode, stdout, stderr)."""
+    try:
+        proc = subprocess.run(
+            ["git"] + args, cwd=repo_dir, capture_output=True,
+            text=True, timeout=timeout, input=input_data,
+        )
+    except FileNotFoundError:
+        raise FileNotFoundError("git 可执行文件未找到。请安装 git 并确保在 PATH 中。")
+    if check and proc.returncode != 0:
+        raise RuntimeError(f"git {' '.join(args)} failed (rc={proc.returncode}): {proc.stderr.strip() or proc.stdout.strip()}")
+    return proc.returncode, proc.stdout, proc.stderr
+
+def _git_parse_status_porcelain_v2(text):
+    """Parse git status --porcelain=v2 -b output into structured dict."""
+    branch, upstream, staged, unstaged, untracked = "HEAD", "", [], [], []
+    for line in text.splitlines():
+        if not line: continue
+        if line.startswith("# branch.head "): branch = line.split(" ", 2)[2]
+        elif line.startswith("# branch.upstream "): upstream = line.split(" ", 2)[2]
+        elif line.startswith("# branch.ab "):
+            parts = line.split(" ")
+            if len(parts) >= 4: upstream += f" (ahead {parts[2]}, behind {parts[3]})"
+        elif line.startswith("1 ") or line.startswith("2 "):
+            parts = line.split(" ")
+            xy, path = parts[1], parts[-1]
+            entry = {"path": path, "index": xy[0], "work": xy[1]}
+            if xy[0] != ".": staged.append(entry)
+            if xy[1] != ".": unstaged.append(entry)
+        elif line.startswith("? "): untracked.append({"path": line[2:]})
+    return {"branch": branch, "upstream": upstream, "staged": staged, "unstaged": unstaged, "untracked": untracked}
+
+def git_status(repo_dir):
+    rc, out, err = _git_run(["status", "--porcelain=v2", "-b", "--untracked-files=all"], repo_dir, check=False)
+    if rc != 0: return {"status": "error", "msg": err.strip() or out.strip()}
+    parsed = _git_parse_status_porcelain_v2(out)
+    parsed["summary"] = f"{len(parsed['staged'])} staged, {len(parsed['unstaged'])} modified, {len(parsed['untracked'])} untracked"
+    parsed["status"] = "success"
+    return parsed
+
+def git_diff(repo_dir, files=None, staged=False):
+    args = ["diff", "--no-color", "--stat"]
+    if staged: args.insert(1, "--staged")
+    if files:
+        args += ["--"] + (files if isinstance(files, list) else [files])
+    rc, stat_out, err = _git_run(args, repo_dir, check=False)
+    if rc != 0: return {"status": "error", "msg": err.strip() or stat_out.strip()}
+    body_args = ["diff", "--no-color"]
+    if staged: body_args.insert(1, "--staged")
+    if files: body_args += ["--"] + (files if isinstance(files, list) else [files])
+    _, body_out, _ = _git_run(body_args, repo_dir, check=False)
+    if not stat_out.strip():
+        return {"status": "success", "stat": "", "diff": "", "msg": "无变更（工作区干净）"}
+    return {"status": "success", "stat": stat_out.strip(), "diff": body_out[:6000] + ("\n... [truncated]" if len(body_out) > 6000 else "")}
+
+def _git_block_on_protected_branch(repo_dir, op):
+    rc, out, _ = _git_run(["rev-parse", "--abbrev-ref", "HEAD"], repo_dir, check=False)
+    branch = (out or "").strip()
+    if branch in ("main", "master"):
+        return {"status": "error", "msg": f"⚠️ 当前在受保护分支 {branch}！{op} 之前必须先 git_checkpoint(action=branch) 切到工作分支。"}
+    return None
+
+def git_commit(repo_dir, message, files=None, add_all=True, no_confirm=False):
+    if not message: return {"status": "error", "msg": "message 必填（commit 描述）"}
+    guard = _git_block_on_protected_branch(repo_dir, "commit")
+    if guard: return guard
+    if add_all: _git_run(["add", "-A"], repo_dir)
+    elif files: _git_run(["add", "--"] + (files if isinstance(files, list) else [files]), repo_dir)
+    rc, out, err = _git_run(["diff", "--cached", "--quiet"], repo_dir, check=False)
+    if rc == 0: return {"status": "error", "msg": "无 staged 变更，无需 commit。"}
+    rc, out, err = _git_run(["commit", "-m", message], repo_dir)
+    sha = ""
+    rc2, log_out, _ = _git_run(["log", "-1", "--format=%H"], repo_dir, check=False)
+    if rc2 == 0: sha = log_out.strip()
+    return {"status": "success", "sha": sha, "short": sha[:7], "msg": out.strip()}
+
+def git_checkpoint_create(repo_dir, message, files=None, add_all=True):
+    """Commit + tag with ga-ckpt-<ts>-<shortsha>. message is stored as tag annotation.
+    Timestamp precision: microseconds (YYYYMMDD-HHMMSSffffff) so list ordering is deterministic."""
+    if not message: message = f"auto checkpoint @ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    commit_res = git_commit(repo_dir, message=message, files=files, add_all=add_all)
+    if commit_res.get("status") != "success": return commit_res
+    sha = commit_res["sha"]
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S%f")
+    tag_name = f"{_GIT_CKPT_PREFIX}{ts}-{sha[:7]}"
+    _git_run(["tag", "-a", tag_name, sha, "-m", message], repo_dir)
+    return {"status": "success", "checkpoint_id": tag_name, "sha": sha, "message": message, "created": ts}
+
+def git_checkpoint_list(repo_dir, max_count=20):
+    # tag 名前缀是微秒精度时间戳 (ga-ckpt-YYYYMMDD-HHMMSSffffff-)，v:refname 倒序 = 时间倒序
+    rc, out, err = _git_run(["tag", "-l", f"{_GIT_CKPT_PREFIX}*", "--sort=-v:refname",
+                             f"--format=%(refname:short)|%(creatordate:iso)|%(subject)"], repo_dir, check=False)
+    if rc != 0: return {"status": "error", "msg": err.strip() or out.strip()}
+    if not out.strip(): return {"status": "success", "checkpoints": [], "msg": "尚无 checkpoint"}
+    items = []
+    for line in out.splitlines()[:max_count]:
+        parts = line.split("|", 2)
+        if len(parts) < 3: continue
+        tag, ts, subj = parts
+        rc2, sha_out, _ = _git_run(["rev-list", "-n", "1", tag], repo_dir, check=False)
+        sha = sha_out.strip()
+        rc3, files_out, _ = _git_run(["show", "--stat", "--format=", tag], repo_dir, check=False)
+        n_files = sum(1 for ln in files_out.splitlines() if ln.strip().startswith("|")) if rc3 == 0 else 0
+        items.append({"id": tag, "sha": sha, "short": sha[:7], "time": ts, "message": subj, "files_changed": n_files})
+    return {"status": "success", "count": len(items), "checkpoints": items}
+
+def git_checkpoint_restore(repo_dir, ckpt_id, no_confirm=False):
+    if not ckpt_id.startswith(_GIT_CKPT_PREFIX): ckpt_id = _GIT_CKPT_PREFIX + ckpt_id
+    rc, sha, _ = _git_run(["rev-parse", "--verify", ckpt_id], repo_dir, check=False)
+    if rc != 0: return {"status": "error", "msg": f"checkpoint 不存在: {ckpt_id}。先 action=list 看可用 id。"}
+    if not no_confirm:
+        return {"status": "needs_confirm", "msg": f"⚠️ 危险操作：将 reset --hard 到 {ckpt_id} ({sha.strip()[:7]})。当前未提交变更将丢失。请传 no_confirm=true 确认执行。reflog 仍可恢复: git reflog | grep {sha.strip()[:7]}", "checkpoint_id": ckpt_id, "sha": sha.strip()}
+    rc, head_before, _ = _git_run(["rev-parse", "HEAD"], repo_dir, check=False)
+    _git_run(["reset", "--hard", ckpt_id], repo_dir)
+    log_dir = os.path.join(script_dir, ".workbuddy")
+    os.makedirs(log_dir, exist_ok=True)
+    with open(os.path.join(log_dir, "git_restore.log"), "a", encoding="utf-8") as f:
+        f.write(f"{datetime.now().isoformat()}\t{repo_dir}\t{ckpt_id}\tfrom={head_before.strip()}\n")
+    return {"status": "success", "checkpoint_id": ckpt_id, "restored_to": sha.strip(), "previous_head": head_before.strip(),
+            "note": "如需回退本次 restore: git reset --hard " + head_before.strip()}
+
+def git_branch_op(repo_dir, name=None, create_from=None):
+    rc, current, _ = _git_run(["rev-parse", "--abbrev-ref", "HEAD"], repo_dir, check=False)
+    cur = (current or "").strip()
+    if not name: return {"status": "success", "current": cur,
+                         "branches": _git_run(["branch", "--format=%(refname:short)|%(upstream:short)"], repo_dir, check=False)[1].strip().splitlines()}
+    if name == cur: return {"status": "error", "msg": f"已在分支 {name}"}
+    rc, _, _ = _git_run(["rev-parse", "--verify", f"refs/heads/{name}"], repo_dir, check=False)
+    if rc == 0:
+        _git_run(["checkout", name], repo_dir)
+        return {"status": "success", "action": "switched", "branch": name}
+    base = create_from or "HEAD"
+    rc, out, err = _git_run(["checkout", "-b", name, base], repo_dir, check=False)
+    if rc != 0: return {"status": "error", "msg": err.strip() or out.strip()}
+    return {"status": "success", "action": "created_and_switched", "branch": name, "from": base}
+
+def git_log(repo_dir, max_count=15):
+    rc, out, _ = _git_run(["log", f"-n{max_count}", "--oneline", "--graph", "--decorate"], repo_dir, check=False)
+    if rc != 0: return {"status": "error", "msg": "log 失败"}
+    return {"status": "success", "log": out.strip() or "（无提交）"}
+
+def _git_pick_remote(repo_dir, preferred=None):
+    rc, out, _ = _git_run(["remote"], repo_dir, check=False)
+    remotes = [r.strip() for r in (out or "").splitlines() if r.strip()]
+    if preferred and preferred in remotes: return preferred
+    for r in ("myfork", "origin"):
+        if r in remotes: return r
+    return remotes[0] if remotes else None
+
+def _github_token():
+    try:
+        import mykey
+        for k in ("github_token", "gh_token", "github_pat"):
+            v = getattr(mykey, k, None)
+            if v: return v, "github"
+        for k in ("gitlab_token", "glab_token"):
+            v = getattr(mykey, k, None)
+            if v: return v, "gitlab"
+    except Exception: pass
+    env = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    return (env, "github") if env else (None, None)
+
+def _git_parse_repo_slug(remote_url):
+    """Parse 'git@github.com:owner/repo.git' or 'https://github.com/owner/repo.git' -> ('owner/repo', 'github')."""
+    s = remote_url.strip()
+    if s.startswith("git@"): s = s.split(":", 1)[1]
+    elif "://" in s: s = s.split("://", 1)[1]
+    s = s.rstrip("/")
+    if s.endswith(".git"): s = s[:-4]
+    host = "github" if "github" in remote_url.lower() else ("gitlab" if "gitlab" in remote_url.lower() else "unknown")
+    return s, host
+
+def git_create_pr(repo_dir, title, body, target=None, remote=None):
+    rc, br_out, _ = _git_run(["rev-parse", "--abbrev-ref", "HEAD"], repo_dir, check=False)
+    head = (br_out or "").strip()
+    if head in ("main", "master", "HEAD", ""): return {"status": "error", "msg": f"当前分支是 {head or '空'}，无法创建 PR。restore 之后 HEAD 可能变成 detached；请先 git_checkpoint(action=branch) 切到工作分支。"}
+    if not title: return {"status": "error", "msg": "pr_title 必填"}
+    if not target:
+        rc, def_out, _ = _git_run(["symbolic-ref", "refs/remotes/origin/HEAD"], repo_dir, check=False)
+        target = (def_out or "").strip().split("/")[-1] or "main"
+    push_remote = _git_pick_remote(repo_dir, remote)
+    if not push_remote: return {"status": "error", "msg": "未配置任何 remote，无法 push。"}
+    _git_run(["push", "-u", push_remote, head], repo_dir, timeout=60)
+    gh_path = shutil.which("gh")
+    if gh_path:
+        try:
+            proc = subprocess.run([gh_path, "pr", "create", "--title", title, "--body", body or "", "--base", target, "--head", head],
+                                  cwd=repo_dir, capture_output=True, text=True, timeout=60)
+            if proc.returncode == 0: return {"status": "success", "method": "gh", "url": proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else "", "head": head, "target": target, "remote": push_remote}
+        except Exception: pass
+    token, host = _github_token()
+    if not token: return {"status": "error", "msg": f"已 push 到 {push_remote}，但创建 PR 失败：未找到 gh CLI 也未配置 token。手动访问: https://github.com/<owner>/<repo>/compare/{target}...{head}?expand=1", "head": head, "target": target, "remote": push_remote}
+    rc, url_out, _ = _git_run(["remote", "get-url", push_remote], repo_dir, check=False)
+    slug, host_parsed = _git_parse_repo_slug(url_out)
+    if "github" not in (host_parsed or "") + (host or ""):
+        return {"status": "error", "msg": f"仅支持 GitHub/GitLab PR 自动创建，当前 remote host={host_parsed}。请用 gh 或网页手动创建。"}
+    import requests as _req
+    api = f"https://api.github.com/repos/{slug}/pulls"
+    r = _req.post(api, headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}, json={"title": title, "body": body or "", "head": head, "base": target}, timeout=30)
+    if r.status_code in (200, 201):
+        return {"status": "success", "method": "rest_api", "url": r.json().get("html_url", ""), "number": r.json().get("number"), "head": head, "target": target, "remote": push_remote}
+    return {"status": "error", "msg": f"GitHub API 失败 (HTTP {r.status_code}): {r.text[:500]}", "head": head, "target": target}
+
 def consume_file(dr, file):
     if dr and os.path.exists(os.path.join(dr, file)): 
         with open(os.path.join(dr, file), encoding='utf-8', errors='replace') as f: content = f.read()
@@ -547,6 +754,255 @@ class GenericAgentHandler(BaseHandler):
             result = result[:maxlen] + f"\n... [output truncated at {maxlen} chars]"
         return StepOutcome(result, next_prompt=self._get_anchor_prompt(skip=args.get('_index', 0) > 0))
 
+    # ── 预加载仓库结构索引（Codex 式：开局吃透整个仓库）──────────────────────
+    def do_repo_index(self, args, response):
+        '''基于 ripgrep 扫描生成文件清单+符号映射+语言统计，缓存到 .ga_search/repo_index.json。
+        大仓库开局先 build 一次，之后用 find/symbols 秒级查询，避免反复走 code_run 遍历。'''
+        action = (args.get("action") or "stats").strip().lower()
+        root = self._get_abs_path(args.get("path", "."))
+        if not os.path.isdir(root): root = os.path.dirname(root) or self.cwd
+        cache_dir = os.path.join(root, ".ga_search")
+        idx_path = os.path.join(cache_dir, "repo_index.json")
+        os.makedirs(cache_dir, exist_ok=True)
+        yield f"\n[Action] repo_index({action}) in {root}\n"
+        if action in ("build", "rebuild"):
+            force = action == "rebuild" or bool(args.get("force"))
+            if not force and os.path.exists(idx_path):
+                try:
+                    ex = json.load(open(idx_path, encoding="utf-8"))
+                    if ex.get("root") == os.path.abspath(root):
+                        return StepOutcome(f"索引已存在（{ex.get('built_at','?')}，{ex.get('file_count',0)} 文件 / {ex.get('symbol_count',0)} 符号）。如需重建加 force=true。", next_prompt=self._get_anchor_prompt())
+                except Exception:
+                    pass
+            files_out, _, _ = self._run_rg(["--files", "--no-messages"], cwd=root)
+            if files_out is None:
+                return StepOutcome("Error: rg 不可用，无法建索引。", next_prompt="\n")
+            file_list = [l for l in files_out.splitlines() if l.strip()]
+            sym_cmd = ["--no-heading", "--color=never", "-n"]
+            for p in (
+                r'^\s*(?:async\s+)?def\s+([A-Za-z_]\w*)',
+                r'^\s*class\s+([A-Za-z_]\w*)',
+                r'^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_]\w*)',
+                r'^\s*(?:const|let|var)\s+([A-Za-z_]\w*)\s*=',
+                r'^\s*(?:pub(?:\([^)]*\))?\s+)?fn\s+([A-Za-z_]\w*)',
+                r'^\s*(?:func|struct|interface|type|enum|trait|impl|mod|namespace|module)\s+([A-Za-z_]\w*)',
+                r'^\s*[A-Za-z_][\w.<>\[\],\s*&:?]*?\b([A-Za-z_]\w*)\s*\(',
+            ):
+                sym_cmd += ["-e", p]
+            sym_cmd.append(root)
+            sym_out, _, _ = self._run_rg(sym_cmd, cwd=root, timeout=60)
+            _SKIP = {'if','for','while','switch','catch','return','sizeof','foreach','lock','using','when','try','do','new','in','out','else','with',
+                     'def','class','function','const','let','var','pub','fn','func','struct','interface','type','enum','trait','impl','mod','namespace','module',
+                     'export','async','static','public','private','protected','final','override','abstract','virtual','extern','inline',
+                     'int','void','char','float','double','bool','long','short','unsigned','signed','auto','self','this'}
+            symbol_map, file_syms = {}, {}
+            if sym_out:
+                for line in sym_out.splitlines():
+                    m = re.match(r'^(.+?):(\d+):(.*)$', line)
+                    if not m: continue
+                    f, rest = m.group(1), m.group(3)
+                    name = next((t for t in re.findall(r'[A-Za-z_]\w*', rest) if t not in _SKIP), None)
+                    if not name: continue
+                    symbol_map.setdefault(name, []).append(f"{f}:{m.group(2)}")
+                    file_syms.setdefault(f, []).append(name)
+            lang_map = {'.py':'py','.js':'js','.ts':'ts','.tsx':'ts','.jsx':'js','.rs':'rs','.go':'go',
+                        '.java':'java','.kt':'kt','.kts':'kt','.c':'c','.h':'c','.cpp':'cpp','.cc':'cpp',
+                        '.hpp':'cpp','.rb':'rb','.php':'php','.swift':'swift','.m':'objc','.mm':'objc',
+                        '.cs':'cs','.scala':'scala','.sh':'sh','.md':'md','.json':'json','.yaml':'yaml',
+                        '.yml':'yaml','.toml':'toml','.html':'html','.css':'css','.sql':'sql','.r':'r','.lua':'lua'}
+            ext_count = {}
+            for f in file_list:
+                _, ext = os.path.splitext(f)
+                lang = lang_map.get(ext.lower(), (ext.lower().lstrip('.') or 'other'))
+                ext_count[lang] = ext_count.get(lang, 0) + 1
+            index = {
+                "built_at": datetime.now().isoformat(timespec="seconds"),
+                "root": os.path.abspath(root),
+                "file_count": len(file_list),
+                "languages": dict(sorted(ext_count.items(), key=lambda x: -x[1])[:30]),
+                "symbol_count": len(symbol_map),
+                "symbols": dict(list(symbol_map.items())[:20000]),
+                "files": sorted(os.path.relpath(f, root) for f in file_list)[:20000],
+            }
+            json.dump(index, open(idx_path, "w", encoding="utf-8"), ensure_ascii=False)
+            langs = ", ".join(f"{k}:{v}" for k, v in list(index["languages"].items())[:12])
+            return StepOutcome(f"索引已构建：{index['file_count']} 文件 / {index['symbol_count']} 符号。语言：{langs}。缓存于 {idx_path}", next_prompt=self._get_anchor_prompt())
+        if not os.path.exists(idx_path):
+            return StepOutcome("索引未构建。请先调用 repo_index(action=build)。", next_prompt="\n")
+        try:
+            index = json.load(open(idx_path, encoding="utf-8"))
+        except Exception as e:
+            return StepOutcome(f"索引读取失败：{e}。请 rebuild。", next_prompt="\n")
+        if action == "stats":
+            langs = ", ".join(f"{k}:{v}" for k, v in list(index.get("languages", {}).items())[:15])
+            return StepOutcome(f"仓库索引概览\n- 根：{index.get('root')}\n- 文件数：{index.get('file_count')}\n- 符号数：{index.get('symbol_count')}\n- 语言：{langs}\n- 构建于：{index.get('built_at')}", next_prompt=self._get_anchor_prompt())
+        q = (args.get("query") or args.get("pattern") or "").lower()
+        if not q:
+            return StepOutcome(f"{action} 需要 query 参数。", next_prompt="\n")
+        maxr = min(int(args.get("max_results", 50 if action == "find" else 30)), 200)
+        if action == "find":
+            hits = [f for f in index.get("files", []) if q in f.lower()][:maxr]
+            if not hits:
+                return StepOutcome(f"索引中未找到文件名含 '{q}' 的文件（已索引 {len(index.get('files', []))} 个）。", next_prompt="\n")
+            return StepOutcome(f"找到 {len(hits)} 个文件名含 '{q}'（显示前 {maxr}）：\n" + "\n".join(hits), next_prompt=self._get_anchor_prompt())
+        if action == "symbols":
+            syms = index.get("symbols", {})
+            exact = syms.get(q) or next((v for k, v in syms.items() if k.lower() == q), None)
+            if exact:
+                return StepOutcome(f"符号 '{q}' 精确匹配 → {len(exact)} 处：\n" + "\n".join(exact[:maxr]), next_prompt=self._get_anchor_prompt())
+            matched = [(k, v) for k, v in syms.items() if q in k.lower()][:maxr]
+            if not matched:
+                return StepOutcome(f"索引中未找到含 '{q}' 的符号。可试 repo_index(action=find) 搜文件名，或 code_search 搜内容。", next_prompt=self._get_anchor_prompt())
+            return StepOutcome("符号含 '" + q + f"' 的 {len(matched)} 个匹配：\n" + "\n".join(f"  {k} → {len(v)} 处（如 {v[0]}）" for k, v in matched), next_prompt=self._get_anchor_prompt())
+        return StepOutcome(f"未知 action: {action}。支持 build/rebuild/stats/find/symbols。", next_prompt="\n")
+
+    # ── 语义/自然语言搜索（Cursor 式：按意图找代码）─────────────────────────
+    def _load_embed_cfg(self):
+        '''返回 (api_key, api_base, model) 或 None（无 embedding 后端 → 降级）'''
+        try:
+            if script_dir not in sys.path: sys.path.insert(0, script_dir)
+            import mykey
+            importlib.reload(mykey)
+        except Exception:
+            return None
+        ak = getattr(mykey, 'embedding_apikey', None) or getattr(mykey, 'emb_key', None)
+        if not ak:
+            for name in dir(mykey):
+                if 'native_oai' in name and name.endswith('_config'):
+                    cfg = getattr(mykey, name)
+                    if isinstance(cfg, dict) and cfg.get('apikey'):
+                        return cfg['apikey'], cfg.get('apibase', 'https://api.openai.com/v1'), 'text-embedding-3-small'
+            return None
+        ab = getattr(mykey, 'embedding_apibase', None) or getattr(mykey, 'emb_base', None) or 'https://api.openai.com/v1'
+        md = getattr(mykey, 'embedding_model', None) or getattr(mykey, 'emb_model', None) or 'text-embedding-3-small'
+        return ak, ab.rstrip('/'), md
+
+    def _embed(self, texts, cfg):
+        import requests
+        ak, ab, md = cfg
+        base = ab.rstrip('/')
+        url = base + ('/v1' if '/v1' not in base else '') + '/embeddings'
+        headers = {'Authorization': f'Bearer {ak}', 'Content-Type': 'application/json'}
+        out = []
+        for t in texts:
+            r = requests.post(url, headers=headers, json={'model': md, 'input': t}, timeout=30)
+            r.raise_for_status()
+            out.append(r.json()['data'][0]['embedding'])
+        return out
+
+    def _cosine(self, a, b):
+        dot = sum(x * y for x, y in zip(a, b))
+        na = sum(x * x for x in a) ** 0.5
+        nb = sum(x * x for x in b) ** 0.5
+        return dot / (na * nb) if na and nb else 0.0
+
+    def _extract_keywords(self, query):
+        STOP = set('a an the of to in on for with and or is are be do does how what where which who when why this that these those i we you they it their our your my me he she as at by from into about can could should would want need find search code function class method use using implement add create new get set make show list all any some each per'.split())
+        toks = re.findall(r'[A-Za-z_][A-Za-z0-9_]*', query.lower())
+        out, syn = [], {'auth': 'authentication', 'login': 'authentication', 'db': 'database', 'sql': 'database',
+                        'cli': 'command', 'ui': 'interface', 'api': 'interface', 'config': 'configuration',
+                        'test': 'testing', 'bug': 'error', 'parse': 'parsing', 'init': 'initialize', 'util': 'utility'}
+        for t in toks:
+            if t in STOP or len(t) < 2:
+                continue
+            out.append(t)
+            for sub in re.findall(r'[a-z]+|[A-Z][a-z]+', t):
+                if sub not in STOP and len(sub) >= 2:
+                    out.append(sub.lower())
+        for k in list(out):
+            if k in syn:
+                out.append(syn[k])
+        return list(dict.fromkeys(out))[:20]
+
+    def _build_chunks(self, root, max_files=4000, chunk_lines=40, overlap=8):
+        out, _, _ = self._run_rg(["--files", "--no-messages"], cwd=root)
+        if not out:
+            return []
+        files = [l for l in out.splitlines() if l.strip()][:max_files]
+        exts = ('.py', '.js', '.ts', '.tsx', '.jsx', '.go', '.rs', '.java', '.kt', '.kts', '.c', '.cpp',
+                '.h', '.hpp', '.rb', '.php', '.swift', '.cs', '.scala', '.sh', '.lua', '.r', '.m', '.mm', '.sql')
+        chunks = []
+        for f in files:
+            if not f.lower().endswith(exts):
+                continue
+            try:
+                lines = open(f, encoding='utf-8', errors='replace').read().splitlines()
+            except Exception:
+                continue
+            if not lines:
+                continue
+            for i in range(0, len(lines), chunk_lines - overlap):
+                seg = lines[i:i + chunk_lines]
+                if not seg:
+                    break
+                chunks.append({'file': os.path.relpath(f, root), 'start': i + 1, 'end': i + len(seg),
+                               'text': "\n".join(seg)})
+                if i + chunk_lines >= len(lines):
+                    break
+        return chunks[:20000]
+
+    def do_semantic_search(self, args, response):
+        '''语义/自然语言搜索代码。有 embedding 后端时向量检索；否则降级为智能 ripgrep（关键词+同义词扩展）。'''
+        query = (args.get("query") or "").strip()
+        if not query:
+            return StepOutcome("需要 query 参数（自然语言描述要找什么）。", next_prompt="\n")
+        root = self._get_abs_path(args.get("path", "."))
+        if not os.path.isdir(root):
+            root = os.path.dirname(root) or self.cwd
+        cache_dir = os.path.join(root, ".ga_search")
+        db_path = os.path.join(cache_dir, "semantic.db")
+        os.makedirs(cache_dir, exist_ok=True)
+        maxr = min(int(args.get("max_results", 10)), 50)
+        kws = self._extract_keywords(query)
+        yield f"\n[Action] semantic_search: {query}\n"
+        cfg = self._load_embed_cfg()
+        if cfg:
+            try:
+                force = bool(args.get("force"))
+                if force or not os.path.exists(db_path):
+                    yield "  构建语义索引（分块+向量化）...\n"
+                    chunks = self._build_chunks(root)
+                    if not chunks:
+                        return StepOutcome("无源码文件可索引。", next_prompt="\n")
+                    embs = []
+                    for i in range(0, len(chunks), 32):
+                        embs += self._embed([c['text'] for c in chunks[i:i + 32]], cfg)
+                    import sqlite3
+                    con = sqlite3.connect(db_path)
+                    con.execute("CREATE TABLE IF NOT EXISTS chunks(file TEXT, start INTEGER, text TEXT, emb TEXT)")
+                    con.execute("DELETE FROM chunks")
+                    for c, e in zip(chunks, embs):
+                        con.execute("INSERT INTO chunks VALUES(?,?,?,?)", (c['file'], c['start'], c['text'], json.dumps(e)))
+                    con.commit()
+                    con.close()
+                q_emb = self._embed([query], cfg)[0]
+                import sqlite3
+                con = sqlite3.connect(db_path)
+                rows = con.execute("SELECT file,start,text,emb FROM chunks").fetchall()
+                con.close()
+                scored = [(self._cosine(q_emb, json.loads(e)), f, s, t) for f, s, t, e in rows]
+                scored.sort(reverse=True)
+                top = scored[:maxr]
+                if not top or top[0][0] < 0.05:
+                    return StepOutcome(f"[语义搜索·向量模式] 未找到高相关片段（top 相似度<0.05）。可换关键词或 force 重建索引。", next_prompt=self._get_anchor_prompt())
+                out = [f"[语义搜索·向量模式] query: {query}  top {len(top)}："]
+                for s, f, st, t in top:
+                    snip = t if len(t) <= 400 else t[:400] + "..."
+                    out.append(f"\n◆ {f}:{st}  (sim={s:.3f})\n{snip}")
+                return StepOutcome("\n".join(out), next_prompt=self._get_anchor_prompt())
+            except Exception as e:
+                yield f"  embedding 失败（{e}），降级为关键词搜索。\n"
+        if not kws:
+            return StepOutcome("无法从查询抽取关键词，请改用 code_search 直接给正则。", next_prompt="\n")
+        pat = "|".join(re.escape(k) for k in kws)
+        out, _, _ = self._run_rg(["--no-heading", "--color=never", "-n", "-i", "-e", pat, root], cwd=root, timeout=30)
+        if out is None:
+            return StepOutcome("Error: rg 不可用。", next_prompt="\n")
+        lines = out.splitlines()[:maxr]
+        if not lines:
+            return StepOutcome(f"[语义搜索·降级模式] 关键词 {kws} 未命中。可换 code_search 给更精确正则。", next_prompt="\n")
+        return StepOutcome(f"[语义搜索·降级模式·无 embedding 后端] 关键词：{kws}\n找到 {len(lines)} 行：\n" + "\n".join(lines), next_prompt=self._get_anchor_prompt())
+
     def export_history(self, fn): 
         with open(fn, 'w', encoding='utf-8') as f: json.dump(self.parent.llmclient.backend.history, f, ensure_ascii=False)
     def _in_plan_mode(self): return self.working.get('in_plan_mode')
@@ -643,6 +1099,59 @@ class GenericAgentHandler(BaseHandler):
         if os.path.exists(path): result = 'This is L0:\n' + file_read(path, show_linenos=False)
         else: result = "Memory Management SOP not found. Do not update memory."
         return StepOutcome(result, next_prompt=prompt)
+
+    def do_git_checkpoint(self, args, response):
+        '''结构化 Git 工作流（替代裸 git 命令）。提供 9 个动作：
+status/diff/commit/checkpoint/list/restore/branch/log/pr。
+checkpoint = commit + 打 ga-ckpt-<ts> tag，可一键 restore；PR 优先 gh CLI，失败回退 GitHub REST API。
+所有动作 cwd 默认 self.cwd（git 仓库根），可在 args.cwd 覆盖。'''
+        action = (args.get("action") or "").strip().lower()
+        repo = self._resolve_git_repo(args.get("cwd"))
+        if not action: return StepOutcome({"status": "error", "msg": "action 必填。可选: status/diff/commit/checkpoint/list/restore/branch/log/pr"}, next_prompt="\n")
+        if repo.get("status") == "error": return StepOutcome(repo, next_prompt="\n")
+        repo_dir = repo["repo_dir"]
+        try:
+            if action == "status":   result = git_status(repo_dir)
+            elif action == "diff":   result = git_diff(repo_dir, files=args.get("files"), staged=args.get("staged", False))
+            elif action == "commit":
+                result = git_commit(repo_dir, message=args.get("message", ""), files=args.get("files"), add_all=args.get("all", True), no_confirm=args.get("no_confirm", False))
+            elif action == "checkpoint":
+                result = git_checkpoint_create(repo_dir, message=args.get("message", ""), files=args.get("files"), add_all=args.get("all", True))
+            elif action == "list":   result = git_checkpoint_list(repo_dir, max_count=args.get("max_count", 20))
+            elif action == "restore":
+                ckpt = args.get("checkpoint_id") or args.get("id")
+                if not ckpt: return StepOutcome({"status": "error", "msg": "restore 必须提供 checkpoint_id（ga-ckpt-...）"}, next_prompt="\n")
+                result = git_checkpoint_restore(repo_dir, ckpt_id=ckpt, no_confirm=args.get("no_confirm", False))
+            elif action == "branch":
+                result = git_branch_op(repo_dir, name=args.get("branch"), create_from=args.get("create_from"))
+            elif action == "log":    result = git_log(repo_dir, max_count=args.get("max_count", 15))
+            elif action == "pr":
+                result = git_create_pr(repo_dir, title=args.get("pr_title", ""), body=args.get("pr_body", ""), target=args.get("pr_target"), remote=args.get("remote"))
+            else: return StepOutcome({"status": "error", "msg": f"未知 action: {action}"}, next_prompt="\n")
+        except subprocess.TimeoutExpired:
+            return StepOutcome({"status": "error", "msg": "git 命令超时（>30s）。请检查 repo 状态或网络。"}, next_prompt="\n")
+        except FileNotFoundError as e:
+            return StepOutcome({"status": "error", "msg": f"git 未安装或不可执行: {e}"}, next_prompt="\n")
+        except Exception as e:
+            return StepOutcome({"status": "error", "msg": format_error(e)}, next_prompt="\n")
+        yield f"[Action] git_checkpoint {action} @ {repo_dir}\n"
+        out = json.dumps(result, ensure_ascii=False, indent=2, default=json_default) if isinstance(result, (dict, list)) else str(result)
+        if len(out) > 8000: out = out[:8000] + "\n... [truncated]"
+        yield out + "\n"
+        next_prompt = self._get_anchor_prompt(skip=args.get('_index', 0) > 0)
+        return StepOutcome(result, next_prompt=next_prompt)
+
+    def _resolve_git_repo(self, cwd):
+        if cwd: target = os.path.abspath(cwd)
+        else: target = os.path.abspath(self.cwd)
+        cur = target
+        for _ in range(8):
+            if os.path.isdir(os.path.join(cur, ".git")) or os.path.isfile(os.path.join(cur, ".git")):
+                return {"status": "success", "repo_dir": cur}
+            parent = os.path.dirname(cur)
+            if parent == cur: break
+            cur = parent
+        return {"status": "error", "msg": f"找不到 git 仓库（向上搜了 8 层）: {target}。请在 git 仓库内调用，或显式传 cwd。"}
 
     def _fold_earlier(self, lines):
         FALLBACK = '直接回答了用户问题'

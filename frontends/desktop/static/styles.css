@@ -942,6 +942,7 @@ body{ background:var(--bg); color:var(--txt); font-size:13px; overflow:hidden; f
 }
 .page.page--chat-ui > .chat-shell > .chat-panel{
   flex:1; min-height:0; width:100%;
+  position:relative;
   display:flex; flex-direction:column;
   gap:var(--chat-stack-gap);
   box-sizing:border-box;
@@ -3157,12 +3158,66 @@ html[data-appearance="dark"] .bubble.md pre code{ color:var(--txt-2); }
 .collab-drawer-body p,.collab-drawer-body ul,.collab-drawer-body ol,.collab-drawer-body pre{ margin:0 0 .5em; }
 .collab-drawer-body code{ font-size:12px; background:var(--field-bg); padding:1px 4px; border-radius:4px; }
 .collab-drawer-body pre code{ display:block; padding:8px; border-radius:6px; white-space:pre-wrap; }
+/* ── Collab 历史会话(页内可续聊) ── */
+.collab-session{
+  position:absolute; inset:0; z-index:60;
+  display:flex; flex-direction:column;
+  background:var(--panel); border-radius:var(--radius,14px);
+  overflow:hidden; box-shadow:var(--shadow-modal);
+}
+.collab-session[hidden]{ display:none; }
+.collab-session-head{
+  display:flex; align-items:center; gap:10px;
+  padding:12px 14px; border-bottom:1px solid var(--line-soft); background:var(--panel-2,var(--panel));
+}
+.collab-session-back{
+  height:30px; padding:0 12px; border:1px solid var(--line); border-radius:9px;
+  background:var(--field-bg); color:var(--txt-strong); font-size:13px; font-weight:600; cursor:pointer;
+}
+.collab-session-back:hover{ background:var(--hover-bg); }
+.collab-session-title{
+  flex:1; min-width:0; font-size:14px; font-weight:600; color:var(--txt-strong);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.collab-session-resume{
+  height:30px; padding:0 14px; border:0; border-radius:9px; color:#fff; font-size:13px; font-weight:700; cursor:pointer;
+  background:linear-gradient(135deg,var(--accent,#3b82f6),var(--green,#10b981));
+}
+.collab-session-resume:disabled{ opacity:.6; cursor:default; }
+.collab-session-body{
+  flex:1; min-height:0; overflow-y:auto; padding:16px;
+  display:flex; flex-direction:column; gap:10px;
+}
+.collab-session-divider{
+  align-self:center; font-size:11px; color:var(--muted);
+  padding:3px 10px; border-radius:99px; background:var(--field-bg); border:1px solid var(--line-soft);
+}
+.collab-session-composer{
+  display:flex; gap:10px; align-items:flex-end; padding:12px 14px;
+  border-top:1px solid var(--line-soft); background:var(--panel-2,var(--panel));
+}
+.collab-session-composer textarea{
+  flex:1; height:44px; max-height:120px; resize:none; outline:none;
+  color:var(--txt); background:var(--field-bg); border:1px solid var(--line); border-radius:12px;
+  padding:11px 13px; font:inherit; line-height:1.35;
+}
+.collab-session-composer textarea:focus{ border-color:var(--accent); }
+.collab-session-composer button{
+  height:44px; min-width:80px; border:0; border-radius:12px; color:#fff; font-weight:700; cursor:pointer;
+  background:linear-gradient(135deg,var(--accent,#3b82f6),var(--green,#10b981));
+}
+.collab-session-composer button:disabled{ opacity:.5; cursor:default; }
 /* ── Collab 历史 ── */
 .collab-prog-tabs{ display:flex; gap:2px; padding:0 10px 8px; }
 .collab-prog-tab{ flex:1; display:flex; align-items:center; justify-content:center; gap:4px; padding:5px 0; font-size:11.5px; font-weight:500; color:var(--muted); background:none; border:none; border-radius:6px; cursor:pointer; transition:color .15s, background .15s; }
 .collab-prog-tab:hover{ background:rgba(0,0,0,.045); color:var(--txt-strong); }
 .collab-prog-tab.is-active{ color:var(--txt-strong); background:rgba(0,0,0,.06); font-weight:600; }
 .collab-hist-badge{ min-width:15px; height:15px; padding:0 4px; border-radius:8px; background:var(--ok); color:#fff; font-size:9.5px; font-weight:600; line-height:15px; text-align:center; }
+/* 标签页容器需成为可伸缩 flex 列，否则内容被面板 overflow:hidden 裁掉、无法滚动 */
+#collab-prog-live:not([hidden]), #collab-prog-history:not([hidden]){
+  flex:1 1 0; min-height:0; display:flex; flex-direction:column;
+}
+.collab-hist-toolbar, .collab-hist-empty{ flex:0 0 auto; }
 .collab-hist-toolbar{ display:flex; align-items:center; gap:6px; padding:0 10px 8px; }
 .collab-hist-search{ flex:1; min-width:0; padding:5px 8px; font-size:11.5px; border:1px solid var(--line); border-radius:6px; background:var(--field-bg); color:var(--txt-strong); outline:none; transition:border-color .15s, box-shadow .15s; }
 .collab-hist-search:focus{ border-color:var(--ok); box-shadow:0 0 0 2px rgba(52,199,123,.12); }
@@ -3170,7 +3225,7 @@ html[data-appearance="dark"] .bubble.md pre code{ color:var(--txt-2); }
 .collab-hist-clear svg{ width:13px; height:13px; }
 .collab-hist-clear.armed{ color:var(--danger); background:rgba(255,69,58,.08); }
 .collab-hist-empty{ padding:18px 10px; font-size:11.5px; color:var(--muted); text-align:center; }
-.collab-hist-list{ display:flex; flex-direction:column; gap:6px; padding:0 10px 10px; }
+.collab-hist-list{ flex:1 1 0; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:6px; padding:0 10px 10px; }
 .collab-hist-card{ --hist-st:var(--muted); padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--panel); cursor:pointer; transition:transform .12s, box-shadow .12s, border-color .12s; animation:collabCardIn .18s ease both; }
 .collab-hist-card:hover{ transform:translateY(-1px); box-shadow:0 3px 12px rgba(0,0,0,.07); border-color:var(--line-strong); }
 .collab-hist-card--stopped{ --hist-st:var(--ok); }
@@ -3644,12 +3699,22 @@ html[data-appearance="dark"] .bubble.md pre code{ color:var(--txt-2); }
 }
 
 /* 面包屑 + 邀请 */
-.ph-breadcrumb-bar{ display:flex; align-items:center; justify-content:space-between; padding:14px 24px; border-bottom:1px solid var(--border,#eee); }
-.ph-breadcrumb{ display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-2,#999); }
-.ph-crumb-icon{ display:inline-flex; align-items:center; }
+.ph-breadcrumb-bar{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 24px; border-bottom:1px solid var(--border,#eee); min-width:0; }
+.ph-breadcrumb{ display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-2,#999); min-width:0; flex:1 1 auto; overflow:hidden; }
+.ph-crumb-icon{ display:inline-flex; align-items:center; flex:0 0 auto; width:14px; height:14px; color:var(--text-2,#999); }
 .ph-crumb-icon i,.ph-crumb-icon svg{ font-size:14px; width:14px; height:14px; color:var(--text-2,#999); }
-.ph-crumb-sep{ color:var(--text-2,#ccc); margin:0 2px; }
-.ph-crumb-current{ color:var(--text-1,#1a1a1a); font-weight:500; }
+.ph-crumb-sep{ color:var(--text-2,#ccc); margin:0 2px; flex:0 0 auto; }
+.ph-crumb-current{ color:var(--text-1,#1a1a1a); font-weight:600; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* 面包屑「项目」可点击 → 返回项目列表 */
+.ph-crumb-link{
+  flex:0 0 auto; white-space:nowrap;
+  font:inherit; color:var(--accent,#8e8e93); background:none; border:none;
+  padding:3px 7px; margin:0 -3px; border-radius:7px; cursor:pointer;
+  transition:background .15s, color .15s;
+}
+.ph-crumb-link:hover{ background:var(--accent-soft,#f4f5f7); color:var(--accent,#8e8e93); text-decoration:underline; }
+.ph-crumb-link:active{ background:var(--accent-bg,#eef0f3); }
+.ph-crumb-link:focus-visible{ outline:2px solid var(--accent,#8e8e93); outline-offset:1px; }
 .ph-invite-btn{ padding:6px 16px; background:var(--text-1,#1a1a1a); color:#fff; border:none; border-radius:20px; font-size:13px; cursor:pointer; transition:opacity .15s; }
 .ph-invite-btn:hover{ opacity:.85; }
 
@@ -3926,7 +3991,24 @@ html[data-appearance="dark"] .bubble.md pre code{ color:var(--txt-2); }
 .chat-produced-file .cpf-menu-btn:hover{ background:var(--hover); color:var(--txt); }
 .chat-produced-file .cpf-menu-btn svg{ width:15px; height:15px; }
 
-/* ═══════════════ 项目资产 ═══════════════ */
+/* ---- unified diff + 结构化产出物 ---- */
+.artifact-summary{ display:flex; align-items:center; gap:7px; margin-top:10px; padding:8px 10px; border:1px solid var(--line); border-radius:6px 6px 0 0; background:var(--accent-bg); color:var(--muted); font-size:12px; }
+.artifact-summary svg{ width:14px; height:14px; color:var(--accent); }
+.artifact-summary strong{ color:var(--txt-strong); }
+.artifact-stat{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600; }
+.artifact-stat.add{ color:#16803c; } .artifact-stat.del{ color:#c53030; }
+.chat-produced-files{ margin-top:0; padding-top:8px; border-top:0; }
+.chat-produced-file{ max-width:320px; }
+.chat-produced-file.change-deleted{ opacity:.72; }
+.chat-produced-file .cpf-diff-btn{ flex:0 0 auto; width:26px; height:26px; border:1px solid var(--line); background:var(--panel); color:var(--accent); border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.chat-produced-file .cpf-diff-btn:hover{ background:var(--hover); }
+.chat-produced-file .cpf-diff-btn svg{ width:15px; height:15px; }
+.diff-viewer{ max-width:920px; }
+.diff-viewer-body{ display:block!important; padding:10px 0; align-items:stretch!important; justify-content:flex-start!important; background:var(--panel)!important; }
+.diff-line{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; line-height:1.6; padding:0 14px; white-space:pre-wrap; word-break:break-all; color:var(--txt-strong); }
+.diff-add{ background:rgba(22,128,60,.12); color:#16803c; } .diff-del{ background:rgba(197,48,48,.11); color:#c53030; }
+.diff-hunk{ color:var(--accent); margin-top:8px; } .diff-meta{ color:var(--muted); }
+
 .ph-asset-bar{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 16px; border-bottom:1px solid var(--border,rgba(128,128,128,.2)); flex-wrap:wrap; }
 .ph-asset-bar-left{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .ph-asset-bar-right{ display:flex; align-items:center; gap:8px; }
@@ -4371,11 +4453,39 @@ html[data-appearance="dark"] .bubble.md pre code{ color:var(--txt-2); }
 }
 .ph-lib-item:hover .ph-lib-more{ opacity:1; transform:translateX(0); }
 .ph-lib-more svg{ width:15px; height:15px; }
+/* 图标按钮内的 SVG 设为不可点击：保证 e.target 始终是 button 本身，
+   避免在某些 WebView(如 Tauri/WKWebView)中点击图标时 e.target 落在 <path>/<svg> 上，
+   导致事件委托的 closest('[data-lib-more]') 失效、菜单无法弹出。
+   与 .conv-session-toggle svg 已有的 pointer-events:none 保持一致。 */
+.ci-more svg, .conv-folder-toggle svg, .conv-folder-add svg, .conv-folder-more svg,
+.ph-lib-more svg, .ph-lib-del svg, .ph-lib-twist svg { pointer-events: none; }
 .ph-lib-more:hover{ background:var(--line-soft); color:var(--txt-strong); }
 .ph-lib-more:active{ transform:scale(.92); }
 .ph-lib-pin{ display:inline-flex; align-items:center; color:var(--brand1); }
 .ph-lib-pin svg{ width:13px; height:13px; }
 .lib-preview-text{ white-space:pre-wrap; word-break:break-word; font:13px/1.6 var(--font-mono, ui-monospace, monospace); margin:0; padding:16px 18px; color:var(--txt); }
+/* ── 资料库 Markdown 预览（镜像 .bubble.md 排版，独立 class 避免耦合聊天气泡）── */
+.lib-preview-md{ padding:16px 18px; font:14px/1.65 var(--font-sans); color:var(--txt); overflow:auto; }
+.lib-preview-md > :first-child{ margin-top:0; }
+.lib-preview-md > :last-child{ margin-bottom:0; }
+.lib-preview-md p{ margin:0 0 10px; } .lib-preview-md p:last-child{ margin:0; }
+.lib-preview-md ul,.lib-preview-md ol{ margin:0 0 10px; padding-left:22px; }
+.lib-preview-md li{ margin:2px 0; }
+.lib-preview-md blockquote{ margin:0 0 10px; padding:2px 0 2px 12px; border-left:3px solid var(--line-strong); color:var(--txt-2); }
+.lib-preview-md h1,.lib-preview-md h2,.lib-preview-md h3,.lib-preview-md h4,.lib-preview-md h5,.lib-preview-md h6{ color:var(--txt-strong); margin:0 0 10px; line-height:1.35; font-weight:600; }
+.lib-preview-md h1{ font-size:1.3em; } .lib-preview-md h2{ font-size:1.15em; } .lib-preview-md h3{ font-size:1.05em; }
+.lib-preview-md strong,.lib-preview-md b{ color:var(--txt-strong); font-weight:600; }
+.lib-preview-md a{ color:var(--accent); text-decoration:underline; }
+.lib-preview-md hr{ border:none; border-top:1px solid var(--line-strong); margin:12px 0; }
+.lib-preview-md img{ max-width:100%; border-radius:6px; }
+.lib-preview-md table{ width:100%; border-collapse:collapse; margin:0 0 10px; font-size:.92em; }
+.lib-preview-md th,.lib-preview-md td{ border:1px solid var(--line); padding:6px 10px; text-align:left; }
+.lib-preview-md th{ background:var(--line-soft); color:var(--txt-strong); }
+.lib-preview-md pre{ background:var(--field-bg); border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 12px; overflow:auto; font-size:.86em; font-family:var(--font-mono); }
+.lib-preview-md pre code{ font-family:var(--font-mono); }
+.lib-preview-md :not(pre) > code{ background:var(--field-bg); border-radius:4px; padding:1px 5px; font-size:.86em; font-family:var(--font-mono); }
+.lib-preview-md .code-block{ border:1px solid var(--line); border-radius:var(--radius-sm); overflow:hidden; margin:10px 0; }
+.lib-preview-md .code-block pre{ background:var(--field-bg); border:none; border-radius:0; padding:12px 14px; margin:0; }
 .lib-dir-list{ list-style:none; margin:0; padding:12px 18px; display:flex; flex-wrap:wrap; gap:8px; }
 .lib-dir-list li{ display:flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid var(--line-soft); border-radius:6px; font-size:12.5px; color:var(--txt-strong); }
 .lib-dir-list li.is-dir{ background:var(--brand1-bg, var(--accent-bg)); }
@@ -4386,6 +4496,8 @@ html[data-appearance="dark"] .bubble.md pre code{ color:var(--txt-2); }
 .lib-preview-image{ display:flex; align-items:center; justify-content:center; padding:12px; }
 .lib-preview-image img{ max-width:100%; max-height:68vh; object-fit:contain; border-radius:6px; background:var(--bg-soft); }
 .lib-preview-pdf{ width:100%; height:72vh; border:0; border-radius:6px; background:#fff; }
+.lib-preview-dl{ display:inline-block; margin-top:4px; padding:8px 16px; border-radius:8px; background:var(--accent, #3b82f6); color:#fff; text-decoration:none; font-size:13px; }
+.lib-preview-dl:hover{ opacity:.9; }
 
 /* ---- 层级树 ---- */
 .ph-lib-node{ position:relative; }
@@ -4629,6 +4741,8 @@ textarea.lib-input{ resize:vertical; min-height:66px; }
 .lib-browse-btn svg, .lib-browse-btn span[data-ga-icon]{ width:15px; height:15px; display:block; }
 .lib-browse-btn:hover{ border-color:var(--brand1); color:#c07f22; background:rgba(255,179,92,.12); }
 .lib-browse-btn:active{ transform:scale(.97); }
+.lib-browse-folder{ padding:0 12px; color:var(--txt-3); background:transparent; }
+.lib-browse-folder:hover{ border-color:var(--line); color:var(--txt-2); background:var(--hover-2); }
 
 /* ── 子页面选项（琥珀 option card + 自定义勾选）── */
 .lib-row-check{

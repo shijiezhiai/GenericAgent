@@ -1,0 +1,6 @@
+{
+  "name": "java-lsp",
+  "description": "Eclipse JDT Language Server 接入，为 .java/.kt/.scala 提供实时编译/类型诊断（配合 agent_loop 的 LSP 诊断注入）。",
+  "version": "0.1.0",
+  "defaultEnabled": true
+}

@@ -1,16 +1,15 @@
-use std::process::{Command, Child, Stdio};
+use std::process::{Command, Stdio};
 use std::io::{BufRead, BufReader};
-use std::sync::Mutex;
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
 use std::thread;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::Manager;
+
+use ga_desktop_gateway::GatewayConfig;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
-
-static BRIDGE_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
 
 /// Get project root (parent of frontends/)
 fn project_root() -> PathBuf {
@@ -39,7 +38,7 @@ fn bundle_anchor_dir() -> Option<PathBuf> {
 
     #[cfg(target_os = "macos")]
     {
-        // current_exe() inside a bundle is:
+        // current_exe() inside a standard bundle is:
         //   <package>/GenericAgent.app/Contents/MacOS/GenericAgent
         // Prefer the standard macOS layout where runtime is embedded in the app:
         //   GenericAgent.app/Contents/Resources/runtime/app/agentmain.py
@@ -56,6 +55,13 @@ fn bundle_anchor_dir() -> Option<PathBuf> {
                     return Some(parent.to_path_buf());
                 }
             }
+            // App Translocation 友好：macOS 把带 quarantine 的 .app 挂载到
+            // /Volumes/<name>/ 并以它为卷根运行，exe = /Volumes/<name>/Contents/MacOS/...
+            // 此时路径里没有 <name>.app 目录，直接检查 <dir>/Resources 即可。
+            let resources = dir.join("Resources");
+            if resources.join("runtime").join("app").join("agentmain.py").exists() {
+                return Some(resources);
+            }
             d = dir.parent();
         }
     }
@@ -63,8 +69,41 @@ fn bundle_anchor_dir() -> Option<PathBuf> {
     Some(exe.parent()?.to_path_buf())
 }
 
-/// Embedded interpreter inside the bundle's runtime/python (base python, before venv).
+/// 可写的 app-support 根：~/Library/Application Support/GenericAgent (macOS)。
+fn app_support_dir() -> Option<PathBuf> {
+    dirs::data_dir().map(|d| d.join("GenericAgent"))
+}
+
+/// 递归复制目录（把只读的包内 runtime/ 克隆到可写的 app-support）。
+fn clone_dir(src: &Path, dst: &Path) -> bool {
+    // dst 的父目录（如 ~/Library/Application Support/GenericAgent）可能不存在，
+    // 必须先创建，否则 cp -R src dst 因父缺失直接失败。
+    if let Some(parent) = dst.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::remove_dir_all(dst);
+    Command::new("cp")
+        .arg("-R")
+        .arg(src)
+        .arg(dst)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Embedded interpreter inside the bundle. Prefer the **writable** app-support/python
+/// (cloned from runtime/python and pip-installed with wheels by run_offline_prepare);
+/// fall back to the read-only in-bundle runtime/python only as a last resort.
 fn bundle_python() -> Option<PathBuf> {
+    if let Some(sup) = app_support_dir() {
+        #[cfg(windows)]
+        let p = sup.join("python").join("python.exe");
+        #[cfg(not(windows))]
+        let p = sup.join("python").join("bin").join("python3");
+        if p.exists() {
+            return Some(p);
+        }
+    }
     let root = bundle_root()?;
     #[cfg(windows)]
     let p = root.join("python").join("python.exe");
@@ -119,15 +158,104 @@ fn find_python() -> String {
     { "python3".to_string() }
 }
 
-/// Find the project directory (folder containing agentmain.py).
-/// Bundle layout: <exe dir>/runtime/app/agentmain.py. Dev layout: walk up from the exe.
-fn find_project_dir() -> Option<String> {
-    // Bundle layout: source tucked under <anchor>/runtime/app/
-    if let Some(anchor) = bundle_anchor_dir() {
-        let app = anchor.join("runtime").join("app");
-        if app.join("agentmain.py").exists() {
-            return Some(app.to_string_lossy().to_string());
+/// When auto-discovery falls back to a bare `python`/`python3` (system interpreter, which
+/// lacks our dependencies), and the discovered project dir bundles a `.venv`, prefer that
+/// venv python so the kernel/legacy subprocesses can import their dependencies.
+fn resolve_python(python: String, project: &str) -> String {
+    if (python == "python" || python == "python3") && !project.is_empty() {
+        let venv = PathBuf::from(project).join(".venv").join("bin").join("python3");
+        if venv.exists() {
+            return venv.to_string_lossy().to_string();
         }
+    }
+    python
+}
+
+/// Bundle 模式下，包内 runtime/ 是只读的，而 Python 端要在 ga_root 下写 temp/sche_tasks/mykey
+/// 等、且首次需把 wheels 装进嵌入式 python。这里在 ~/Library/Application Support/GenericAgent/
+/// 维护可写副本：app/(源码) 与 python/(解释器)。仅在构建版本 (GA_BUILD_ID) 变化或缺失时重新克隆。
+/// 非 bundle 构建返回 None（走 dev/source 路径，ga_root 本身是可读写的仓库目录）。
+fn ensure_writable_runtime() -> Option<PathBuf> {
+    if bundle_root().is_none() {
+        return None;
+    }
+    let anchor = bundle_anchor_dir()?;
+    let src_app = anchor.join("runtime").join("app");
+    let src_py = anchor.join("runtime").join("python");
+    if !src_app.join("agentmain.py").exists()
+        || !src_py.join("bin").join("python3").exists()
+    {
+        return None;
+    }
+    let base = app_support_dir()?;
+    let dst_app = base.join("app");
+    let dst_py = base.join("python");
+    let version_file = base.join(".app-clone-version");
+    let need_copy = match std::fs::read_to_string(&version_file) {
+        Ok(v) if v.trim() == env!("GA_BUILD_ID") => false,
+        _ => true,
+    };
+    if need_copy {
+        // 升级重克隆会整体删掉 dst_app，但其中的用户数据（会话历史 temp/、定时任务、
+        // 运行期演化的 memory/、mykey.py 等）必须跨版本保留：先挪到 hold 目录，克隆后挪回。
+        let hold = base.join(".upgrade-hold");
+        let _ = std::fs::remove_dir_all(&hold);
+        let preserved = stash_user_data(&dst_app, &hold);
+        if !clone_dir(&src_app, &dst_app) || !clone_dir(&src_py, &dst_py) {
+            restore_user_data(&hold, &dst_app, &preserved);
+            return None;
+        }
+        restore_user_data(&hold, &dst_app, &preserved);
+        let _ = std::fs::remove_dir_all(&hold);
+        let _ = std::fs::write(&version_file, env!("GA_BUILD_ID"));
+    }
+    Some(dst_app)
+}
+
+/// app 根目录下属于「用户数据」、升级时必须原样保留的条目。
+const USER_DATA_ENTRIES: &[&str] = &[
+    "temp",
+    "sche_tasks",
+    "memory",
+    "mykey.py",
+    ".file_favorites.json",
+];
+
+/// 把 dst_app 中存在的用户数据条目 rename 到 hold/ 下，返回成功挪走的条目名。
+fn stash_user_data(dst_app: &Path, hold: &Path) -> Vec<&'static str> {
+    let mut moved = Vec::new();
+    if !dst_app.exists() {
+        return moved;
+    }
+    let _ = std::fs::create_dir_all(hold);
+    for name in USER_DATA_ENTRIES {
+        let src = dst_app.join(name);
+        if src.exists() && std::fs::rename(&src, hold.join(name)).is_ok() {
+            moved.push(*name);
+        }
+    }
+    moved
+}
+
+/// 把 hold/ 中的用户数据条目挪回新克隆的 dst_app（覆盖包内自带的同名内容）。
+fn restore_user_data(hold: &Path, dst_app: &Path, preserved: &[&'static str]) {
+    for name in preserved {
+        let dst = dst_app.join(name);
+        let _ = std::fs::remove_dir_all(&dst);
+        let _ = std::fs::remove_file(&dst);
+        if std::fs::rename(hold.join(name), &dst).is_err() {
+            eprintln!("[ga-desktop] WARN: failed to restore user data entry: {}", name);
+        }
+    }
+}
+
+/// Find the project directory (folder containing agentmain.py).
+/// Bundle layout: a writable copy under <app support>/GenericAgent/app (cloned from
+/// runtime/app, see ensure_writable_runtime). Dev layout: walk up from the exe.
+fn find_project_dir() -> Option<String> {
+    // Bundle 模式：ga_root 必须可写，返回 app-support 副本
+    if let Some(w) = ensure_writable_runtime() {
+        return Some(w.to_string_lossy().to_string());
     }
 
     // Dev/source layout: walk up to 8 levels from the exe location.
@@ -344,7 +472,7 @@ pub fn get_or_discover_config() -> (String, String) {
                 "python_path": python,
                 "project_dir": project
             }));
-            return (python, project);
+            return (resolve_python(python, &project), project);
         }
     }
 
@@ -371,7 +499,7 @@ pub fn get_or_discover_config() -> (String, String) {
                     .unwrap_or("")
                     .to_string();
                 if !python.is_empty() && !project.is_empty() {
-                    return (python, project);
+                    return (resolve_python(python, &project), project);
                 }
             }
         }
@@ -389,7 +517,7 @@ pub fn get_or_discover_config() -> (String, String) {
         }));
     }
 
-    (python, project)
+    (resolve_python(python, &project), project)
 }
 
 /// Self-contained bundle support dir: holds python/, wheels/, install_windows.ps1 and app/.
@@ -403,11 +531,12 @@ fn bundle_root() -> Option<PathBuf> {
     None
 }
 
-/// Marker written after a successful offline prepare. Lives under runtime/ so it travels
-/// with the bundle: a relocated folder stays "prepared" (deps live in the embedded python,
-/// which is itself relocatable) and won't re-run prepare.
+/// Marker written after a successful offline prepare. Must live in a writable dir: the
+/// in-bundle runtime/ is read-only, so writing .prepared there silently fails and
+/// needs_first_run_prepare() stays true (re-running prepare on every launch). We put it
+/// under the app-support dir (same place as the writable app clone).
 fn prepared_marker() -> Option<PathBuf> {
-    Some(bundle_root()?.join(".prepared"))
+    Some(dirs::data_dir()?.join("GenericAgent").join(".prepared"))
 }
 
 /// True when this is a self-contained bundle whose python env has not been prepared yet
@@ -424,8 +553,8 @@ fn sanitize_bundle_env(cmd: &mut Command) {
     cmd.env_remove("PYTHONHOME");
     cmd.env_remove("PYTHONPATH");
     cmd.env_remove("LD_LIBRARY_PATH");
-    // Stamp the bridge we spawn with this build's id so a later app launch can tell whether the
-    // bridge holding :14168 is ours (see bridge_identity_matches / GET /services/identity).
+    // Stamp the gateway/kernel we spawn with this build's id (used by the bundle prepare flow
+    // and any future identity checks).
     cmd.env("GA_BUILD_ID", env!("GA_BUILD_ID"));
 }
 
@@ -436,21 +565,17 @@ fn run_offline_prepare(project_dir: &str, report: &dyn Fn(i32, &str)) -> Result<
     let root = bundle_root().ok_or("cannot locate bundle root")?;
     let wheels = root.join("wheels");
 
-    #[cfg(windows)]
-    let (script, py) = (
-        root.join("install_windows.ps1"),
-        root.join("python").join("python.exe"),
-    );
-    #[cfg(target_os = "macos")]
-    let (script, py) = (
-        root.join("install_macos.sh"),
-        root.join("python").join("bin").join("python3"),
-    );
-    #[cfg(all(not(windows), not(target_os = "macos")))]
-    let (script, py) = (
-        root.join("install_linux.sh"),
-        root.join("python").join("bin").join("python3"),
-    );
+    // 脚本(wheels)仍在包内 runtime/ 读取（只读，OK）；python 必须用可写的 app-support 副本，
+    // 否则 pip install 写包内 site-packages 会因只读失败。ensure_writable_runtime() 已先把
+    // runtime/python 克隆到 app-support/python，故这里 find_python() 在 bundle 模式返回可写副本。
+    let script = if cfg!(windows) {
+        root.join("install_windows.ps1")
+    } else if cfg!(target_os = "macos") {
+        root.join("install_macos.sh")
+    } else {
+        root.join("install_linux.sh")
+    };
+    let py = PathBuf::from(find_python());
 
     if !script.exists() || !py.exists() || !wheels.exists() {
         return Err(format!("prepare resources missing under {:?}", root));
@@ -516,52 +641,10 @@ fn run_offline_prepare(project_dir: &str, report: &dyn Fn(i32, &str)) -> Result<
     Ok(())
 }
 
-/// GET /services/identity from a running bridge; returns the parsed JSON (or None when the
-/// endpoint is absent — i.e. an older/foreign bridge).
-fn bridge_reported_identity() -> Option<serde_json::Value> {
-    use std::io::{Read, Write};
-    let mut stream = TcpStream::connect_timeout(
-        &"127.0.0.1:14168".parse().unwrap(),
-        Duration::from_millis(800),
-    ).ok()?;
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(800)));
-    let _ = stream.set_write_timeout(Some(Duration::from_millis(600)));
-    let req = b"GET /services/identity HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
-    stream.write_all(req).ok()?;
-    let mut buf = Vec::new();
-    let _ = stream.read_to_end(&mut buf);
-    let text = String::from_utf8_lossy(&buf);
-    let body = text.split("\r\n\r\n").nth(1)?;
-    serde_json::from_str(body.trim()).ok()
-}
-
-fn norm_path(p: &str) -> String {
-    std::fs::canonicalize(p)
-        .map(|c| c.to_string_lossy().to_string())
-        .unwrap_or_else(|_| p.to_string())
-}
-
-/// A running bridge is "ours" only when it serves the same install path AND was spawned by the
-/// same build. The build id (commit+timestamp, see build.rs) changes on every build, so an
-/// in-place upgrade or a same-version re-publish still counts as a different bridge → take over.
-/// An old bridge with no /identity (None) or no build_id field ("") never matches → taken over.
-fn bridge_identity_matches(project_dir: &str) -> bool {
-    let Some(id) = bridge_reported_identity() else { return false; };
-    let reported_root = id.get("ga_root").and_then(|v| v.as_str()).unwrap_or("");
-    let reported_build = id.get("build_id").and_then(|v| v.as_str()).unwrap_or("");
-    if reported_build != env!("GA_BUILD_ID") {
-        return false;
-    }
-    let (a, b) = (norm_path(reported_root), norm_path(project_dir));
-    #[cfg(windows)]
-    { a.eq_ignore_ascii_case(&b) }
-    #[cfg(not(windows))]
-    { a == b }
-}
-
-/// Last resort when a stale bridge ignores POST /services/bridge/exit (e.g. an old build with
-/// no such endpoint): force-kill whatever process is listening on :14168 so the new bridge can
-/// bind it. Only called after an identity mismatch, so we never kill a bridge that is ours.
+/// Last resort when a stale listener on :14168 (from a crashed previous run) holds the port:
+/// force-kill whatever process is listening so our in-process gateway can bind it.
+/// Phase 2: there is no separate "bridge" process — the gateway IS the :14168 server — but a
+/// leftover listener from a prior crash must still be cleared.
 fn force_free_bridge_port() {
     #[cfg(windows)]
     {
@@ -591,46 +674,6 @@ fn force_free_bridge_port() {
     }
 }
 
-fn request_bridge_shutdown() {
-    use std::io::{Read, Write};
-    let Ok(mut stream) = TcpStream::connect_timeout(
-        &"127.0.0.1:14168".parse().unwrap(),
-        Duration::from_millis(800),
-    ) else {
-        return;
-    };
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(600)));
-    let _ = stream.set_write_timeout(Some(Duration::from_millis(600)));
-    let req = b"POST /services/bridge/exit HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-    let _ = stream.write_all(req);
-    let _ = stream.read(&mut [0u8; 512]);
-}
-
-fn takeover_stale_bridge(project_dir: &str) {
-    if project_dir.is_empty() || !is_bridge_running() {
-        return;
-    }
-    if bridge_identity_matches(project_dir) {
-        return;
-    }
-    eprintln!("[tauri] a different/stale bridge holds 127.0.0.1:14168; taking over");
-    request_bridge_shutdown();
-    let start = Instant::now();
-    while is_bridge_running() && start.elapsed() < Duration::from_secs(10) {
-        thread::sleep(Duration::from_millis(200));
-    }
-    // Old bridges have no /services/bridge/exit endpoint and ignore the request above — if the
-    // port is still held, force-kill the listener so our fresh bridge can bind it.
-    if is_bridge_running() {
-        eprintln!("[tauri] stale bridge did not exit; force-freeing :14168");
-        force_free_bridge_port();
-        let start = Instant::now();
-        while is_bridge_running() && start.elapsed() < Duration::from_secs(5) {
-            thread::sleep(Duration::from_millis(200));
-        }
-    }
-}
-
 fn is_bridge_running() -> bool {
     TcpStream::connect(("127.0.0.1", 14168)).is_ok()
 }
@@ -646,25 +689,26 @@ fn wait_for_port(port: u16, timeout: Duration) -> bool {
     false
 }
 
-fn spawn_bridge_process(python_path: &str, project_dir: &str) -> Result<(), String> {
-    if is_bridge_running() {
-        return Ok(());
-    }
-    let py = PathBuf::from(python_path);
-    let dir = PathBuf::from(project_dir);
-    let script = dir.join("frontends").join("desktop_bridge.py");
-    if !script.exists() {
-        return Err(format!("desktop_bridge.py not found at {:?}", script));
-    }
-
-    let mut cmd = Command::new(&py);
-    cmd.arg(&script).current_dir(&dir);
-    sanitize_bundle_env(&mut cmd);
-    #[cfg(windows)]
-    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    let child = cmd.spawn().map_err(|e| format!("Failed to spawn: {}", e))?;
-    *BRIDGE_PROCESS.lock().unwrap() = Some(child);
-    Ok(())
+/// Phase 2: run the Rust/axum gateway in-process (Tauri's async runtime) and supervise only the
+/// Python kernel subprocess. The kernel spawns the legacy `desktop_bridge.py` on `GA_LEGACY_PORT`
+/// for any not-yet-migrated routes (strangler fallback), so the kernel is the only Python
+/// subprocess Tauri manages directly. Once every route is migrated (plan 2.1) the legacy fallback
+/// is removed and the kernel becomes the sole subprocess.
+fn spawn_gateway(python_path: &str, project_dir: &str) {
+    let cfg = GatewayConfig {
+        root: PathBuf::from(project_dir),
+        port: 14168,
+        conductor_port: 8900,
+        fallback: String::new(),
+        legacy_port: 14169,
+        kernel_python: python_path.to_string(),
+        kernel_data_dir: String::new(), // production: kernel shares the real project root
+    };
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = ga_desktop_gateway::serve(cfg).await {
+            eprintln!("[tauri] gateway exited with error: {}", e);
+        }
+    });
 }
 
 fn show_bridge_window(app_handle: &tauri::AppHandle) {
@@ -684,7 +728,7 @@ fn start_bridge_with_config(app_handle: tauri::AppHandle, python_path: String, p
     // Save to settings (merge so sibling keys like desktop_shortcut survive).
     merge_settings(serde_json::json!({"python_path": python_path, "project_dir": project_dir}));
 
-    spawn_bridge_process(&python_path, &project_dir)?;
+    spawn_gateway(&python_path, &project_dir);
 
     // Wait for port
     if !wait_for_port(14168, Duration::from_secs(20)) {
@@ -698,7 +742,7 @@ fn start_bridge_with_config(app_handle: tauri::AppHandle, python_path: String, p
 #[tauri::command]
 fn start_bridge(app_handle: tauri::AppHandle) -> Result<(), String> {
     let (python_path, project_dir) = get_or_discover_config();
-    spawn_bridge_process(&python_path, &project_dir)?;
+    spawn_gateway(&python_path, &project_dir);
     if !wait_for_port(14168, Duration::from_secs(20)) {
         return Err("Bridge did not become ready within 20s".into());
     }
@@ -753,28 +797,21 @@ pub fn run() {
     let project_dir = find_project_dir().unwrap_or_default();
     let needs_prepare = needs_first_run_prepare(&project_dir);
 
-    takeover_stale_bridge(&project_dir);
+    // Phase 2: the gateway serves :14168 in-process. Free any stale listener from a previous
+    // crash so our fresh gateway can bind it.
+    if is_bridge_running() {
+        eprintln!("[tauri] :14168 already held; freeing stale listener");
+        force_free_bridge_port();
+    }
 
     let bridge_ok = is_bridge_running();
     let mut spawned_bridge = false;
     // Skip the early spawn when a first-run prepare is required (no venv yet);
     // the setup thread prepares the env first and then starts the bridge.
     if !bridge_ok && !no_autostart && !needs_prepare {
-        // Try to start bridge with saved/discovered config
         let (py_str, dir_str) = get_or_discover_config();
-        let dir = PathBuf::from(&dir_str);
-        let script = dir.join("frontends").join("desktop_bridge.py");
-        if script.exists() {
-            let mut cmd = Command::new(&py_str);
-            cmd.arg(&script).current_dir(&dir);
-            sanitize_bundle_env(&mut cmd);
-            #[cfg(windows)]
-            cmd.creation_flags(0x08000000);
-            if let Ok(child) = cmd.spawn() {
-                *BRIDGE_PROCESS.lock().unwrap() = Some(child);
-                spawned_bridge = true;
-            }
-        }
+        spawn_gateway(&py_str, &dir_str);
+        spawned_bridge = true;
     }
 
     tauri::Builder::default()
@@ -824,18 +861,7 @@ pub fn run() {
                     report(95, "starting");
                     if !is_bridge_running() {
                         let (py_str, dir_str) = get_or_discover_config();
-                        let dir = PathBuf::from(&dir_str);
-                        let script = dir.join("frontends").join("desktop_bridge.py");
-                        if script.exists() {
-                            let mut cmd = Command::new(&py_str);
-                            cmd.arg(&script).current_dir(&dir);
-                            sanitize_bundle_env(&mut cmd);
-                            #[cfg(windows)]
-                            cmd.creation_flags(0x08000000);
-                            if let Ok(child) = cmd.spawn() {
-                                *BRIDGE_PROCESS.lock().unwrap() = Some(child);
-                            }
-                        }
+                        spawn_gateway(&py_str, &dir_str);
                     }
                 }
 

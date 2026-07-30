@@ -74,3 +74,26 @@ native_oai_config = {
 # ── 5. Chat platform integrations (optional) ─────────────────────────────────
 # tg_bot_token = '...'
 # tg_allowed_users = [123456789]
+
+
+# ── 6. Git platform credentials (optional; used by git_checkpoint action=pr) ──
+#  Without these, the tool still works: it tries `gh pr create` first, and falls back
+#  to a comparison-URL hint if neither gh nor a token is available. Configure here
+#  to enable automatic PR creation via GitHub/GitLab REST API. Minimum scopes:
+#    github_token: repo
+#    gitlab_token: api
+#  Alternatively set the env var $GITHUB_TOKEN / $GITLAB_TOKEN (takes precedence).
+#
+# github_token = 'ghp_xxxxxxxxxxxxxxxxxxxx'
+# gitlab_token = 'glpat-xxxxxxxxxxxxxxxxxxxx'
+
+
+# ── 7. Embedding backend (optional; enables semantic_search vector mode) ─────
+#  Without these, semantic_search auto-falls back to keyword+synonym ripgrep.
+#  With them, it does true vector retrieval via any OpenAI-compatible
+#  /v1/embeddings endpoint. If absent but a native_oai_* config exists, its
+#  credentials are reused with text-embedding-3-small.
+#
+# embedding_apikey = 'sk-...'
+# embedding_apibase = 'https://api.openai.com/v1'
+# embedding_model = 'text-embedding-3-small'

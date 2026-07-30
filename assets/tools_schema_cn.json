@@ -95,5 +95,48 @@
       "max_results": {"type": "integer", "description": "最大结果数（默认50，上限200）", "default": 50},
       "sort_by": {"type": "string", "enum": ["path", "modified"], "description": "按路径排序（默认）或按修改时间（最新在前）", "default": "path"}},
       "required": ["pattern"]}
+  }},
+  {"type": "function", "function": {
+    "name": "git_checkpoint",
+    "description": "结构化 Git 工作流（替代裸 `code_run` 调 git）。单工具 9 个 action：\n• status: 当前分支 + staged/unstaged/untracked 解析（porcelain-v2）\n• diff: 工作区或已暂存 diff（带 stat）\n• commit: add + commit（在 main/master 分支上会被拒绝）\n• checkpoint: commit + 打 ga-ckpt-<ts>-<shortsha> 标签，可一键 restore\n• list: 枚举 ga-ckpt-* 标签及变更文件数\n• restore: git reset --hard 到指定 checkpoint（需 no_confirm=true；记录到 .workbuddy/git_restore.log；reflog 可救回）\n• branch: 列出/创建/切换分支（commit 前先切分支）\n• log: --oneline --graph 日志\n• pr: push 当前分支到 remote（myfork 优先，回退 origin），再创建 PR。优先调 `gh pr create`，失败回退 GitHub REST API（需 mykey.github_token 或 $GITHUB_TOKEN）。\n所有 git 操作都应走此工具而非 code_run，结构化输出、可恢复。cwd 默认 self.cwd，向上搜 8 层找 .git。",
+    "parameters": {"type": "object", "properties": {
+      "action": {"type": "string", "enum": ["status", "diff", "commit", "checkpoint", "list", "restore", "branch", "log", "pr"], "description": "要执行的动作"},
+      "cwd": {"type": "string", "description": "仓库根覆盖，默认从 self.cwd 向上搜"},
+      "message": {"type": "string", "description": "commit / checkpoint 提交信息（commit、checkpoint 必填）"},
+      "files": {"type": "array", "items": {"type": "string"}, "description": "指定要 add 的文件列表。默认 add 全部（add_all=true）"},
+      "all": {"type": "boolean", "description": "是否 add 全部（含 untracked），commit/checkpoint 默认 true", "default": true},
+      "staged": {"type": "boolean", "description": "diff 时显示已暂存而非工作区，默认 false", "default": false},
+      "checkpoint_id": {"type": "string", "description": "restore 目标（ga-ckpt-... 或短 sha），必填"},
+      "id": {"type": "string", "description": "checkpoint_id 的别名"},
+      "branch": {"type": "string", "description": "branch 动作：要创建/切换的分支名。省略则列出分支"},
+      "create_from": {"type": "string", "description": "branch 创建时的起点 ref，默认 HEAD"},
+      "max_count": {"type": "integer", "description": "list / log 最大条数，默认 20 / 15"},
+      "pr_title": {"type": "string", "description": "PR 标题（pr 动作必填）"},
+      "pr_body": {"type": "string", "description": "PR 描述（Markdown）"},
+      "pr_target": {"type": "string", "description": "PR 目标分支，默认 origin/HEAD 或 main"},
+      "remote": {"type": "string", "description": "PR 推送 remote，优先 myfork，回退 origin"},
+      "no_confirm": {"type": "boolean", "description": "跳过 restore 的安全确认，默认 false", "default": false}},
+      "required": ["action"]}
+  }},
+  {"type": "function", "function": {
+    "name": "repo_index",
+    "description": "预加载仓库结构索引（Codex 式：开局吃透整个仓库）。基于 ripgrep 扫描生成文件清单+符号映射+语言统计，缓存到 .ga_search/repo_index.json。大仓库开局先 build 一次，之后用 find/symbols 秒级查询文件与符号定义位置，避免反复走 code_run 遍历。",
+    "parameters": {"type": "object", "properties": {
+      "action": {"type": "string", "enum": ["build", "rebuild", "stats", "find", "symbols"], "description": "build:构建/复用索引；rebuild:强制重建；stats:概览；find:按文件名子串找文件；symbols:按符号名找定义位置", "default": "stats"},
+      "query": {"type": "string", "description": "find/symbols 的查询词（文件名子串或符号名）"},
+      "path": {"type": "string", "description": "仓库根目录，默认当前目录", "default": "."},
+      "force": {"type": "boolean", "description": "build 时强制重建索引", "default": false},
+      "max_results": {"type": "integer", "description": "最大返回条数（find 默认50/symbols 默认30）", "default": 50}},
+      "required": []}
+  }},
+  {"type": "function", "function": {
+    "name": "semantic_search",
+    "description": "语义/自然语言搜索代码（Cursor 式：按意图找代码）。若 mykey 配置了 embedding 后端（embedding_apikey 或复用 native_oai_*），则对源码分块向量化并做余弦相似检索；否则自动降级为『智能 ripgrep』：从查询抽取关键词+同义词扩展后跑正则搜索。用于『找实现XXX逻辑的地方』这类意图式搜索。",
+    "parameters": {"type": "object", "properties": {
+      "query": {"type": "string", "description": "自然语言描述要找的代码意图，如『处理用户登录鉴权的函数』"},
+      "path": {"type": "string", "description": "仓库根目录，默认当前目录", "default": "."},
+      "max_results": {"type": "integer", "description": "最大返回片段数", "default": 10},
+      "force": {"type": "boolean", "description": "有 embedding 后端时强制重建向量索引", "default": false}},
+      "required": ["query"]}
   }}
 ]

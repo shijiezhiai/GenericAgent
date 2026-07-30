@@ -64,7 +64,7 @@
     .left-col { min-height: 0; display: flex; flex-direction: column; gap: 18px; }
     .left-col > .pane.left { flex: 1; min-height: 0; }
     .left, .right { display: flex; flex-direction: column; min-height: 0; }
-    .right { background: transparent; border: 0; box-shadow: none; backdrop-filter: none; gap: 18px; }
+    .right { position: relative; background: transparent; border: 0; box-shadow: none; backdrop-filter: none; gap: 18px; }
 
     .head {
       padding: 18px 20px 13px;
@@ -324,42 +324,56 @@
     }
     .history-footer button:hover { opacity: 1; text-decoration: underline; }
 
-    /* ---------- History Detail Modal ---------- */
-    .modal-overlay {
-      position: fixed; inset: 0; background: rgba(15,20,35,.45);
-      backdrop-filter: blur(3px); z-index: 1000; display: flex;
-      align-items: center; justify-content: center; opacity: 0;
-      pointer-events: none; transition: opacity .2s;
+    /* ---------- Session (open history as a resumable chat, in-page) ---------- */
+    .session-pane {
+      position: absolute; inset: 0; z-index: 6; display: none;
+      flex-direction: column; overflow: hidden;
+      background: linear-gradient(180deg, rgba(255,255,255,.97), rgba(255,255,255,.88));
+      backdrop-filter: blur(18px);
+      border: 1px solid var(--border); border-radius: 26px; box-shadow: var(--shadow);
     }
-    .modal-overlay.open { opacity: 1; pointer-events: auto; }
-    .modal-box {
-      width: min(720px, 90vw); max-height: 82vh; background: #fff;
-      border-radius: 20px; box-shadow: 0 24px 80px rgba(20,30,60,.22);
-      display: flex; flex-direction: column; overflow: hidden;
-      transform: translateY(12px) scale(.97); transition: transform .2s;
+    .session-pane.active { display: flex; }
+    .session-head {
+      padding: 15px 18px 12px; display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid rgba(31,42,68,.075); background: rgba(255,255,255,.4);
     }
-    .modal-overlay.open .modal-box { transform: translateY(0) scale(1); }
-    .modal-head {
-      padding: 18px 22px 14px; border-bottom: 1px solid var(--border);
-      display: flex; align-items: flex-start; justify-content: space-between;
+    .session-head .s-back {
+      height: 34px; min-width: 0; padding: 0 12px; border: 0; border-radius: 12px;
+      font-size: 13px; font-weight: 700; cursor: pointer; color: var(--soft);
+      background: rgba(31,42,68,.07); box-shadow: none;
     }
-    .modal-head .m-title { font-size: 15px; font-weight: 700; color: var(--text); flex: 1; margin-right: 12px; word-break: break-all; }
-    .modal-head .m-close {
-      width: 28px; height: 28px; border-radius: 8px; border: none;
-      background: var(--bg); cursor: pointer; font-size: 16px; color: var(--muted);
-      display: flex; align-items: center; justify-content: center;
+    .session-head .s-back:hover { background: rgba(31,42,68,.13); }
+    .session-head .s-title {
+      flex: 1; min-width: 0; font-size: 14px; font-weight: 700; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .modal-head .m-close:hover { background: var(--red); color: #fff; }
-    .modal-meta { padding: 10px 22px; font-size: 12px; color: var(--muted); display: flex; gap: 14px; border-bottom: 1px solid var(--border); }
-    .modal-body {
-      flex: 1; overflow-y: auto; padding: 18px 22px;
-      font-size: 13.5px; line-height: 1.7; color: var(--text);
+    .session-head .s-resume {
+      height: 34px; min-width: 0; padding: 0 14px; border: 0; border-radius: 12px;
+      font-size: 13px; font-weight: 750; color: #fff; cursor: pointer;
+      background: linear-gradient(135deg, #3b82f6, #10b981); box-shadow: 0 6px 16px rgba(59,130,246,.22);
     }
-    .modal-body pre { background: var(--bg); padding: 12px; border-radius: 10px; overflow-x: auto; font-size: 12px; }
-    .modal-body code { background: var(--bg); padding: 2px 5px; border-radius: 4px; font-size: 12px; }
-    .modal-body h1,.modal-body h2,.modal-body h3 { margin: 16px 0 8px; }
-    .modal-body table { border-collapse: collapse; width: 100%; margin: 10px 0; }
-    .modal-body th, .modal-body td { border: 1px solid var(--border); padding: 6px 10px; font-size: 12px; text-align: left; }
+    .session-msgs {
+      flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 13px;
+    }
+    .session-msgs .s-divider {
+      align-self: center; color: var(--muted); font-size: 12px; padding: 4px 12px;
+      border-radius: 99px; background: rgba(255,255,255,.7); border: 1px solid var(--border);
+    }
+    .session-composer {
+      padding: 12px 14px; border-top: 1px solid rgba(31,42,68,.075);
+      display: flex; gap: 10px; align-items: end; background: rgba(255,255,255,.4);
+    }
+    .session-composer textarea {
+      flex: 1; height: 48px; max-height: 130px; resize: none; outline: none; color: var(--text);
+      background: rgba(255,255,255,.92); border: 1px solid rgba(31,42,68,.12); border-radius: 16px;
+      padding: 12px 14px; font: inherit; line-height: 1.35;
+    }
+    .session-composer textarea:focus { border-color: rgba(59,130,246,.44); box-shadow: 0 0 0 4px rgba(59,130,246,.10); }
+    .session-composer button {
+      height: 48px; min-width: 84px; border: 0; border-radius: 16px; color: #fff; font-weight: 750; cursor: pointer;
+      background: linear-gradient(135deg, #3b82f6, #10b981); box-shadow: 0 8px 20px rgba(59,130,246,.22);
+    }
+    .session-composer button:disabled { opacity: .5; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -430,21 +444,23 @@
           <button id="send">发送</button>
         </div>
       </section>
+
+      <!-- 历史会话:在指挥家页内打开为可续聊的会话(覆盖右列) -->
+      <div class="session-pane" id="sessionPane">
+        <div class="session-head">
+          <button class="s-back" onclick="exitSession()">← 返回</button>
+          <div class="s-title" id="sessionTitle">历史会话</div>
+          <button class="s-resume" id="sessionResume" onclick="resumeSession()">继续对话</button>
+        </div>
+        <div class="session-msgs" id="sessionMsgs"></div>
+        <div class="session-composer">
+          <textarea id="sessionInput" placeholder="续接此会话，输入你的要求……" disabled></textarea>
+          <button id="sessionSend" onclick="sendSession()" disabled>发送</button>
+        </div>
+      </div>
     </section>
     </div><!-- /app-grid -->
   </main>
-
-  <!-- 历史详情 Modal -->
-  <div class="modal-overlay" id="histModal" onclick="if(event.target===this)closeHistModal()">
-    <div class="modal-box">
-      <div class="modal-head">
-        <div class="m-title" id="mTitle">任务详情</div>
-        <button class="m-close" onclick="closeHistModal()">✕</button>
-      </div>
-      <div class="modal-meta" id="mMeta"></div>
-      <div class="modal-body" id="mBody"></div>
-    </div>
-  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
@@ -632,6 +648,9 @@
     const histWrapEl = document.getElementById('historyWrap');
     const histCountEl = document.getElementById('histCount');
     let histSearchTimer = null;
+    const sessionPane = document.getElementById('sessionPane');
+    const sessionMsgsEl = document.getElementById('sessionMsgs');
+    let sessionRid = null, sessionSubId = null, sessionReplyEl = null, lastSubagents = [], sessionSeed = null;
 
     function switchPanel(mode) {
       document.getElementById('tabLive').classList.toggle('active', mode === 'live');
@@ -658,7 +677,7 @@
                           t.toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'});
           const dur = r.duration >= 60 ? Math.floor(r.duration/60) + 'm' + (r.duration%60 ? (r.duration%60)+'s' : '') : r.duration + 's';
           const stLabel = r.status === 'aborted' ? '已中止' : '已完成';
-          return '<div class="h-card" onclick="openHistDetail(\'' + r.id + '\')">' +
+          return '<div class="h-card" onclick="openSession(\'' + r.id + '\')">' +
             '<div class="h-prompt" title="' + escHtml(r.prompt) + '">' + escHtml(r.prompt) + '</div>' +
             '<div class="h-meta"><span class="h-status ' + r.status + '">' + stLabel + '</span>' +
             '<span>' + timeStr + '</span><span>耗时 ' + dur + '</span>' +
@@ -678,36 +697,121 @@
       histSearchTimer = setTimeout(() => loadHistory(document.getElementById('histSearch').value.trim()), 300);
     }
 
-    async function openHistDetail(rid) {
-      const modal = document.getElementById('histModal');
-      document.getElementById('mTitle').textContent = '加载中…';
-      document.getElementById('mMeta').innerHTML = '';
-      document.getElementById('mBody').innerHTML = '<div class="history-empty">加载详情…</div>';
-      modal.classList.add('open');
+    async function openSession(rid) {
+      sessionRid = rid; sessionSubId = null; sessionReplyEl = null; sessionSeed = null;
+      sessionMsgsEl.innerHTML = '<div class="s-divider">加载中…</div>';
+      const rBtn = document.getElementById('sessionResume');
+      rBtn.style.display = ''; rBtn.disabled = false; rBtn.textContent = '继续对话';
+      document.getElementById('sessionInput').disabled = true;
+      document.getElementById('sessionSend').disabled = true;
+      sessionPane.classList.add('active');
       try {
         const res = await fetch('/history/' + rid);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const r = await res.json();
-        document.getElementById('mTitle').textContent = r.prompt || '(无 prompt)';
-        const t = new Date(r.created_at * 1000);
-        const dur = r.duration >= 60 ? Math.floor(r.duration/60) + ' 分 ' + (r.duration%60) + ' 秒' : r.duration + ' 秒';
-        document.getElementById('mMeta').innerHTML =
-          '<span>🕐 ' + t.toLocaleString('zh-CN') + '</span>' +
-          '<span>⏱ 耗时 ' + dur + '</span>' +
-          '<span>状态: ' + (r.status === 'aborted' ? '已中止' : '已完成') + '</span>' +
-          '<span style="opacity:.6">ID: ' + r.id + '</span>';
-        const reply = r.reply || '(无回复内容)';
-        document.getElementById('mBody').innerHTML =
-          (typeof marked !== 'undefined') ? marked.parse(reply) : '<pre>' + escHtml(reply) + '</pre>';
+        document.getElementById('sessionTitle').textContent = (r.prompt || '历史会话').slice(0, 60);
+        sessionMsgsEl.innerHTML = '';
+        addDivider('历史会话 · ' + new Date(r.created_at * 1000).toLocaleString('zh-CN'));
+        addSessionMsg(r.prompt || '(无 prompt)', 'me');
+        addSessionMsg(r.reply || '(无回复内容)', 'ai');
       } catch (e) {
-        document.getElementById('mBody').innerHTML = '<div class="history-empty">加载失败: ' + e.message + '</div>';
+        sessionMsgsEl.innerHTML = '<div class="s-divider">加载失败: ' + e.message + '</div>';
       }
     }
 
-    function closeHistModal() {
-      document.getElementById('histModal').classList.remove('open');
+    function addDivider(t) {
+      const d = document.createElement('div');
+      d.className = 's-divider'; d.textContent = t;
+      sessionMsgsEl.appendChild(d);
+      sessionMsgsEl.scrollTop = sessionMsgsEl.scrollHeight; return d;
     }
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHistModal(); });
+
+    function addSessionMsg(text, role) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + (role === 'me' ? 'me' : 'ai');
+      div.innerHTML = renderMd(text);
+      sessionMsgsEl.appendChild(div);
+      sessionMsgsEl.scrollTop = sessionMsgsEl.scrollHeight;
+      return div;
+    }
+
+    async function resumeSession() {
+      if (!sessionRid) return;
+      const btn = document.getElementById('sessionResume');
+      btn.disabled = true; btn.textContent = '续接中…';
+      try {
+        const res = await fetch('/history/' + sessionRid + '/resume', { method: 'POST' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        btn.style.display = 'none';
+        document.getElementById('sessionInput').disabled = false;
+        document.getElementById('sessionSend').disabled = false;
+        if (!data.recreated) {
+          // 复用仍存活的原 subagent
+          sessionSubId = data.id;
+          addDivider('续接会话（复用原会话）');
+          sessionReplyEl = addSessionMsg('（生成中…）', 'ai');
+          mirrorSession();
+        } else {
+          // 原 subagent 已回收：记住 seed，等用户第一条消息再新建并带入上下文
+          sessionSeed = data.seed || null;
+          addDivider('续接会话（已重建，等待你的第一条消息）');
+        }
+      } catch (e) {
+        btn.disabled = false; btn.textContent = '继续对话';
+        alert('续接失败: ' + e.message);
+      }
+    }
+
+    function mirrorSession() {
+      if (!sessionPane.classList.contains('active') || !sessionSubId || !sessionReplyEl) return;
+      const it = lastSubagents.find(x => x.id === sessionSubId);
+      if (it && it.reply) sessionReplyEl.innerHTML = renderMd(it.reply);
+    }
+
+    async function sendSession() {
+      const inp = document.getElementById('sessionInput');
+      const msg = inp.value.trim();
+      if (!msg) return;
+      if (!sessionSubId && !sessionSeed) { alert('请先点击「继续对话」'); return; }
+      addSessionMsg(msg, 'me');
+      inp.value = ''; inp.focus();
+      sessionReplyEl = addSessionMsg('（生成中…）', 'ai');
+      try {
+        if (sessionSubId) {
+          // 复用/已建立的 subagent：直接追加 input
+          fetch('/subagent/' + sessionSubId, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'input', msg })
+          });
+        } else if (sessionSeed) {
+          // 重建路径：以「原 prompt + 原回复 + 用户新需求」为整体新建 subagent
+          const combined = '【续接历史任务】你之前做过这个任务：\n' + sessionSeed.prompt +
+                           '\n\n你之前的完成结果是：\n' + sessionSeed.reply +
+                           '\n\n【用户现在的要求】\n' + msg;
+          const res = await fetch('/subagent', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: combined })
+          });
+          const data = await res.json();
+          sessionSubId = data.id || null;
+          sessionSeed = null;
+          mirrorSession();
+        }
+      } catch (e) {
+        sessionReplyEl.innerHTML = renderMd('发送失败: ' + e.message);
+      }
+    }
+
+    function exitSession() {
+      sessionPane.classList.remove('active');
+      sessionRid = null; sessionSubId = null; sessionReplyEl = null; sessionSeed = null;
+      document.getElementById('sessionInput').disabled = true;
+      document.getElementById('sessionSend').disabled = true;
+    }
+    document.getElementById('sessionInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); sendSession(); }
+    });
 
     async function clearHistory() {
       if (!confirm('确定清空所有历史记录？此操作不可恢复。')) return;

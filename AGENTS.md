@@ -44,7 +44,7 @@
 | 文件 | 角色 | 说明 |
 |---|---|---|
 | `agent_loop.py` | Agent Loop 内核 | `BaseHandler`、`StepOutcome`、`agent_runner_loop()`、`json_default`。~100 行循环，协议无关 |
-| `ga.py` | 工具实现层 | `GenericAgentHandler(BaseHandler)` 实现 9 个原子工具的物理执行。最大文件，含 `code_run` 等 |
+| `ga.py` | 工具实现层 | `GenericAgentHandler(BaseHandler)` 实现 12 个原子工具的物理执行。最大文件，含 `code_run` / `git_checkpoint` 等 |
 | `llmcore.py` | LLM 适配层 | `ToolClient`/`NativeClaudeSession`/`NativeOAISession`/`MixinSession`/`resolve_client`，mykey 热重载，历史压缩 |
 | `agentmain.py` | 主编排器 | `GenericAgent` 类（SDK 入口）、系统提示拼装、工具 schema 加载、slash 命令分发、多 LLM 轮转 |
 | `simphtml.py` | HTML 简化器 | web_scan 底层，提取页面结构化纯文本 |
@@ -63,6 +63,11 @@
 | `update_working_checkpoint` | 短期工作记忆便签，每轮注入上下文 |
 | `ask_user` | 需用户决策时中断提问 |
 | `start_long_term_update` | 触发长期记忆提炼 |
+| `code_search` | ripgrep 搜索内容（file:line:content） |
+| `file_find` | ripgrep 按文件名模式找文件 |
+| `repo_index` | 预加载仓库结构索引（build/rebuild/stats/find/symbols），文件清单+符号映射+语言统计，缓存 `.ga_search/repo_index.json`。大仓库开局先 build |
+| `semantic_search` | 语义/自然语言搜代码。mykey 配了 embedding 后端（`embedding_apikey` 等）走向量检索（分块+sqlite+余弦）；未配自动降级为关键词+同义词扩展 ripgrep |
+| `git_checkpoint` | 结构化 Git 工作流（status/diff/commit/checkpoint/list/restore/branch/log/pr），替代裸 `code_run` 调 git。checkpoint 用 git tag `ga-ckpt-<ts>-<shortsha>` 标记，`restore` 一键回退（需 `no_confirm=true`）。`pr` 优先 `gh pr create`，回退 GitHub REST API（需 `mykey.github_token`）|
 
 > Windows 下 `code_run` 用 powershell；非 Windows 用 bash。schema 在 `agentmain.load_tool_schema()` 中按 OS 替换。
 
@@ -184,12 +189,13 @@ python assets/configure_mykey.py   # 或 ga configure
 
 1. **改前必读目标文件**，用 `file_read` 获取最新行号上下文
 2. **精细修改用 `file_patch`**（old_content 须唯一精确匹配），全量覆盖才用 `file_write`
-3. **搜索文件名用 `es`**，搜索网络用 Google，禁递归遍历/猜路径
+3. **搜代码内容用 `code_search`、按文件名找文件用 `file_find`，大仓库开局 `repo_index(build)` 预索引、意图式查询用 `semantic_search`**（均基于 ripgrep/可选 embedding，工具已注册）；替代 `code_run` 跑裸 `grep`/`find` 更省 token。搜索网络用 Google，禁递归遍历/猜路径
 4. **不可逆操作先问用户**；3 次失败请求干预
 5. **进程操作精确 PID**，禁无条件杀 python（会杀自己）
 6. **打包**：`build_app.sh`（macOS py2app）/ PyInstaller（spec 在 `GenericAgent.spec`），macOS 需 `xattr -cr` + `codesign`
 7. **temp/ 和 sche_tasks/ 是运行时区**，勿提交、勿在其中放源码
 8. `.claude/` 目录为 Claude Code 本地配置，不入库
+9. **git_checkpoint 操作禁忌**：commit/checkpoint 不能在 main/master 上做（工具会硬拒），先 `action=branch` 切工作分支；`restore` 是 `reset --hard`，**必须**传 `no_confirm=true`，且操作前应有上一个 checkpoint 可回退。`.workbuddy/git_restore.log` 记录所有 restore，可审计。
 
 ## 常见任务速查
 

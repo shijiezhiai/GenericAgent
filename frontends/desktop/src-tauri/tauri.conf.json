@@ -37,6 +37,7 @@
   },
   "bundle": {
     "active": true,
+    "resources": ["runtime"],
     "targets": ["dmg"],
     "icon": ["icons/icon.icns"],
     "macOS": {

@@ -185,6 +185,18 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                         next_prompt += '\n\n' + '\n'.join(_diag_lines)
         except Exception:
             pass
+        # Post-Action Verification：文件修改后自动 lint/test，结果反馈给模型
+        try:
+            from plugins.post_action_verify import run_post_action_verify
+            next_prompt = run_post_action_verify(tool_calls, next_prompt)
+        except Exception:
+            pass
+        # Test-Output Verification：模型自行用 code_run 跑测试命令时，识别失败并注入信号
+        try:
+            from plugins.post_action_verify import run_test_output_verify
+            next_prompt = run_test_output_verify(tool_calls, tool_results, next_prompt)
+        except Exception:
+            pass
         _hook('turn_after', locals())
         messages = [{"role": "user", "content": next_prompt, "tool_results": tool_results}]   # just new message, history is kept in *Session
     if exit_reason: handler.turn_end_callback(response, tool_calls, tool_results, turn, '', exit_reason)

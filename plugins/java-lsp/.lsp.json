@@ -1,0 +1,12 @@
+{
+  "command": "${CLAUDE_PLUGIN_ROOT}/jdtls-launch.sh",
+  "args": ["-data", "${CLAUDE_PLUGIN_DATA}"],
+  "env": {},
+  "extensionToLanguage": {".java": "java", ".kt": "kotlin", ".scala": "scala"},
+  "workspaceFolder": "${CLAUDE_PROJECT_DIR}",
+  "initializationOptions": {},
+  "settings": {},
+  "startupTimeout": 90,
+  "maxRestarts": 0,
+  "diagnostics": true
+}

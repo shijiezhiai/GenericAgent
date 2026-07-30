@@ -212,6 +212,13 @@
                 <div class="slash-groups" id="skill-picker-groups"></div>
               </div>
             </div>
+            <!-- plugin picker panel (镜像 skill picker) -->
+            <div class="slash-panel skill-picker-panel" id="plugin-picker-panel" hidden>
+              <div class="slash-panel-inner">
+                <div class="slash-search"><input type="text" id="plugin-picker-search" placeholder="搜索插件..." autocomplete="off"></div>
+                <div class="slash-groups" id="plugin-picker-groups"></div>
+              </div>
+            </div>
             <!-- expert picker panel (无搜索框，单选) -->
             <div class="slash-panel expert-picker-panel" id="expert-picker-panel" hidden>
               <div class="slash-panel-inner">
@@ -245,6 +252,10 @@
                 <button type="button" class="chip skill-chip" id="chat-skill-chip" title="选择技能">
                   <span class="skill-chip-ic" data-ga-icon="sparkle"></span>
                   <span class="skill-chip-label">技能</span>
+                </button>
+                <button type="button" class="chip skill-chip plugin-chip" id="chat-plugin-chip" title="选择插件">
+                  <span class="skill-chip-ic" data-ga-icon="puzzlePiece"></span>
+                  <span class="skill-chip-label">插件</span>
                 </button>
                 <button type="button" class="chip expert-chip" id="chat-expert-chip" title="选择专家">
                   <span class="expert-chip-ic" data-ga-icon="usersThree"></span>
@@ -422,6 +433,18 @@
               </aside>
             </div>
           </div>
+          <div class="collab-session" id="collab-session" hidden>
+            <div class="collab-session-head">
+              <button type="button" class="collab-session-back" id="collab-session-back">← 返回</button>
+              <div class="collab-session-title" id="collab-session-title">历史会话</div>
+              <button type="button" class="collab-session-resume" id="collab-session-resume">继续对话</button>
+            </div>
+            <div class="collab-session-body" id="collab-session-body"></div>
+            <div class="collab-session-composer">
+              <textarea id="collab-session-input" placeholder="续接此会话，输入你的要求……" disabled></textarea>
+              <button type="button" id="collab-session-send" disabled>发送</button>
+            </div>
+          </div>
           <div class="collab-quick" id="collab-quick">
             <button type="button" class="pill" data-prompt-key="collab.chipProgress" data-i18n="collab.chipProgress"></button>
             <button type="button" class="pill" data-prompt-key="collab.chipPause" data-i18n="collab.chipPause"></button>
@@ -448,6 +471,10 @@
                 <button type="button" class="chip skill-chip" id="cdb-skill-chip" title="选择技能">
                   <span class="skill-chip-ic" data-ga-icon="sparkle"></span>
                   <span class="skill-chip-label">技能</span>
+                </button>
+                <button type="button" class="chip skill-chip plugin-chip" id="cdb-plugin-chip" title="选择插件">
+                  <span class="skill-chip-ic" data-ga-icon="puzzlePiece"></span>
+                  <span class="skill-chip-label">插件</span>
                 </button>
                 <span class="spacer"></span>
                 <button type="button" class="chip" id="cdb-model-chip" data-i18n-title="model.menuLabel" title="">
@@ -681,9 +708,9 @@
               <div class="ph-breadcrumb-bar">
                 <div class="ph-breadcrumb">
                   <span class="ph-crumb-icon" data-ga-icon="folder"></span>
-                  <span class="ph-crumb" data-i18n="nav.project"></span>
+                  <button type="button" class="ph-crumb ph-crumb-link" id="ph-crumb-project" data-i18n="nav.project"></button>
                   <span class="ph-crumb-sep">/</span>
-                  <span class="ph-crumb ph-crumb-current" id="ph-project-name">—</span>
+                  <span class="ph-crumb ph-crumb-current" id="ph-project-name" title="">—</span>
                 </div>
                 <button type="button" class="ph-invite-btn" id="ph-invite-btn" data-i18n="ph.invite"></button>
               </div>
@@ -783,6 +810,10 @@
                       <button type="button" class="chip skill-chip" id="ph-skill-chip" title="选择技能">
                         <span class="skill-chip-ic" data-ga-icon="sparkle"></span>
                         <span class="skill-chip-label">技能</span>
+                      </button>
+                      <button type="button" class="chip skill-chip plugin-chip" id="ph-plugin-chip" title="选择插件">
+                        <span class="skill-chip-ic" data-ga-icon="puzzlePiece"></span>
+                        <span class="skill-chip-label">插件</span>
                       </button>
                       <button type="button" class="chip ws-chip-static" id="ph-workspace-chip" title="">
                         <span class="ws-chip-icon" data-ga-icon="folderSimple"></span>
@@ -1072,6 +1103,10 @@
         <button type="button" class="bb-btn bb-cancel" data-bb="cancel" data-i18n="common.cancel"></button>
       </div>
 
+    </aside>
+
+    <!-- 浮层菜单 / 弹窗层：移出 #rightpanel，避免在项目主页 / 资料库视图（右侧面板收起 display:none）时整层不渲染 -->
+    <div id="ctx-layer">
       <!-- 会话操作菜单 -->
       <div class="ctx-menu" id="conv-menu" hidden>
         <div class="ctx-item" data-act="pin">
@@ -1139,6 +1174,17 @@
           <div class="modal-body" id="lib-preview-body"></div>
         </div>
       </div>
+      <!-- 资产预览弹窗（项目主页 - 资产 tab） -->
+      <div class="modal" id="asset-preview-modal" hidden>
+        <div class="modal-card modal-card-wide">
+          <div class="modal-head">
+            <div class="modal-title" id="asset-preview-title"></div>
+            <button class="modal-close" type="button" data-close aria-label="close">&times;</button>
+          </div>
+          <div class="modal-sub" id="asset-preview-meta"></div>
+          <div class="modal-body" id="asset-preview-body"></div>
+        </div>
+      </div>
       <div class="ctx-menu" id="folder-menu" hidden>
         <div class="ctx-item" data-act="new-in-folder">
           <span data-ga-icon="plus"></span>
@@ -1154,7 +1200,7 @@
         </div>
       </div>
       <div class="ctx-menu" id="move-menu" hidden></div>
-    </aside>
+    </div>
 
   </div>
 
@@ -1773,7 +1819,8 @@
         <span class="lib-label" data-i18n="ph.lib.filePath"></span>
         <div class="lib-path-wrap">
           <input type="text" class="as-input lib-input" id="lib-add-path" data-i18n-ph="ph.lib.filePathPh" autocomplete="off">
-          <button type="button" class="lib-browse-btn" id="lib-add-browse"><span data-ga-icon="folder"></span><span data-i18n="ph.lib.browse"></span></button>
+          <button type="button" class="lib-browse-btn" id="lib-add-browse"><span data-ga-icon="file"></span><span data-i18n="ph.lib.browseFile"></span></button>
+          <button type="button" class="lib-browse-btn lib-browse-folder" id="lib-add-browse-folder"><span data-ga-icon="folder"></span><span data-i18n="ph.lib.browseFolder"></span></button>
           <input type="file" id="lib-add-file-input" hidden>
         </div>
       </div>
@@ -2120,6 +2167,7 @@
 <!-- highlight.js -->
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js" crossorigin="anonymous"></script>
 <script src="phosphor-icons.js?v=6"></script>
+<script src="ga-ports.js"></script>
 <script src="app.js?v=331"></script>
 </body>
 </html>

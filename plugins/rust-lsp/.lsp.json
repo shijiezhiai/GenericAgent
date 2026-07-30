@@ -1,0 +1,12 @@
+{
+    "command": "rust-analyzer",
+    "args": [],
+    "env": {},
+    "extensionToLanguage": { ".rs": "rust" },
+    "workspaceFolder": "${CLAUDE_PROJECT_DIR}",
+    "initializationOptions": {},
+    "settings": {},
+    "startupTimeout": 30,
+    "maxRestarts": 3,
+    "diagnostics": true
+}

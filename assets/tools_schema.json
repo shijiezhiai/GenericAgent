@@ -95,5 +95,48 @@
       "max_results": {"type": "integer", "description": "Max results (default 50, max 200)", "default": 50},
       "sort_by": {"type": "string", "enum": ["path", "modified"], "description": "Sort by path (default) or modification time (newest first)", "default": "path"}},
       "required": ["pattern"]}
+  }},
+  {"type": "function", "function": {
+    "name": "git_checkpoint",
+    "description": "Structured Git workflow (replaces raw `code_run` git commands). One tool, 9 actions:\n• status: branch + staged/unstaged/untracked (porcelain-v2 parsed)\n• diff: file diff with stat (staged or working tree)\n• commit: add + commit (blocked on main/master)\n• checkpoint: commit + tag with ga-ckpt-<ts>-<shortsha> for one-click restore\n• list: enumerate ga-ckpt-* tags with files-changed count\n• restore: git reset --hard to a checkpoint (requires no_confirm=true; logs to .workbuddy/git_restore.log; reflog retains prior HEAD for undo)\n• branch: list / create / switch (use this before commit)\n• log: --oneline --graph log\n• pr: push current branch to remote (myfork>origin), then create PR. Tries `gh pr create` first, falls back to GitHub REST API using mykey.github_token / $GITHUB_TOKEN.\nUse this instead of code_run for any git operation; it's atomic, recoverable, and gives structured output. cwd defaults to self.cwd (searches up to 8 levels for .git).",
+    "parameters": {"type": "object", "properties": {
+      "action": {"type": "string", "enum": ["status", "diff", "commit", "checkpoint", "list", "restore", "branch", "log", "pr"], "description": "Action to perform"},
+      "cwd": {"type": "string", "description": "Repo root override. Default: search up from self.cwd"},
+      "message": {"type": "string", "description": "Commit / checkpoint message (required for commit, checkpoint)"},
+      "files": {"type": "array", "items": {"type": "string"}, "description": "Specific files to add. Default for commit/checkpoint: all changes (add_all=true)"},
+      "all": {"type": "boolean", "description": "Add all changes (incl. untracked). Default true for commit/checkpoint", "default": true},
+      "staged": {"type": "boolean", "description": "For diff: show staged diff instead of working tree. Default false", "default": false},
+      "checkpoint_id": {"type": "string", "description": "For restore: checkpoint id (ga-ckpt-... or short sha). Required."},
+      "id": {"type": "string", "description": "Alias of checkpoint_id"},
+      "branch": {"type": "string", "description": "For branch action: name to create/switch. Omit to list branches."},
+      "create_from": {"type": "string", "description": "For branch create: base ref. Default HEAD."},
+      "max_count": {"type": "integer", "description": "For list / log: max entries. Default 20 / 15."},
+      "pr_title": {"type": "string", "description": "For pr: PR title (required)"},
+      "pr_body": {"type": "string", "description": "For pr: PR description (Markdown)"},
+      "pr_target": {"type": "string", "description": "For pr: target branch. Default: origin/HEAD or main."},
+      "remote": {"type": "string", "description": "For pr: preferred remote. Default: myfork > origin."},
+      "no_confirm": {"type": "boolean", "description": "Skip safety confirmation for restore. Default false.", "default": false}},
+      "required": ["action"]}
+  }},
+  {"type": "function", "function": {
+    "name": "repo_index",
+    "description": "Preloaded structural repo index (Codex-style): scans the repo via ripgrep into a file inventory + symbol map + language stats, cached in .ga_search/repo_index.json. Build once at session start on a large repo, then query files/symbols instantly via find/symbols instead of walking the tree with code_run.",
+    "parameters": {"type": "object", "properties": {
+      "action": {"type": "string", "enum": ["build", "rebuild", "stats", "find", "symbols"], "description": "build: create/reuse index; rebuild: force rebuild; stats: overview; find: locate files by name substring; symbols: locate symbol definitions", "default": "stats"},
+      "query": {"type": "string", "description": "Query for find/symbols (filename substring or symbol name)"},
+      "path": {"type": "string", "description": "Repo root to index. Defaults to cwd", "default": "."},
+      "force": {"type": "boolean", "description": "Force rebuild the index on build", "default": false},
+      "max_results": {"type": "integer", "description": "Max results (find default 50 / symbols default 30)", "default": 50}},
+      "required": []}
+  }},
+  {"type": "function", "function": {
+    "name": "semantic_search",
+    "description": "Semantic / natural-language code search (Cursor-style). If an embedding backend is configured in mykey (embedding_apikey or reusing native_oai_*), chunks source files, vectorizes them, and retrieves by cosine similarity. Otherwise auto-falls back to 'smart ripgrep': extracts keywords + synonym expansion from the query and runs regex search. Use for intent-based queries like 'where is user login/auth handled'.",
+    "parameters": {"type": "object", "properties": {
+      "query": {"type": "string", "description": "Natural-language description of the code you want, e.g. 'function that handles user login authentication'"},
+      "path": {"type": "string", "description": "Repo root to search. Defaults to cwd", "default": "."},
+      "max_results": {"type": "integer", "description": "Max result chunks", "default": 10},
+      "force": {"type": "boolean", "description": "Force rebuild the vector index when an embedding backend is present", "default": false}},
+      "required": ["query"]}
   }}
 ]

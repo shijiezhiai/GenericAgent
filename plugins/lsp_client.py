@@ -431,4 +431,4 @@ class LspClient:
             return ext in ext_map
         # 无显式配置时，用默认映射判断
         return ext in {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs",
-                       ".c", ".cpp", ".rb", ".php", ".swift", ".kt", ".scala"}
+                       ".c", ".cpp", ".h", ".hpp", ".rb", ".php", ".swift", ".kt", ".scala"}

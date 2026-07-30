@@ -1,0 +1,6 @@
+{
+    "name": "cpp-lsp",
+    "description": "C/C++ language server (clangd) for real-time diagnostics on .c/.cpp/.h files",
+    "version": "1.0.0",
+    "default_enabled": true
+}

@@ -1153,6 +1153,66 @@ if hooks:
             content.append({"type": "text", "text": text})
 
 
+# ===== 用户显式选中插件（前端 plugin-chip 写入的「【使用插件 X】」前缀） =====
+
+_SELECTED_PLUGIN_RE = re.compile(r"【使用插件 ([^】\n]+)】")
+
+
+def _build_selected_injection(name):
+    """构建选中 plugin 的聚焦注入文本：完整能力清单 + 优先使用指令。
+
+    与 _build_injection 的全量索引互补：即使 plugin 无 skills（仅 agents/MCP）
+    也能被选中生效；不缓存（仅在命中前缀的轮次构建，开销可忽略）。
+    """
+    p = next((x for x in _get_plugins() if x["name"] == name), None)
+    if not p:
+        return None
+    lines = [f"\n\n---\n## 用户已显式选择插件 `{p['name']}`，本轮请优先使用该插件的能力完成任务"]
+    if p["description"]:
+        lines.append(f"- 说明：{_truncate(p['description'], 300)}")
+    lines.append(f"- 目录：{p['dir']}")
+    for sk in p["skills"]:
+        tag = " [接受 $ARGUMENTS]" if sk["has_args"] else ""
+        lines.append(f"- skill `{sk['ns_name']}`{tag}：{_truncate(sk['description'], 160)}")
+        lines.append(f"  - SKILL.md：{sk['path']}")
+    for ag in p.get("agents", []):
+        lines.append(f"- agent `{ag['ns_name']}`：{_truncate(ag['description'], 160)}")
+        lines.append(f"  - 正文：{ag['path']}")
+    for sn in (p.get("mcp") or {}):
+        lines.append(f"- MCP server `{sn}`：工具名前缀 `mcp__{p['name']}__{sn}__`，可直接调用")
+    lines.append("执行方式：先 file_read 与用户请求最匹配的 SKILL.md（或 agent 正文）获取完整指令，再按指令执行。")
+    lines.append("---")
+    return "\n".join(lines)
+
+
+if hooks:
+    @hooks.register("agent_before")
+    def inject_selected_plugin(ctx):
+        """用户消息带「【使用插件 X】」前缀时，注入该 plugin 的聚焦能力清单。"""
+        um = next((m for m in reversed(ctx.get("messages") or [])
+                   if isinstance(m, dict) and m.get("role") == "user"), None)
+        if um is None:
+            return
+        content = um.get("content")
+        if isinstance(content, str):
+            body = content
+        elif isinstance(content, list):
+            body = next((c.get("text", "") for c in content
+                         if isinstance(c, dict) and c.get("type") == "text"), "")
+        else:
+            return
+        m = _SELECTED_PLUGIN_RE.search(body[:300])
+        if not m:
+            return
+        text = _build_selected_injection(m.group(1).strip())
+        if not text:
+            return
+        if isinstance(content, str):
+            um["content"] = content + text
+        elif isinstance(content, list):
+            content.append({"type": "text", "text": text})
+
+
 def _build_agent_injection():
     """构建 plugin agent 索引注入文本（与 _build_injection 对称，独立于 skill 注入）。
 

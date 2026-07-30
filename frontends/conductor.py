@@ -20,8 +20,8 @@ from agentmain import GenericAgent
 import shutil, subprocess
 from plugins.skills_loader import _discover_skills, _load_config, _CONFIG_PATH
 
-HOST = "127.0.0.1"
-PORT = 8900
+HOST = os.environ.get("CONDUCTOR_HOST", "127.0.0.1")
+PORT = int(os.environ.get("CONDUCTOR_PORT", "8900"))
 HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conductor.html")
 
 
@@ -608,6 +608,24 @@ def api_history_detail(rid: str):
     rec = task_history.get(rid)
     if not rec: return JSONResponse({"error": "not found"}, status_code=404)
     return rec
+
+@app.post("/history/{rid}/resume")
+def api_history_resume(rid: str):
+    """继续一个历史任务。
+
+    - 原 subagent 仍存活(已停止)：直接复用其 id，后续消息走 POST /subagent/{id} action=input。
+    - 原 subagent 已回收：不自动重跑原 prompt(避免重复执行历史动作)，返回 seed，
+      由前端在用户发出第一条续接消息时新建 subagent 并带入原 prompt+回复作为上下文。
+    """
+    rec = task_history.get(rid)
+    if not rec:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    agent_id = rec.get("agent_id")
+    s = pool.get(agent_id) if agent_id else None
+    if s and s.status != "running":
+        return {"id": s.id, "recreated": False, "seed": None}
+    return {"id": None, "recreated": True,
+            "seed": {"prompt": rec.get("prompt") or "", "reply": rec.get("reply") or ""}}
 
 @app.delete("/history")
 def api_history_clear():

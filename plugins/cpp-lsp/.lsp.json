@@ -1,0 +1,19 @@
+{
+    "command": "clangd",
+    "args": ["--background-index", "--header-insertion=never"],
+    "env": {},
+    "extensionToLanguage": {
+        ".c": "c",
+        ".cpp": "cpp",
+        ".cc": "cpp",
+        ".cxx": "cpp",
+        ".h": "c",
+        ".hpp": "cpp"
+    },
+    "workspaceFolder": "${CLAUDE_PROJECT_DIR}",
+    "initializationOptions": {},
+    "settings": {},
+    "startupTimeout": 30,
+    "maxRestarts": 3,
+    "diagnostics": true
+}

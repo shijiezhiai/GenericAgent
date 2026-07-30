@@ -28,8 +28,8 @@ UA = f'openclaw-weixin/{VER}'
 ITEM_IMAGE, ITEM_FILE, ITEM_VIDEO = 2, 4, 5
 CDN_BASE = 'https://novac2c.cdn.weixin.qq.com/c2c'
 
-# Bridge API for routing messages to sessions
-_BRIDGE_API = 'http://127.0.0.1:14168'
+# Bridge API for routing messages to sessions (BRIDGE_PORT env 跟随并行部署实例)
+_BRIDGE_API = f"http://127.0.0.1:{os.environ.get('BRIDGE_PORT', '14168')}"
 
 def _route_to_bridge(content, sender='微信用户'):
     """Send message to bridge for session display."""

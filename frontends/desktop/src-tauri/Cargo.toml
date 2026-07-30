@@ -14,6 +14,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "5"
 rfd = "0.15"
+# Phase 2: embed the Rust/axum gateway (single Rust process + Python kernel subprocess)
+ga-desktop-gateway = { path = "../../desktop_gateway" }
 
 [lib]
 name = "ga_desktop_lib"

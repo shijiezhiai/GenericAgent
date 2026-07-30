@@ -1,0 +1,6 @@
+{
+    "name": "rust-lsp",
+    "description": "Rust language server (rust-analyzer) for real-time diagnostics on .rs files",
+    "version": "1.0.0",
+    "default_enabled": true
+}

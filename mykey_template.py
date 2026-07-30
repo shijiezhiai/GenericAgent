@@ -312,3 +312,27 @@ mixin_config = {
 #     'host': 'https://cloud.langfuse.com',   # 或自托管地址
 # }
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Git 平台凭证（可选；git_checkpoint 工具的 action=pr 用）
+# ══════════════════════════════════════════════════════════════════════════════
+#  不配置也能用：工具会优先尝试 `gh pr create`，都没有时 push 完返回 PR 比较链接。
+#  配了 token 后可走 GitHub/GitLab REST API 自动建 PR，token 最小权限：repo (GitHub) / api (GitLab)。
+#  也可改用环境变量 $GITHUB_TOKEN / $GITLAB_TOKEN，无需在此填。
+#
+# github_token = 'ghp_xxxxxxxxxxxxxxxxxxxx'    # GitHub PAT，scope: repo
+# gitlab_token = 'glpat-xxxxxxxxxxxxxxxxxxxx'  # GitLab PAT，scope: api
+# gitea_token  = '...'                          # 自托管 Gitea（暂未支持自动建 PR，仅 push）
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Embedding 后端（可选；semantic_search 工具的向量检索模式用）
+# ══════════════════════════════════════════════════════════════════════════════
+#  不配置也能用：semantic_search 自动降级为关键词+同义词扩展的 ripgrep 搜索。
+#  配置后走真正的向量语义检索（OpenAI 兼容 /v1/embeddings 接口）。
+#  未配置且存在 native_oai_* 配置时，会自动复用其凭据 + text-embedding-3-small。
+#
+# embedding_apikey = 'sk-...'                          # embedding API key
+# embedding_apibase = 'https://api.openai.com/v1'      # OpenAI 兼容 base URL
+# embedding_model = 'text-embedding-3-small'           # embedding 模型名
+
