@@ -14,8 +14,10 @@ const BRIDGE_PORT = (window.GA_PORTS && window.GA_PORTS.bridge) || Number(locati
 const CONDUCTOR_PORT = (window.GA_PORTS && window.GA_PORTS.conductor) || 8900;
 const BRIDGE_ORIGIN = `${location.protocol}//${location.hostname}:${BRIDGE_PORT}`;
 const BRIDGE_WS_ORIGIN = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:${BRIDGE_PORT}`;
-const CONDUCTOR_ORIGIN = `${location.protocol}//${location.hostname}:${CONDUCTOR_PORT}`;
-const CONDUCTOR_WS_ORIGIN = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:${CONDUCTOR_PORT}`;
+// Conductor 经网关同端口暴露：所有调用走 `${origin}/conductor`，由网关反向代理到真实
+// conductor 端口（:8900）。这样桌面端只需开放网关一个端口，conductor 的 HTTP 与 /ws 同源。
+const CONDUCTOR_ORIGIN = `${location.origin}/conductor`;
+const CONDUCTOR_WS_ORIGIN = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/conductor`;
 
 /* ═══════════════ 进程状态 store ═══════════════ */
 const _serviceById = {};

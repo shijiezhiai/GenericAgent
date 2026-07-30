@@ -23,6 +23,8 @@ async fn main() {
         root: root.clone(),
         port: parse_port("GA_GATEWAY_PORT", 34168),
         conductor_port: parse_port("GA_CONDUCTOR_PORT", 8900),
+        cdp_port: parse_port("GA_CDP_PORT", 18766),
+        grok_port: parse_port("GA_GROK_PORT", 15433),
         fallback: std::env::var("GA_FALLBACK_URL").unwrap_or_default(),
         legacy_port: parse_port("GA_LEGACY_PORT", 14169),
         kernel_python: std::env::var("GA_KERNEL_PYTHON").unwrap_or_else(|_| "python3".to_string()),

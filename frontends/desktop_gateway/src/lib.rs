@@ -40,6 +40,9 @@ pub struct AppState {
     pub static_dir: PathBuf,
     pub bridge_port: u16,
     pub conductor_port: u16,
+    pub conductor_upstream: String,
+    pub cdp_upstream: String,
+    pub grok_upstream: String,
     pub ga_root: String,
     pub client: reqwest::Client,
 }
@@ -384,6 +387,21 @@ fn build_router(state: AppState) -> Router {
         .route("/session/{sid}/plan", get(session_plan))
         .route("/model-profiles", get(model_profiles_list))
         .route("/ws", get(ws_handler))
+        // Fold external HTTP services onto this single port (strangler consolidation).
+        // Path prefix is stripped before forwarding: /conductor/history -> :8900/history
+        // The bare trailing-slash variants (`/conductor/`) are registered explicitly because
+        // axum 0.8's `/conductor/{*rest}` catch-all does NOT match `/conductor/`; without them
+        // the trailing slash falls through to the legacy-bridge fallback and hangs (curl 000).
+        .route("/conductor", any(proxy::proxy_conductor))
+        .route("/conductor/", any(proxy::proxy_conductor))
+        .route("/conductor/{*rest}", any(proxy::proxy_conductor))
+        .route("/conductor/ws", get(proxy::ws_conductor))
+        .route("/cdp", any(proxy::proxy_cdp))
+        .route("/cdp/", any(proxy::proxy_cdp))
+        .route("/cdp/{*rest}", any(proxy::proxy_cdp))
+        .route("/proxy", any(proxy::proxy_grok))
+        .route("/proxy/", any(proxy::proxy_grok))
+        .route("/proxy/{*rest}", any(proxy::proxy_grok))
         // everything else -> legacy bridge (strangler fallback)
         .fallback(any(proxy::proxy_handler))
         .layer(CorsLayer::permissive())
@@ -399,6 +417,10 @@ pub struct GatewayConfig {
     /// Conductor port advertised to the frontend (`window.GA_PORTS.conductor`) and forwarded to
     /// the kernel (which passes it to the legacy fallback bridge).
     pub conductor_port: u16,
+    /// TMWebDriver (CDP browser bridge) upstream port, folded onto the gateway as `/cdp`.
+    pub cdp_port: u16,
+    /// supergrok_proxy upstream port, folded onto the gateway as `/proxy`.
+    pub grok_port: u16,
     /// Explicit fallback URL for un-migrated routes. When empty, the gateway proxies to
     /// `http://127.0.0.1:<legacy_port>` (the kernel-spawned legacy bridge).
     pub fallback: String,
@@ -420,6 +442,8 @@ pub async fn serve(cfg: GatewayConfig) -> Result<(), String> {
     let root = cfg.root.clone();
     let port = cfg.port;
     let conductor_port = cfg.conductor_port;
+    let cdp_port = cfg.cdp_port;
+    let grok_port = cfg.grok_port;
     let fallback = if cfg.fallback.is_empty() {
         format!("http://127.0.0.1:{}", cfg.legacy_port)
     } else {
@@ -467,6 +491,9 @@ pub async fn serve(cfg: GatewayConfig) -> Result<(), String> {
     };
 
     let client = reqwest::Client::builder()
+        // Bound upstream latency so a hung/missing upstream returns 502 instead of hanging the
+        // gateway connection (which would surface to the caller as an empty response / curl 000).
+        .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| e.to_string())?;
     let state = AppState {
@@ -475,6 +502,9 @@ pub async fn serve(cfg: GatewayConfig) -> Result<(), String> {
         static_dir,
         bridge_port: port,
         conductor_port,
+        conductor_upstream: format!("http://127.0.0.1:{}", conductor_port),
+        cdp_upstream: format!("http://127.0.0.1:{}", cdp_port),
+        grok_upstream: format!("http://127.0.0.1:{}", grok_port),
         ga_root: ga_root.clone(),
         client,
     };
