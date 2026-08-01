@@ -171,14 +171,60 @@ def remove_dir_link(path: str) -> bool:
 
 # --------------------------------------------------------------------------- #
 # 注册表 temp/workspaces.json(本功能私有;v2/v3 可能并发 -> 原子写)
+# duckdb 模式下由 desktop_bridge 注入 store, 注册表改存 config_kv(单真源);
+# 无 store(replica/json 回滚)时退回原文件原子写。
 # --------------------------------------------------------------------------- #
+_store = None  # injected DBStore (kernel owns the DuckDB lock)
+
+
+def attach(store) -> None:
+    """Bind the DuckDB store so registry/map persist to config_kv instead of files."""
+    global _store
+    _store = store
+
+
+def _db_get(name: str) -> Optional[dict]:
+    if _store is None:
+        return None
+    try:
+        d = _store.kv_get(name)
+        return d if isinstance(d, dict) else None
+    except Exception:
+        return None
+
+
+def _db_set(name: str, items: dict) -> bool:
+    if _store is None:
+        return False
+    try:
+        _store.kv_set(name, items)
+        return True
+    except Exception:
+        return False
+
+
+def _rename_migrated(path: str) -> None:
+    """Mark a source file as migrated so it stops shadowing the DB copy."""
+    try:
+        if os.path.isfile(path):
+            os.replace(path, f"{path}.migrated-{int(time.time())}")
+    except OSError:
+        pass
+
+
 def registry_load() -> dict:
+    # DB first; fall back to file, migrating lazily so the first duckdb boot moves data.
+    d = _db_get("workspaces_registry")
+    if d is not None:
+        return d
     try:
         with open(_registry_path(), encoding="utf-8") as fh:
             data = json.load(fh)
         if isinstance(data, dict) and data.get("version") == _REGISTRY_VERSION:
             items = data.get("items")
             if isinstance(items, dict):
+                if _db_set("workspaces_registry", items):
+                    _rename_migrated(_registry_path())
                 return items
     except (OSError, ValueError):
         pass
@@ -186,6 +232,8 @@ def registry_load() -> dict:
 
 
 def _registry_save(items: dict) -> None:
+    if _db_set("workspaces_registry", items):
+        return
     path = _registry_path()
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -209,12 +257,17 @@ def _session_map_path() -> str:
 
 
 def _session_map_load() -> dict:
+    d = _db_get("session_workspaces_map")
+    if d is not None:
+        return d
     try:
         with open(_session_map_path(), encoding="utf-8") as fh:
             data = json.load(fh)
         if isinstance(data, dict) and data.get("version") == _REGISTRY_VERSION:
             items = data.get("items")
             if isinstance(items, dict):
+                if _db_set("session_workspaces_map", items):
+                    _rename_migrated(_session_map_path())
                 return items
     except (OSError, ValueError):
         pass
@@ -222,6 +275,8 @@ def _session_map_load() -> dict:
 
 
 def _session_map_save(items: dict) -> None:
+    if _db_set("session_workspaces_map", items):
+        return
     path = _session_map_path()
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)

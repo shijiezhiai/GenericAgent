@@ -349,6 +349,11 @@ class AgentManager:
                 ga_config.attach(self.store)
             except Exception as e:  # noqa: BLE001 - config falls back to its own connection
                 print(f"[bridge] ga_config attach skipped: {e}", file=sys.stderr)
+            # workspace registry/map and datasources persist to the store as well
+            try:
+                workspace_cmd.attach(self.store)
+            except Exception as e:  # noqa: BLE001
+                print(f"[bridge] workspace_cmd attach skipped: {e}", file=sys.stderr)
 
     @property
     def mykey_path(self) -> str:
@@ -621,6 +626,21 @@ class AgentManager:
         return self._project_dir(project_name) / ".events.jsonl"
 
     def _load_datasources(self) -> Dict[str, Any]:
+        st = getattr(self, "store", None)
+        if st is not None:
+            try:
+                d = st.kv_get("desktop_datasources")
+                if isinstance(d, dict):
+                    return d
+                f = self._datasources_file()  # lazy migration from the legacy file
+                if f.exists():
+                    d = json.loads(f.read_text(encoding="utf-8"))
+                    if isinstance(d, dict):
+                        st.kv_set("desktop_datasources", d)
+                        f.replace(f.with_name(f.name + f".migrated-{int(time.time())}"))
+                        return d
+            except Exception as e:
+                print(f"[bridge] load datasources from db failed: {e}", file=sys.stderr)
         try:
             f = self._datasources_file()
             if not f.exists():
@@ -631,6 +651,13 @@ class AgentManager:
             return {}
 
     def _save_datasources(self, d: Dict[str, Any]):
+        st = getattr(self, "store", None)
+        if st is not None:
+            try:
+                st.kv_set("desktop_datasources", d)
+                return
+            except Exception as e:
+                print(f"[bridge] save datasources to db failed: {e}", file=sys.stderr)
         try:
             f = self._datasources_file()
             f.parent.mkdir(parents=True, exist_ok=True)

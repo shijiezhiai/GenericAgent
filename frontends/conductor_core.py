@@ -235,8 +235,25 @@ pool = SubagentPool()
 HISTORY_FILE = os.path.join(ROOT, "temp", "conductor_history.json")
 HISTORY_MAX = 200
 
+_HISTORY_STORE = None  # injected DBStore (kernel owns the DuckDB lock)
+
+
+def attach_store(store) -> None:
+    """Bind the DuckDB store so task history persists to config_kv instead of a file.
+
+    Called AFTER `import conductor_core` (whose module-level `task_history` was built
+    with the file backend), so we re-load the records through the now-attached store --
+    that is what migrates the legacy file into the DB on first boot."""
+    global _HISTORY_STORE
+    _HISTORY_STORE = store
+    try:
+        task_history._load()
+    except Exception as e:  # noqa: BLE001
+        print(f"[history] reload after attach failed: {e}")
+
+
 class TaskHistoryStore:
-    """Persist finished subagent task records to disk."""
+    """Persist finished subagent task records (duckdb kv when attached, else file)."""
     def __init__(self, path: str = HISTORY_FILE, max_records: int = HISTORY_MAX):
         self.path = path
         self.max_records = max_records
@@ -245,6 +262,30 @@ class TaskHistoryStore:
         self._load()
 
     def _load(self):
+        s = _HISTORY_STORE
+        if s is not None:
+            try:
+                data = s.kv_get("conductor_history")
+                if isinstance(data, list):
+                    self.records = data[:self.max_records]
+                    return
+            except Exception:
+                pass
+            # lazy migration from the legacy file
+            if os.path.isfile(self.path):
+                try:
+                    with open(self.path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, list):
+                        self.records = data[:self.max_records]
+                        try:
+                            s.kv_set("conductor_history", self.records)
+                            os.replace(self.path, self.path + f".migrated-{int(time.time())}")
+                        except Exception:
+                            pass
+                        return
+                except Exception:
+                    pass
         try:
             if os.path.isfile(self.path):
                 with open(self.path, "r", encoding="utf-8") as f:
@@ -255,6 +296,13 @@ class TaskHistoryStore:
             self.records = []
 
     def _save(self):
+        s = _HISTORY_STORE
+        if s is not None:
+            try:
+                s.kv_set("conductor_history", self.records[:self.max_records])
+                return
+            except Exception as e:
+                print(f"[history] db save failed: {e}")
         try:
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
             tmp = self.path + ".tmp"

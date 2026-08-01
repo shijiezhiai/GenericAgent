@@ -165,6 +165,12 @@ def _start_bridge_server():
     def run():
         import asyncio
         import desktop_bridge
+        import conductor_core
+        # hand the DB-backed kv to conductor history (in-process owner)
+        try:
+            conductor_core.attach_store(getattr(manager, "store", None))
+        except Exception as e:  # noqa: BLE001
+            print(f"[kernel] conductor store attach skipped: {e}", file=sys.stderr)
         while True:
             try:
                 asyncio.run(desktop_bridge._serve_dual("127.0.0.1", bridge_port, conductor_port))
