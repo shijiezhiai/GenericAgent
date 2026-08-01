@@ -6546,8 +6546,8 @@ def create_app():
 
     app.router.add_get("/upload/raw", upload_raw_handler)
     app.router.add_get("/token-stats", token_stats_handler)
-    app.router.add_get("/token-history", get_token_history_handler)
-    app.router.add_post("/token-history", post_token_history_handler)
+    # /token-history moved to an explicit gateway -> kernel (DB) route (G1); the bridge
+    # is a replica and must no longer be the source of truth for it.
     app.router.add_post("/services/start", service_start_handler)
     app.router.add_post("/services/stop", service_stop_handler)
     app.router.add_get("/services/logs", service_logs_handler)

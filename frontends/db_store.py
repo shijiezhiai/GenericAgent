@@ -35,7 +35,7 @@ from typing import Any, Dict, List, Optional
 _JSON_PLACEHOLDER = "{}"
 
 # Bump when the physical schema changes; add a branch in _migrate_schema for the step.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Runtime maintenance. DuckDB's CHECKPOINT only folds the WAL into the main file; it
 # never hands free blocks back to the OS (a 268MB production store measured 514/1041
@@ -354,6 +354,12 @@ class DBStore:
             self.con.execute("CREATE INDEX IF NOT EXISTS idx_rawlogs_sid ON raw_logs(session_id)")
             self.con.execute("CREATE INDEX IF NOT EXISTS idx_logmap_sid ON log_session_map(session_id)")
             self.con.execute("""
+                CREATE TABLE IF NOT EXISTS token_history (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),  -- single-document row
+                    doc VARCHAR NOT NULL
+                )
+            """)
+            self.con.execute("""
                 CREATE TABLE IF NOT EXISTS schema_version (
                     version INTEGER PRIMARY KEY,
                     applied_at DOUBLE
@@ -644,6 +650,56 @@ class DBStore:
         self._w("INSERT INTO config_kv (key, value, updated_at) VALUES (?,?,?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
                 [key, json.dumps(value, ensure_ascii=False, default=str), time.time()])
+
+    # ------------------------------------------------------------------
+    # token history (single-document row; same whole-doc semantics as the old JSON file)
+    # ------------------------------------------------------------------
+    _EMPTY_TOKEN_HISTORY = {"history": [], "snap": {}, "conductorHist": [], "conductorLast": None}
+
+    def load_token_history(self) -> dict:
+        row = self._q1("SELECT doc FROM token_history WHERE id = 1")
+        if not row or not row[0]:
+            return dict(self._EMPTY_TOKEN_HISTORY)
+        try:
+            data = json.loads(row[0])
+            return data if isinstance(data, dict) else dict(self._EMPTY_TOKEN_HISTORY)
+        except Exception:
+            return dict(self._EMPTY_TOKEN_HISTORY)
+
+    def save_token_history(self, data: dict) -> dict:
+        """Whole-document overwrite. Refuses to clobber a non-empty history with an
+        empty one (frontend has been known to write back an empty array before the old
+        data is fetched -- that used to wipe all usage records)."""
+        new_hist = (data or {}).get("history") or []
+        old = self.load_token_history()
+        if not new_hist and (old or {}).get("history"):
+            return {"ok": False, "skipped": "refuse_empty_overwrite",
+                    "kept": len(old.get("history") or [])}
+        self._w("INSERT INTO token_history (id, doc) VALUES (1, ?) "
+                "ON CONFLICT(id) DO UPDATE SET doc = excluded.doc",
+                [json.dumps(data or {}, ensure_ascii=False)])
+        return {"ok": True}
+
+    def import_token_history_file(self) -> Optional[dict]:
+        """One-time import of the legacy desktop_token_history.json into the DB. Skips
+        when the DB already holds data; renames the file (kept for rollback) on success.
+        Idempotent, safe to call on every kernel start."""
+        f = Path(self.ga_root) / "temp" / "desktop_token_history.json"
+        if not f.is_file():
+            return None
+        if (self.load_token_history() or {}).get("history"):
+            return {"skipped": "db_already_has_data"}
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"[db_store] token_history import: unreadable file, skipped: {e}", file=sys.stderr)
+            return None
+        self._w("INSERT INTO token_history (id, doc) VALUES (1, ?) "
+                "ON CONFLICT(id) DO UPDATE SET doc = excluded.doc",
+                [json.dumps(data, ensure_ascii=False)])
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        f.replace(f.with_name(f"desktop_token_history.json.imported-{stamp}"))
+        return {"imported": len((data or {}).get("history") or [])}
 
     def _replace_ordered(self, table: str, paths: List[str]):
         ts = time.time()

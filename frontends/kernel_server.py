@@ -366,6 +366,25 @@ def rpc_model_profiles_list(params):
     return {"profiles": manager.list_model_profiles()}
 
 
+def rpc_token_history_get(params):
+    """Serve /token-history from the DuckDB store (the kernel owns the file lock)."""
+    store = getattr(manager, "store", None)
+    if store is None:
+        return dict(bridge._TOKEN_EMPTY if hasattr(bridge, "_TOKEN_EMPTY") else
+                    {"history": [], "snap": {}, "conductorHist": [], "conductorLast": None})
+    return store.load_token_history()
+
+
+def rpc_token_history_set(params):
+    store = getattr(manager, "store", None)
+    if store is None:
+        return {"ok": False, "skipped": "no_db"}
+    data = params.get("data", params)
+    if not isinstance(data, dict):
+        data = {}
+    return store.save_token_history(data)
+
+
 def rpc_model_profiles_add(params):
     return {"ok": True, **manager.add_model_profile(params.get("data", params))}
 
@@ -405,6 +424,8 @@ DISPATCH = {
     "model_profiles.get": rpc_model_profiles_get,
     "model_profiles.update": rpc_model_profiles_update,
     "model_profiles.delete": rpc_model_profiles_delete,
+    "token_history.get": rpc_token_history_get,
+    "token_history.set": rpc_token_history_set,
 }
 
 
@@ -433,6 +454,16 @@ def main():
     if config_port:
         print(f"[kernel] ready; config store published on :{config_port} for the bridge",
               file=sys.stderr)
+
+    # One-time import of the legacy desktop_token_history.json into the DB (idempotent).
+    try:
+        store = getattr(manager, "store", None)
+        if store is not None:
+            imported = store.import_token_history_file()
+            if imported:
+                print(f"[kernel] token_history: {imported}", file=sys.stderr)
+    except Exception as e:
+        print(f"[kernel] token_history import skipped: {e}", file=sys.stderr)
 
     # handshake so a gateway knows the kernel is ready on stdio
     _notify("kernel.ready", {"gaRoot": manager.ga_root})

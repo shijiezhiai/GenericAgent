@@ -194,6 +194,16 @@ async fn config_set(State(s): State<AppState>, Json(body): Json<Value>) -> Respo
     kernel_json(&s, "config.set", json!({ "config": cfg })).await
 }
 
+// token history: kernel serves it straight from the DuckDB store (G1). The bridge no
+// longer owns this route, so the legacy JSON file is no longer the source of truth.
+async fn token_history_get(State(s): State<AppState>) -> Response {
+    kernel_json(&s, "token_history.get", json!({})).await
+}
+
+async fn token_history_set(State(s): State<AppState>, Json(body): Json<Value>) -> Response {
+    kernel_json(&s, "token_history.set", json!({ "data": body })).await
+}
+
 async fn conv_folders_get(State(s): State<AppState>) -> Response {
     kernel_json(&s, "conv_folders.get", json!({})).await
 }
@@ -431,6 +441,7 @@ fn build_router(state: AppState) -> Router {
         .route("/bridge/state", get(bridge_state_handler))
         .route("/bridge/restart", post(bridge_restart_handler))
         .route("/config", get(config_get).post(config_set))
+        .route("/token-history", get(token_history_get).post(token_history_set))
         .route("/conv-folders", get(conv_folders_get).put(conv_folders_put))
         .route("/sessions", get(sessions_list))
         .route("/session/new", post(session_new))
