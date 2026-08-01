@@ -666,27 +666,20 @@ class AgentManager:
             print(f"[bridge] save datasources failed: {e}", file=sys.stderr)
 
     def _load_project_datasource_ids(self, project_name: str) -> list:
-        try:
-            f = self._project_datasources_file(project_name)
-            if not f.exists():
-                return []
-            data = json.loads(f.read_text(encoding="utf-8"))
-            if isinstance(data, list):
-                return [str(x).strip() for x in data if str(x).strip()]
-            return []
-        except Exception:
-            return []
+        return self.project_meta_load(
+            project_name, "datasources", self._project_datasources_file(project_name), [],
+            parse=lambda raw: [str(x).strip() for x in raw if str(x).strip()]
+            if isinstance(raw, list) else None)
 
     def _save_project_datasource_ids(self, project_name: str, ids: list) -> None:
-        f = self._project_datasources_file(project_name)
-        f.parent.mkdir(parents=True, exist_ok=True)
         clean, seen = [], set()
         for x in ids or []:
             s = str(x).strip()
             if s and s not in seen:
                 clean.append(s)
                 seen.add(s)
-        f.write_text(json.dumps(clean, ensure_ascii=False), encoding="utf-8")
+        self.project_meta_save(project_name, "datasources", clean,
+                               self._project_datasources_file(project_name))
 
     # ── 项目待办 (todos) 持久化 ──────────────────────────────
     # 注：todos 文件存放在 GA 自身的元数据侧车目录 projects_meta/{name}/，
@@ -699,21 +692,80 @@ class AgentManager:
         """旧路径：项目目录下的 .todos.json（用于回退读取与迁移清理）。"""
         return self._project_dir(project_name) / ".todos.json"
 
-    def _load_todos(self, project_name: str) -> list:
+    # ── 项目元数据通用读写（DuckDB project_meta 优先，文件镜像保留供 json 回滚）──
+    def project_meta_load(self, project_name: str, kind: str, file_path, default, parse=None):
+        """DB 优先；DB 空则惰性迁移文件(读文件->写 DB，文件保留为镜像)；无 store 走文件。
+        parse: 可选 callable(原始JSON) -> 规范值；None 表示原样返回。DB 命中也过 parse
+        （保证 raw 形态统一，兼容历史写入的包装值）。"""
+        st = getattr(self, "store", None)
+        if st is not None:
+            try:
+                d = st.load_project_meta(project_name, kind, default=None)
+                if d is not None:
+                    val = d if parse is None else parse(d)
+                    return val if val is not None else default
+                f = Path(file_path)
+                if f.exists():
+                    raw = json.loads(f.read_text(encoding="utf-8"))
+                    val = raw if parse is None else parse(raw)
+                    if val is not None:
+                        st.save_project_meta(project_name, kind, raw)
+                        return val
+            except Exception as e:
+                print(f"[bridge] project_meta load {kind} failed: {e}", file=sys.stderr)
         try:
-            f = self._project_todos_file(project_name)
-            if not f.exists():
-                # 回退：旧版本数据存放在项目目录内，迁移前先读旧路径
-                legacy = self._project_todos_file_legacy(project_name)
-                if legacy.exists():
-                    data = json.loads(legacy.read_text(encoding="utf-8"))
-                    return data if isinstance(data, list) else []
-                return []
-            data = json.loads(f.read_text(encoding="utf-8"))
-            return data if isinstance(data, list) else []
+            f = Path(file_path)
+            if f.exists():
+                raw = json.loads(f.read_text(encoding="utf-8"))
+                return raw if parse is None else parse(raw)
+        except Exception:
+            pass
+        return default
+
+    def project_meta_save(self, project_name: str, kind: str, doc, file_path,
+                          file_json: bool = True) -> None:
+        """写 DB（有 store 时）+ 写文件镜像（json 回滚/agent 侧兼容）。
+        file_json=False 时文件镜像写原始文本（如 instruction.md），否则写 JSON。"""
+        st = getattr(self, "store", None)
+        if st is not None:
+            try:
+                st.save_project_meta(project_name, kind, doc)
+            except Exception as e:
+                print(f"[bridge] project_meta save {kind} failed: {e}", file=sys.stderr)
+        try:
+            f = Path(file_path)
+            f.parent.mkdir(parents=True, exist_ok=True)
+            if file_json:
+                f.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+            else:
+                f.write_text(str(doc), encoding="utf-8")
+        except Exception as e:
+            print(f"[bridge] project_meta file write {kind} failed: {e}", file=sys.stderr)
+
+    def _load_todos(self, project_name: str) -> list:
+        # 旧路径迁移：项目目录内 .todos.json（projects_meta 方案之前的存放处）
+        f = self._project_todos_file(project_name)
+        legacy = self._project_todos_file_legacy(project_name)
+        st = getattr(self, "store", None)
+        if not f.exists() and legacy.exists() and st is not None:
+            try:
+                data = json.loads(legacy.read_text(encoding="utf-8"))
+                if isinstance(data, list):
+                    st.save_project_meta(project_name, "todos", data)
+                    legacy.unlink(missing_ok=True)
+            except Exception as e:
+                print(f"[bridge] todos legacy migrate failed: {e}", file=sys.stderr)
+        try:
+            return self.project_meta_load(
+                project_name, "todos", f, [],
+                parse=lambda raw: raw if isinstance(raw, list) else None)
         except Exception as e:
             print(f"[bridge] load todos failed: {e}", file=sys.stderr)
             return []
+
+    def _save_todos(self, project_name: str, items: list) -> None:
+        self.project_meta_save(project_name, "todos", items,
+                               self._project_todos_file(project_name))
 
     def _save_todos(self, project_name: str, items: list) -> None:
         f = self._project_todos_file(project_name)
@@ -3159,11 +3211,8 @@ async def project_create_handler(request):
     if isinstance(skills, list) and skills:
         clean = [s for s in (str(s).strip() for s in skills) if s]
         if clean:
-            try:
-                with open(os.path.join(pdir, '.skills.json'), 'w', encoding='utf-8') as f:
-                    json.dump(clean, f, ensure_ascii=False)
-            except OSError:
-                pass
+            manager.project_meta_save(name, "skills", clean,
+                                      os.path.join(pdir, '.skills.json'))
     # 项目级 workspace 绑定：可选已有 workspace name 或新建（需 path）
     ws_name = (data.get("workspace") or "").strip()
     ws_path = (data.get("workspacePath") or "").strip()
@@ -3180,13 +3229,9 @@ async def project_instruction_get_handler(request):
     if not os.path.isdir(pdir):
         return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
     inst_file = os.path.join(pdir, 'instruction.md')
-    instruction = ""
-    if os.path.isfile(inst_file):
-        try:
-            with open(inst_file, encoding='utf-8') as f:
-                instruction = f.read()
-        except OSError:
-            pass
+    instruction = manager.project_meta_load(
+        name, "instruction", inst_file, "",
+        parse=lambda raw: raw if isinstance(raw, str) else None)
     return json_ok({"name": name, "instruction": instruction})
 
 
@@ -3204,10 +3249,17 @@ async def project_instruction_update_handler(request):
     try:
         text = instruction.rstrip()
         if text:
-            with open(inst_file, 'w', encoding='utf-8') as f:
-                f.write(text + "\n")
-        elif os.path.isfile(inst_file):
-            os.remove(inst_file)
+            # DB 真源 + instruction.md 镜像（plugins/project_mode.py 等按文件注入）
+            manager.project_meta_save(name, "instruction", text, inst_file, file_json=False)
+        else:
+            if os.path.isfile(inst_file):
+                os.remove(inst_file)
+            st = getattr(manager, "store", None)
+            if st is not None:
+                try:
+                    st._w("DELETE FROM project_meta WHERE project_name=? AND kind='instruction'", [name])
+                except Exception as e:
+                    print(f"[bridge] instruction meta delete failed: {e}", file=sys.stderr)
     except OSError as e:
         return web.json_response({"error": str(e)}, status=500, headers=cors_headers())
     return json_ok({"ok": True, "name": name, "instruction": instruction.rstrip()})
@@ -3221,16 +3273,9 @@ async def project_skills_get_handler(request):
     pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
     if not os.path.isdir(pdir):
         return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
-    skills_file = os.path.join(pdir, '.skills.json')
-    skills = []
-    if os.path.isfile(skills_file):
-        try:
-            with open(skills_file, encoding='utf-8') as f:
-                loaded = json.load(f)
-            if isinstance(loaded, list):
-                skills = [str(s) for s in loaded]
-        except (OSError, json.JSONDecodeError):
-            pass
+    skills = manager.project_meta_load(
+        name, "skills", os.path.join(pdir, '.skills.json'), [],
+        parse=lambda raw: [str(s) for s in raw] if isinstance(raw, list) else None)
     return json_ok({"name": name, "skills": skills})
 
 
@@ -3252,12 +3297,17 @@ async def project_skills_update_handler(request):
     skills_file = os.path.join(pdir, '.skills.json')
     try:
         if clean:
-            with open(skills_file, 'w', encoding='utf-8') as f:
-                json.dump(clean, f, ensure_ascii=False)
+            manager.project_meta_save(name, "skills", clean, skills_file)
         else:
             # 空列表=删除绑定，恢复全局注入
             if os.path.isfile(skills_file):
                 os.remove(skills_file)
+            st = getattr(manager, "store", None)
+            if st is not None:
+                try:
+                    st._w("DELETE FROM project_meta WHERE project_name=? AND kind='skills'", [name])
+                except Exception as e:
+                    print(f"[bridge] skills meta delete failed: {e}", file=sys.stderr)
     except OSError as e:
         return web.json_response({"error": f"write failed: {e}"}, status=500, headers=cors_headers())
     return json_ok({"ok": True, "name": name, "skills": clean})
@@ -3268,28 +3318,22 @@ def _library_file(pdir):
 
 
 def _read_library(pdir):
-    lf = _library_file(pdir)
-    if os.path.isfile(lf):
-        try:
-            with open(lf, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            if isinstance(data, list):
-                for _it in data:
-                    if isinstance(_it, dict):
-                        _it.setdefault('pinned', False)
-                return data
-        except (OSError, json.JSONDecodeError):
-            pass
-    return []
+    """读取项目资料库；duckdb 时经 manager.project_meta_load（DB 优先+惰性迁移）。"""
+    def _norm(raw):
+        if not isinstance(raw, list):
+            return None
+        for _it in raw:
+            if isinstance(_it, dict):
+                _it.setdefault('pinned', False)
+        return raw
+    return manager.project_meta_load(os.path.basename(pdir), "library",
+                                     os.path.join(pdir, '.library.json'), [], parse=_norm)
 
 
 def _write_library(pdir, items):
-    try:
-        with open(_library_file(pdir), 'w', encoding='utf-8') as f:
-            json.dump(items, f, ensure_ascii=False, indent=2)
-        return True
-    except OSError:
-        return False
+    manager.project_meta_save(os.path.basename(pdir), "library", items,
+                              os.path.join(pdir, '.library.json'))
+    return True
 
 
 async def pick_folder_handler(request):
@@ -3811,18 +3855,16 @@ async def project_experts_get_handler(request):
     pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
     if not os.path.isdir(pdir):
         return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
-    experts_file = os.path.join(pdir, '.experts.json')
-    experts = []
-    configured = False
-    if os.path.isfile(experts_file):
-        configured = True
-        try:
-            with open(experts_file, encoding='utf-8') as f:
-                loaded = json.load(f)
-            if isinstance(loaded, list):
-                experts = [str(e) for e in loaded]
-        except (OSError, json.JSONDecodeError):
-            pass
+    def _norm(raw):
+        if isinstance(raw, list):
+            return {"configured": True, "experts": [str(e) for e in raw]}
+        if isinstance(raw, dict) and isinstance(raw.get("experts"), list):
+            # 兼容历史写入的包装形态（早期 parse 结果入 DB）
+            return raw
+        return None
+    d = manager.project_meta_load(name, "experts", os.path.join(pdir, '.experts.json'),
+                                  None, parse=_norm)
+    experts, configured = (d["experts"], d["configured"]) if d else ([], False)
     # configured=False 表示未显式配置（默认全部专家启用）；
     # configured=True 且 experts=[] 表示「显式不选任何专家」。
     return json_ok({"name": name, "experts": experts, "configured": configured})
@@ -4182,19 +4224,21 @@ async def project_experts_update_handler(request):
         try:
             if os.path.isfile(experts_file):
                 os.remove(experts_file)
+            st = getattr(manager, "store", None)
+            if st is not None:
+                try:
+                    st._w("DELETE FROM project_meta WHERE project_name=? AND kind='experts'", [name])
+                except Exception as e:
+                    print(f"[bridge] experts meta reset failed: {e}", file=sys.stderr)
         except OSError as e:
             return web.json_response({"error": f"write failed: {e}"}, status=500, headers=cors_headers())
         return json_ok({"ok": True, "name": name, "experts": [], "configured": False})
     experts = data.get("experts")
     if not isinstance(experts, list):
         return web.json_response({"error": "experts must be a list"}, status=400, headers=cors_headers())
-    # 空列表 = 显式「不选任何专家」；非空 = 显式启用的子集。均落地为文件，不再删除。
+    # 空列表 = 显式「不选任何专家」；非空 = 显式启用的子集。均落地，不再删除。
     clean = [e for e in (str(e).strip() for e in experts) if e]
-    try:
-        with open(experts_file, 'w', encoding='utf-8') as f:
-            json.dump(clean, f, ensure_ascii=False)
-    except OSError as e:
-        return web.json_response({"error": f"write failed: {e}"}, status=500, headers=cors_headers())
+    manager.project_meta_save(name, "experts", clean, experts_file)
     return json_ok({"ok": True, "name": name, "experts": clean, "configured": True})
 
 

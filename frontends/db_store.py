@@ -35,7 +35,7 @@ from typing import Any, Dict, List, Optional
 _JSON_PLACEHOLDER = "{}"
 
 # Bump when the physical schema changes; add a branch in _migrate_schema for the step.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # Runtime maintenance. DuckDB's CHECKPOINT only folds the WAL into the main file; it
 # never hands free blocks back to the OS (a 268MB production store measured 514/1041
@@ -401,6 +401,15 @@ class DBStore:
                 )
             """)
             self.con.execute("""
+                CREATE TABLE IF NOT EXISTS project_meta (
+                    project_name VARCHAR NOT NULL,
+                    kind VARCHAR NOT NULL,  -- todos | library | skills | experts | datasources
+                    doc VARCHAR NOT NULL,
+                    updated_at DOUBLE,
+                    PRIMARY KEY (project_name, kind)
+                )
+            """)
+            self.con.execute("""
                 CREATE TABLE IF NOT EXISTS schema_version (
                     version INTEGER PRIMARY KEY,
                     applied_at DOUBLE
@@ -741,6 +750,24 @@ class DBStore:
         stamp = time.strftime("%Y%m%d-%H%M%S")
         f.replace(f.with_name(f"desktop_token_history.json.imported-{stamp}"))
         return {"imported": len((data or {}).get("history") or [])}
+
+    # ------------------------------------------------------------------
+    # project metadata (per-project doc rows: todos/library/skills/experts/datasources)
+    # ------------------------------------------------------------------
+    def load_project_meta(self, project_name: str, kind: str, default=None):
+        row = self._q1("SELECT doc FROM project_meta WHERE project_name=? AND kind=?",
+                       [project_name, kind])
+        if not row or not row[0]:
+            return default
+        try:
+            return json.loads(row[0])
+        except Exception:
+            return default
+
+    def save_project_meta(self, project_name: str, kind: str, doc):
+        self._w("INSERT INTO project_meta (project_name, kind, doc, updated_at) VALUES (?,?,?,?) "
+                "ON CONFLICT(project_name, kind) DO UPDATE SET doc=excluded.doc, updated_at=excluded.updated_at",
+                [project_name, kind, json.dumps(doc, ensure_ascii=False), time.time()])
 
     def _replace_ordered(self, table: str, paths: List[str]):
         ts = time.time()
