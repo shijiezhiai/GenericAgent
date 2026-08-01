@@ -6850,16 +6850,25 @@ async def _serve_dual(host: str, bridge_port: int, conductor_port: int):
     bridge_app = create_app()
     runner_b = web.AppRunner(bridge_app)
     await runner_b.setup()
-    await web.TCPSite(runner_b, host, bridge_port).start()
-    print(f"GenericAgent Web2 bridge: http://{host}:{bridge_port}  ws://{host}:{bridge_port}/ws", file=sys.stderr)
-
     runner_c = None
-    if has_conductor:
-        cond_app = conductor_core.create_conductor_app()
-        runner_c = web.AppRunner(cond_app)
-        await runner_c.setup()
-        await web.TCPSite(runner_c, host, conductor_port).start()
-        print(f"[bridge] conductor (merged) API: ws://{host}:{conductor_port}/ws", file=sys.stderr)
+    try:
+        await web.TCPSite(runner_b, host, bridge_port).start()
+        print(f"GenericAgent Web2 bridge: http://{host}:{bridge_port}  ws://{host}:{bridge_port}/ws", file=sys.stderr)
+        if has_conductor:
+            cond_app = conductor_core.create_conductor_app()
+            runner_c = web.AppRunner(cond_app)
+            await runner_c.setup()
+            await web.TCPSite(runner_c, host, conductor_port).start()
+            print(f"[bridge] conductor (merged) API: ws://{host}:{conductor_port}/ws", file=sys.stderr)
+    except Exception:
+        # a partially bound site leaks its port otherwise; clean up before re-raising
+        for r in (runner_b, runner_c):
+            if r is not None:
+                try:
+                    await r.cleanup()
+                except Exception:
+                    pass
+        raise
 
     stop = asyncio.Event()
     loop = asyncio.get_event_loop()

@@ -11,7 +11,6 @@
 //! deployment) and a library so the Tauri shell can embed the axum server in-process
 //! (Phase 2: single Rust process + a single Python kernel subprocess).
 
-pub mod bridge;
 pub mod kernel;
 pub mod proxy;
 
@@ -33,12 +32,9 @@ use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
 use kernel::KernelSupervisor;
-use bridge::BridgeSupervisor;
-
 #[derive(Clone)]
 pub struct AppState {
     pub kernel: Arc<KernelSupervisor>,
-    pub bridge: Arc<BridgeSupervisor>,
     pub fallback: String,
     pub static_dir: PathBuf,
     pub bridge_port: u16,
@@ -168,21 +164,27 @@ async fn kernel_restart_handler(State(s): State<AppState>) -> Response {
     }
 }
 
+// The legacy bridge no longer exists as a process: its HTTP API (and the merged
+// conductor) now lives inside the kernel. /bridge/state probes the kernel-hosted
+// bridge over the fallback URL; /bridge/restart is a no-op kept for API stability.
 async fn bridge_state_handler(State(s): State<AppState>) -> Response {
-    Json(json!({ "up": s.bridge.is_up().await, "generation": s.bridge.generation() }))
-        .into_response()
+    let url = format!("{}/status", s.fallback);
+    let up = match s
+        .client
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(3))
+        .send()
+        .await
+    {
+        Ok(r) => r.status().is_success(),
+        Err(_) => false,
+    };
+    Json(json!({ "up": up, "generation": 1, "inside_kernel": true })).into_response()
 }
 
 async fn bridge_restart_handler(State(s): State<AppState>) -> Response {
-    match s.bridge.clone().restart().await {
-        Ok(()) => Json(json!({ "success": true, "generation": s.bridge.generation() }))
-            .into_response(),
-        _ => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "success": false, "error": "bridge restart failed" })),
-        )
-            .into_response(),
-    }
+    Json(json!({ "success": true, "note": "bridge lives inside kernel; restart kernel to restart it" }))
+        .into_response()
 }
 
 async fn config_get(State(s): State<AppState>) -> Response {
@@ -552,11 +554,12 @@ pub async fn serve(cfg: GatewayConfig) -> Result<(), String> {
     let static_dir = root.join("frontends").join("desktop").join("static");
 
     let mut extra_env: HashMap<String, String> = HashMap::new();
-    // The kernel publishes its DuckDB store on this fixed loopback port so the bridge can
-    // reconnect to it after a kernel restart. The gateway owns the bridge lifecycle now, so
-    // we no longer tell the kernel to spawn it (GA_LEGACY_PORT is ignored by the kernel).
+    // The kernel hosts the (former legacy) bridge HTTP API and the merged conductor
+    // itself, so the gateway hands it their ports; there is no bridge subprocess anymore.
     extra_env.insert("GA_CONFIG_PORT".to_string(), cfg.config_port.to_string());
     extra_env.insert("GA_CONDUCTOR_PORT".to_string(), conductor_port.to_string());
+    extra_env.insert("CONDUCTOR_PORT".to_string(), conductor_port.to_string());
+    extra_env.insert("BRIDGE_PORT".to_string(), cfg.legacy_port.to_string());
     if let Ok(v) = std::env::var("GA_NO_IM_AUTOSTART") {
         extra_env.insert("GA_NO_IM_AUTOSTART".to_string(), v);
     }
@@ -593,29 +596,8 @@ pub async fn serve(cfg: GatewayConfig) -> Result<(), String> {
         }
     };
 
-    // Spawn the legacy bridge as a sibling of the kernel (owned by the gateway). It is a
-    // replica of the store, reading/writing config through the kernel's loopback config
-    // server on config_port; it survives a kernel crash and reconnects after a respawn.
-    let bridge_script = root.join("frontends").join("desktop_bridge.py");
-    let bridge_log = root.join("temp").join("legacy_bridge.log");
-    let mut bridge_env: HashMap<String, String> = HashMap::new();
-    bridge_env.insert("BRIDGE_PORT".to_string(), cfg.legacy_port.to_string());
-    bridge_env.insert("CONDUCTOR_PORT".to_string(), conductor_port.to_string());
-    bridge_env.insert("GA_STORAGE_SECONDARY".to_string(), "1".to_string());
-    bridge_env.insert("GA_CONFIG_PORT".to_string(), cfg.config_port.to_string());
-    bridge_env.insert("GA_NO_IM_AUTOSTART".to_string(), "1".to_string());
-    bridge_env.insert("GA_ROOT".to_string(), root.to_string_lossy().into_owned());
-    eprintln!(
-        "[gateway] spawning bridge: {} {} (bridge_port={}, config_port={})",
-        python,
-        bridge_script.display(),
-        cfg.legacy_port,
-        cfg.config_port
-    );
-    let bridge =
-        BridgeSupervisor::start(&python, &bridge_script, &root, &bridge_log, bridge_env)
-            .await
-            .map_err(|e| format!("failed to spawn bridge subprocess: {}", e))?;
+    // The legacy bridge process is retired (G4): the kernel serves the bridge HTTP API
+    // and conductor on the fallback ports itself, so there is nothing to spawn here.
 
     let client = reqwest::Client::builder()
         // Bound upstream latency so a hung/missing upstream returns 502 instead of hanging the
@@ -625,7 +607,6 @@ pub async fn serve(cfg: GatewayConfig) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let state = AppState {
         kernel,
-        bridge,
         fallback: fallback.clone(),
         static_dir,
         bridge_port: port,

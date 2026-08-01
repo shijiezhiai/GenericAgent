@@ -146,6 +146,39 @@ def _reap_port(port):
     time.sleep(0.3)
 
 
+def _start_bridge_server():
+    """Host the (former legacy) bridge HTTP API + merged conductor inside this process.
+
+    G4 retired the standalone desktop_bridge.py subprocess: the gateway no longer spawns
+    it, so the kernel serves the fallback HTTP API (:BRIDGE_PORT, default 14169) and the
+    conductor API (:CONDUCTOR_PORT, default 8900) itself via desktop_bridge._serve_dual.
+    Handlers call the in-process manager/DBStore directly -- no replica, no gateway
+    round-trip. Runs in a daemon thread with a restart loop; a crashed site is rebound.
+    """
+    bridge_port = int(os.environ.get("BRIDGE_PORT", "14169"))
+    # the gateway passes CONDUCTOR_PORT (legacy env name GA_CONDUCTOR_PORT also honored)
+    conductor_port = int(os.environ.get("CONDUCTOR_PORT",
+                                        os.environ.get("GA_CONDUCTOR_PORT", "8900")))
+    for port in (bridge_port, conductor_port):
+        _reap_port(port)
+
+    def run():
+        import asyncio
+        import desktop_bridge
+        while True:
+            try:
+                asyncio.run(desktop_bridge._serve_dual("127.0.0.1", bridge_port, conductor_port))
+            except asyncio.CancelledError:
+                return
+            except Exception as e:  # noqa: BLE001 - keep the bridge alive
+                print(f"[kernel] bridge server died: {e}; rebinding in 2s", file=sys.stderr)
+            time.sleep(2)
+
+    threading.Thread(target=run, name="kernel-bridge", daemon=True).start()
+    print(f"[kernel] bridge API on :{bridge_port}, conductor on :{conductor_port} (in-process)",
+          file=sys.stderr)
+
+
 def _start_config_server():
     """Publish the skill/plugin/mcp store to processes that cannot open the DB.
 
@@ -454,6 +487,7 @@ def main():
     if config_port:
         print(f"[kernel] ready; config store published on :{config_port} for the bridge",
               file=sys.stderr)
+    _start_bridge_server()
 
     # One-time import of the legacy desktop_token_history.json into the DB (idempotent).
     try:
