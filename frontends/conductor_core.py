@@ -1,12 +1,9 @@
-import os, sys, re, time, json, uuid, queue, asyncio, threading
+from __future__ import annotations
+import os, sys, re, time, json, uuid, queue, asyncio, threading, signal
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, List
-from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import PlainTextResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from aiohttp import web
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTENDS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -14,10 +11,25 @@ for p in (ROOT, FRONTENDS_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from agentmain import GenericAgent
-
 HOST = os.environ.get("CONDUCTOR_HOST", "127.0.0.1")
 PORT = int(os.environ.get("CONDUCTOR_PORT", "8900"))
+
+
+def _generic_agent_class():
+    """Return the GenericAgent agent class. Resolves the class name defensively
+    (the source defines it as ``GenericAgent`` but some modules reference the
+    historical ``GeneraticAgent`` alias) and works around the circular-import
+    artifact where agentmain may land in sys.modules partially initialized."""
+    import sys
+    import agentmain
+    cls = getattr(agentmain, "GenericAgent", None) or getattr(agentmain, "GeneraticAgent", None)
+    if cls is None:
+        sys.modules.pop("agentmain", None)
+        import agentmain
+        cls = getattr(agentmain, "GenericAgent", None) or getattr(agentmain, "GeneraticAgent", None)
+    if cls is None:
+        raise RuntimeError("agent class not found on agentmain (GenericAgent/GeneraticAgent)")
+    return cls
 
 
 def _desktop_llm_no() -> Optional[int]:
@@ -44,56 +56,13 @@ def _apply_desktop_model(agent: "GenericAgent") -> None:
         print(f"[conductor] failed to apply desktop model #{no}: {e}", file=sys.stderr)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # 服务启动（事件循环已就绪）：捕获 loop 供工作线程跨线程推 WS 广播，并起主agent
-    global main_loop
-    main_loop = asyncio.get_running_loop()
-    import cost_tracker; cost_tracker.install()
-    conductor.start()
-    threading.Thread(target=im_poll_loop, name="im-poller", daemon=True).start()
-    yield
-
-
-app = FastAPI(title="Conductor", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-
-class ChatIn(BaseModel):
-    msg: str
-    role: str = "conductor"  # conductor | system | user
-
-class StartSubagentIn(BaseModel):
-    prompt: str
-
-class ApprovalIn(BaseModel):
-    prompt: str
-    source: str = ""
-
-class SubagentActionIn(BaseModel):
-    action: str = "intervene"  # intervene | abort | kill
-    msg: str = ""
-
-@dataclass
-class SubAgentState:
-    id: str
-    agent: GenericAgent
-    prompt: str
-    thread: Optional[threading.Thread] = None
-    reply: str = ""
-    status: str = "running"  # running | stopped
-    created_at: int = field(default_factory=lambda: int(time.time()))
-    updated_at: int = field(default_factory=lambda: int(time.time()))
-
-ws_clients: set[WebSocket] = set()
+ws_clients: set = set()
 main_loop: Optional[asyncio.AbstractEventLoop] = None
 # conductor event queue: only user messages and subagent-done events enter here.
 chat_messages: List[dict] = []
 
-def now_ms() -> int:
-    return int(time.time() * 1000)
-
-def short_id() -> str:
-    return uuid.uuid4().hex[:8]
+now_ms = lambda: int(time.time() * 1000)
+short_id = lambda: uuid.uuid4().hex[:8]
 
 _TURN_SPLIT_RE = re.compile(r'\**LLM Running \(Turn \d+\) \.\.\.\**')
 _SUMMARY_RE = re.compile(r'<summary>(.*?)</summary>\s*', re.DOTALL)
@@ -107,23 +76,18 @@ def extract_last_summary(full: str) -> str:
 
 def extract_last_text_reply(full: str) -> str:
     """Extract only the last turn's text reply (like stapp.py fold_turns logic)."""
-    # Split by turn markers, take last segment
     parts = _TURN_SPLIT_RE.split(full)
     last = parts[-1] if parts else full
-    # Strip <summary> tags
     last = _SUMMARY_RE.sub('', last)
-    # Strip [Status] and [Info] lines
     last = re.sub(r'\[(Status|Info)\][^\n]*\n?', '', last)
-    # Strip trailing whitespace
     last = last.strip()
-    # Cap length
     return last[-3000:] if len(last) > 3000 else last
 
 def clean_log_text(s: str) -> str:
     if not s: return s
     s = re.sub(r'`{5}\n.*?`{5}\n?', '', s, flags=re.DOTALL)
     s = re.sub(r'🛠️ Tool: `([^`]+)`\s*📥 args:\n`{4}.*?`{4}\n?', r'🛠️ `\1`\n', s, flags=re.DOTALL)
-    s = re.sub(r'^🛠️ .*\n?', '', s, flags=re.MULTILINE)  # remove tool call summary lines
+    s = re.sub(r'^🛠️ .*\n?', '', s, flags=re.MULTILINE)
     s = re.sub(r'<thinking>.*?</thinking>\s*', '', s, flags=re.DOTALL)
     s = re.sub(r'^\s*\[(?:Info|Status)\][^\n]*\n?', '', s, flags=re.MULTILINE)
     s = re.sub(r'^\s*`{4,5}\s*$\n?', '', s, flags=re.MULTILINE)
@@ -172,12 +136,24 @@ def monitor_display_queue(agent_id: str, dq: "queue.Queue", trigger_when_done: b
             break
 
 
+@dataclass
+class SubagentState:
+    id: str
+    agent: GenericAgent
+    prompt: str
+    thread: Optional[threading.Thread] = None
+    reply: str = ""
+    status: str = "running"  # running | stopped
+    created_at: int = field(default_factory=lambda: int(time.time()))
+    updated_at: int = field(default_factory=lambda: int(time.time()))
+
+
 class SubagentPool:
     def __init__(self):
-        self.subagents: Dict[str, SubAgentState] = {}
+        self.subagents: Dict[str, SubagentState] = {}
         self.lock = threading.RLock()
         threading.Thread(target=self._auto_cleanup_loop, name="subagent-cleanup", daemon=True).start()
-    def snapshot(self) -> list[dict]:
+    def snapshot(self) -> list:
         with self.lock:
             return [
                 {
@@ -190,7 +166,7 @@ class SubagentPool:
                 }
                 for s in self.subagents.values()
             ]
-    def get(self, sid: str) -> Optional[SubAgentState]:
+    def get(self, sid: str) -> Optional[SubagentState]:
         with self.lock: return self.subagents.get(sid)
     def counts(self) -> tuple:
         with self.lock:
@@ -207,7 +183,7 @@ class SubagentPool:
     def _auto_cleanup_loop(self):
         IDLE_TIMEOUT = 3600
         while True:
-            time.sleep(300) 
+            time.sleep(300)
             now = time.time()
             to_abort = []
             with self.lock:
@@ -215,18 +191,18 @@ class SubagentPool:
                     if s.status == "stopped" and (now - s.updated_at) > IDLE_TIMEOUT: to_abort.append((sid, s))
             for sid, s in to_abort:
                 s.agent.abort()
-                s.agent.task_queue.put("EXIT")  
-                with self.lock: self.subagents.pop(sid, None)  
+                s.agent.task_queue.put("EXIT")
+                with self.lock: self.subagents.pop(sid, None)
             if to_abort: push_cards()
     def start_subagent(self, prompt: str) -> dict:
         sid = short_id()
-        agent = GenericAgent()
+        agent = _generic_agent_class()()
         agent.inc_out = True
         agent.verbose = False
         agent.no_print = True
         _apply_desktop_model(agent)
         th = start_agent_runner(agent, f"subagent-{sid}")
-        state = SubAgentState(id=sid, agent=agent, prompt=prompt, status="running", thread=th)
+        state = SubagentState(id=sid, agent=agent, prompt=prompt, status="running", thread=th)
         with self.lock: self.subagents[sid] = state
         return self._send_msg(sid, prompt)
     def _send_msg(self, sid, msg):
@@ -251,7 +227,7 @@ class SubagentPool:
         h = s.agent.handler
         h.working['key_info'] = h.working.get('key_info', '') + f"\n[MASTER] {msg}"
         s.updated_at = int(time.time())
-        return {"id": sid, "status": "keyinfo_injected"}        
+        return {"id": sid, "status": "keyinfo_injected"}
 
 pool = SubagentPool()
 
@@ -334,7 +310,7 @@ class TaskHistoryStore:
 task_history = TaskHistoryStore()
 
 READMES = {
-"api": f"""\
+"api": """{
 Conductor API\tBase: http://{HOST}:{PORT}
 
 POST /chat\tbody: {{"msg": "..."}}\t给用户发消息
@@ -391,7 +367,7 @@ class Conductor:
         self.inbox: "queue.Queue[dict]" = queue.Queue()   # 收件箱：唯一对外接口
         self.agent: Optional[GenericAgent] = None
         self.started = False
-        self.log: list = []   
+        self.log: list = []
 
     def notify(self, event: dict): self.inbox.put(event)
 
@@ -405,7 +381,7 @@ class Conductor:
         elif event_type == "im_signal": summary = f"[IM信号] {', '.join(im_sources)} 有新消息；" + "；".join(f"GET /im_prompt/{s}取采集prompt" for s in im_sources) + "；尽量复用已有subagent。"
         else: summary = f"[唤醒] subagents: {running} running, {stopped} stopped | {unread}条用户未读消息, {done_count}个subagent完成报告"
         base = f"http://{HOST}:{PORT}"
-        return f"""你是agent总管。用户只和你对话，你负责调度、验收、交付，目标是降低用户管理多个agent的负担。
+        return f""""你是agent总管。用户只和你对话，你负责调度、验收、交付，目标是降低用户管理多个agent的负担。
 API: {base}；requests，GET /readme查用法，GET /chat读未读对话，GET /subagent看状态；POST /chat是唯一对用户说话方式。
 
 铁律：
@@ -414,7 +390,8 @@ API: {base}；requests，GET /readme查用法，GET /chat读未读对话，GET /
 - 改写prompt时严禁添加用户未提及的假设、工具、前提条件。只能精炼/结构化用户原意，不能脑补，只能做很小的改写
 
 原则：
-- 信任subagent足够聪明，不要写具体步骤和容易探测的信息；能自己判断的自己判断，只在真正需要用户决策时打扰。\n
+- 信任subagent足够聪明，不要写具体步骤和容易探测的信息；能自己判断的自己判断，只在真正需要用户决策时打扰。
+
 需要处理：
 {summary}"""
 
@@ -448,15 +425,13 @@ API: {base}；requests，GET /readme查用法，GET /chat读未读对话，GET /
                 return
 
     def _run(self):
-        self.agent = GenericAgent()
+        self.agent = _generic_agent_class()()
         self.agent.inc_out = True
         start_agent_runner(self.agent, "conductor-agent")
         self.started = True
         while True:
-            # Block until first event arrives
             first = self.inbox.get()
             self.inbox.task_done()
-            # Short debounce: collect any additional events that arrived meanwhile
             time.sleep(0.3)
             events = [first]
             while not self.inbox.empty():
@@ -467,15 +442,12 @@ API: {base}；requests，GET /readme查用法，GET /chat读未读对话，GET /
                     break
             try:
                 prompt = self._build_prompt(events)
-                # Follow the desktop-selected model live: re-read before each task
-                # so switching models in the UI takes effect without restarting.
                 _apply_desktop_model(self.agent)
                 dq = self.agent.put_task(prompt, source="conductor")
                 self._drain(dq, events)
             except Exception as e: print(f"Conductor error: {e}")
 
     def start(self): threading.Thread(target=self._run, name="conductor-loop", daemon=True).start()
-
 
 conductor = Conductor()
 
@@ -505,141 +477,185 @@ def im_poll_loop():
             last_fire[name] = now
             conductor.notify({"type": "im_signal", "source": name})
 
-@app.get("/token-stats")
-def conductor_token_stats():
+
+# ===================== aiohttp handlers =====================
+async def _json_body(request):
+    try:
+        return await request.json() or {}
+    except Exception:
+        return {}
+
+def _plain(text: str, status: int = 200):
+    return web.Response(text=text, status=status, content_type="text/plain", charset="utf-8")
+
+async def _token_stats(request):
     import cost_tracker
-    return {"records": [{"thread": k, "input": v.input, "output": v.output, "cacheCreate": v.cache_create, "cacheRead": v.cache_read} for k, v in cost_tracker.all_trackers().items()]}
+    return web.json_response({"records": [{"thread": k, "input": v.input, "output": v.output, "cacheCreate": v.cache_create, "cacheRead": v.cache_read} for k, v in cost_tracker.all_trackers().items()]})
 
-@app.get("/")
-def index():
-    """Headless: UI 由桌面 App「协作」页提供，本服务只出 API。"""
-    return PlainTextResponse("GA Conductor (headless API). UI: desktop app -> Collab. Docs: /readme")
+async def _index(request):
+    return _plain("GA Conductor (headless API). UI: desktop app -> Collab. Docs: /readme")
 
-@app.get("/readme")
-def readme(): return PlainTextResponse(READMES["api"])
+async def _readme(request):
+    return _plain(READMES["api"])
 
-@app.get("/readme/{topic}")
-def readme_topic(topic: str):
+async def _readme_topic(request):
+    topic = request.match_info["topic"]
     if topic not in READMES:
-        return PlainTextResponse(f"Unknown topic: {topic}. Available: {', '.join(READMES.keys())}", status_code=404)
-    return PlainTextResponse(READMES[topic])
+        return _plain(f"Unknown topic: {topic}. Available: {', '.join(READMES.keys())}", status=404)
+    return _plain(READMES[topic])
 
-@app.get("/im_prompt/{source}")
-def im_prompt(source: str):
+async def _im_prompt(request):
+    source = request.match_info["source"]
     if source not in IM_PROMPTS:
-        return PlainTextResponse(f"Unknown source: {source}. Available: {', '.join(IM_PROMPTS.keys())}", status_code=404)
-    return PlainTextResponse(IM_PROMPTS[source])
+        return _plain(f"Unknown source: {source}. Available: {', '.join(IM_PROMPTS.keys())}", status=404)
+    return _plain(IM_PROMPTS[source])
 
-@app.get("/subagent")
-def list_subagents(): return {"items": pool.snapshot()}
+async def _list_subagents(request):
+    return web.json_response({"items": pool.snapshot()})
 
-@app.get("/subagent/{sid}")
-def get_subagent(sid: str, max_len: int = 5000):
+async def _get_subagent(request):
+    sid = request.match_info["sid"]
+    max_len = int(request.query.get("max_len", "5000"))
     s = pool.get(sid)
     if not s:
-        return JSONResponse({"error": "not found"}, status_code=404)
+        return web.json_response({"error": "not found"}, status=404)
     cleaned = clean_log_text(s.reply or "")
-    return {"id": s.id, "prompt": s.prompt, "status": s.status,
+    return web.json_response({"id": s.id, "prompt": s.prompt, "status": s.status,
             "reply": cleaned[-max_len:] if len(cleaned) > max_len else cleaned,
-            "created_at": s.created_at, "updated_at": s.updated_at}
+            "created_at": s.created_at, "updated_at": s.updated_at})
 
 INSTR_DISPATCHED = "Task received. I'll handle THIS TASK from here. You MUST to do other task or end your reply."
 
-@app.post("/subagent")
-def api_start_subagent(body: StartSubagentIn):
-    result = pool.start_subagent(body.prompt)
+async def _start_subagent(request):
+    body = await _json_body(request)
+    prompt = body.get("prompt", "")
+    result = pool.start_subagent(prompt)
     result["instruction"] = INSTR_DISPATCHED
-    return result
+    return web.json_response(result)
 
-@app.post("/subagent/{sid}")
-def api_subagent_action(sid: str, body: SubagentActionIn):
+async def _subagent_action(request):
+    sid = request.match_info["sid"]
+    body = await _json_body(request)
+    action = (body.get("action") or "intervene").lower().strip()
+    msg = body.get("msg", "")
     s = pool.get(sid)
-    if not s: return JSONResponse({"error": "subagent not found", "id": sid}, status_code=404)
-    action = body.action.lower().strip()
+    if not s: return web.json_response({"error": "subagent not found", "id": sid}, status=404)
     if action == "keyinfo":
-        result = pool.keyinfo_subagent(sid, body.msg)
+        result = pool.keyinfo_subagent(sid, msg)
         result["instruction"] = "Received. I'll incorporate this. You MUST to do other task or end your reply."
-        return result
+        return web.json_response(result)
     if action in ("input", "reply", "append", "message", "msg"):
-        result = pool.input_subagent(sid, body.msg)
+        result = pool.input_subagent(sid, msg)
         result["instruction"] = INSTR_DISPATCHED
-        return result
+        return web.json_response(result)
     if action in ("abort", "stop"):
         s.agent.abort()
         s.status = "stopped"
         s.updated_at = int(time.time())
         task_history.record_done(sid, status_override="aborted")
         push_cards()
-        return {"id": sid, "status": "stopped"}
-    return JSONResponse({"error": f"unknown action: {body.action}"}, status_code=400)
+        return web.json_response({"id": sid, "status": "stopped"})
+    return web.json_response({"error": f"unknown action: {body.get('action')}"}, status=400)
 
-@app.get("/chat")
-def api_get_chat(last: int = 20):
+async def _get_chat(request):
+    last = int(request.query.get("last", "20"))
     for m in chat_messages:
         if m.get("role") == "user" and not m.get("read"): m["read"] = True
     schedule_broadcast({"type": "chat_read"})
-    return {"items": chat_messages[-last:]}
+    return web.json_response({"items": chat_messages[-last:]})
 
-@app.post("/chat")
-def api_chat(body: ChatIn):
-    return add_chat(body.msg, role=body.role)
+async def _chat(request):
+    body = await _json_body(request)
+    return web.json_response(add_chat(body.get("msg", ""), role=body.get("role", "conductor")))
 
-@app.post("/approval")
-def api_approval(body: ApprovalIn):
-    schedule_broadcast({"type": "approval", "item": {"id": short_id(), "prompt": body.prompt, "source": body.source}})
-    return {"ok": True}
+async def _approval(request):
+    body = await _json_body(request)
+    schedule_broadcast({"type": "approval", "item": {"id": short_id(), "prompt": body.get("prompt", ""), "source": body.get("source", "")}})
+    return web.json_response({"ok": True})
 
-# ===================== Task History API =====================
-@app.get("/history")
-def api_history(limit: int = 50, offset: int = 0, q: str = ""):
-    return task_history.list(limit=min(limit, 200), offset=offset, q=q)
+async def _history(request):
+    limit = min(int(request.query.get("limit", "50")), 200)
+    offset = int(request.query.get("offset", "0"))
+    q = request.query.get("q", "")
+    return web.json_response(task_history.list(limit=limit, offset=offset, q=q))
 
-@app.get("/history/{rid}")
-def api_history_detail(rid: str):
+async def _history_detail(request):
+    rid = request.match_info["rid"]
     rec = task_history.get(rid)
-    if not rec: return JSONResponse({"error": "not found"}, status_code=404)
-    return rec
+    if not rec: return web.json_response({"error": "not found"}, status=404)
+    return web.json_response(rec)
 
-@app.post("/history/{rid}/resume")
-def api_history_resume(rid: str):
-    """继续一个历史任务。
-
-    - 原 subagent 仍存活(已停止)：直接复用其 id，后续消息走 POST /subagent/{id} action=input。
-    - 原 subagent 已回收：不自动重跑原 prompt(避免重复执行历史动作)，返回 seed，
-      由前端在用户发出第一条续接消息时新建 subagent 并带入原 prompt+回复作为上下文。
-    """
+async def _history_resume(request):
+    rid = request.match_info["rid"]
     rec = task_history.get(rid)
-    if not rec:
-        return JSONResponse({"error": "not found"}, status_code=404)
+    if not rec: return web.json_response({"error": "not found"}, status=404)
     agent_id = rec.get("agent_id")
     s = pool.get(agent_id) if agent_id else None
     if s and s.status != "running":
-        return {"id": s.id, "recreated": False, "seed": None}
-    return {"id": None, "recreated": True,
-            "seed": {"prompt": rec.get("prompt") or "", "reply": rec.get("reply") or ""}}
+        return web.json_response({"id": s.id, "recreated": False, "seed": None})
+    return web.json_response({"id": None, "recreated": True,
+            "seed": {"prompt": rec.get("prompt") or "", "reply": rec.get("reply") or ""}})
 
-@app.delete("/history")
-def api_history_clear():
+async def _history_clear(request):
     task_history.clear()
-    return {"ok": True}
+    return web.json_response({"ok": True})
 
-@app.websocket("/ws")
-async def websocket(ws: WebSocket):
-    await ws.accept()
+async def _ws(request):
+    ws = web.WebSocketResponse(heartbeat=30)
+    await ws.prepare(request)
     ws_clients.add(ws)
     try:
         running = any(s.status == "running" for s in pool.subagents.values())
         await ws.send_json({"type": "hello", "subagents": pool.snapshot(), "chat": chat_messages, "log": conductor.log, "running": running})
-        while True:
-            data = await ws.receive_json()
-            msg = (data.get("msg") or "").strip()
-            if not msg: continue
-            add_chat(msg, role="user", files=data.get("files") or [], images=data.get("images") or [])
-            conductor.notify({"type": "user_message", "msg": msg})
-    except WebSocketDisconnect: pass
-    finally: ws_clients.discard(ws)
+        async for msg in ws:
+            if msg.type == web.WSMsgType.TEXT:
+                try:
+                    data = json.loads(msg.data) if msg.data else {}
+                except Exception:
+                    data = {}
+                m = (data.get("msg") or "").strip()
+                if not m: continue
+                add_chat(m, role="user", files=data.get("files") or [], images=data.get("images") or [])
+                conductor.notify({"type": "user_message", "msg": m})
+            elif msg.type == web.WSMsgType.ERROR:
+                break
+    except Exception:
+        pass
+    finally:
+        ws_clients.discard(ws)
+    return ws
 
-if __name__ == "__main__":
-    import uvicorn
-    # headless:UI 只在桌面 App「协作」页,这里不再自开浏览器(--no-browser 保留兼容 bridge 的调用)。
-    uvicorn.run("conductor:app", host=HOST, port=PORT, reload=False)
+
+def create_conductor_app() -> web.Application:
+    app = web.Application()
+    app.router.add_get("/token-stats", _token_stats)
+    app.router.add_get("/", _index)
+    app.router.add_get("/readme", _readme)
+    app.router.add_get("/readme/{topic}", _readme_topic)
+    app.router.add_get("/im_prompt/{source}", _im_prompt)
+    app.router.add_get("/subagent", _list_subagents)
+    app.router.add_get("/subagent/{sid}", _get_subagent)
+    app.router.add_post("/subagent", _start_subagent)
+    app.router.add_post("/subagent/{sid}", _subagent_action)
+    app.router.add_get("/chat", _get_chat)
+    app.router.add_post("/chat", _chat)
+    app.router.add_post("/approval", _approval)
+    app.router.add_get("/history", _history)
+    app.router.add_get("/history/{rid}", _history_detail)
+    app.router.add_post("/history/{rid}/resume", _history_resume)
+    app.router.add_delete("/history", _history_clear)
+    app.router.add_get("/ws", _ws)
+    return app
+
+
+def init():
+    """Start the conductor loop + IM poller. Safe to call once from the bridge
+    process startup (on the running asyncio loop)."""
+    global main_loop
+    try:
+        main_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        main_loop = asyncio.get_event_loop()
+    import cost_tracker; cost_tracker.install()
+    conductor.start()
+    threading.Thread(target=im_poll_loop, name="im-poller", daemon=True).start()

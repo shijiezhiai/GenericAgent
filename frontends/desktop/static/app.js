@@ -12863,7 +12863,7 @@ if (chanQrModal) {
 /* ═══════════════ 状态面板（复用 ServiceManager + 启停/日志） ═══════════════ */
 const statusListEl = document.getElementById('status-list');
 const BRIDGE_SERVICE_ID = '__bridge__';
-const EXTRA_SERVICE_IDS = new Set(['frontends/conductor.py', 'reflect/scheduler.py']);
+const EXTRA_SERVICE_IDS = new Set(['reflect/scheduler.py']);
 
 function bridgeOfflinePanelServices() {
   return [
@@ -12876,17 +12876,6 @@ function bridgeOfflinePanelServices() {
       memMb: null,
       cpuPct: null,
       managed: false,
-    },
-    {
-      id: 'frontends/conductor.py',
-      name: 'frontends/conductor.py',
-      status: 'offline',
-      running: false,
-      pid: null,
-      memMb: null,
-      cpuPct: null,
-      managed: false,
-      bridgeOffline: true,
     },
     {
       id: 'reflect/scheduler.py',

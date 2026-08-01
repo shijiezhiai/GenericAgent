@@ -25,8 +25,8 @@ HTTP API:
   GET    /services/panel
   GET    /services/mykey
   POST   /services/mykey       body: {"content":"..."}
-  POST   /services/stop-extras   stop conductor + scheduler (127.0.0.1 only)
-  POST   /services/start-extras  start conductor + scheduler (127.0.0.1 only)
+  POST   /services/stop-extras   stop scheduler (127.0.0.1 only)
+  POST   /services/start-extras  start scheduler (127.0.0.1 only)
   POST   /services/bridge/exit    stop managed services, then exit bridge (127.0.0.1 only)
 
 WS API (state sync):
@@ -36,7 +36,7 @@ WS API (state sync):
 """
 from __future__ import annotations
 
-import asyncio, atexit, contextlib, gzip, importlib, json, os, re, subprocess, sys
+import asyncio, atexit, contextlib, gzip, importlib, json, os, re, signal, subprocess, sys
 from datetime import datetime
 from collections import Counter, deque
 import threading, time, traceback, uuid, hmac
@@ -2133,7 +2133,8 @@ SCHEDULER_LOCK_PORT = int(os.environ.get("GA_SCHEDULER_LOCK_PORT", "45762"))
 _SERVICE_PORTS: Dict[str, int] = {
     "frontends/wechatapp.py": 19531,    # socket 单例锁
     "frontends/wecomapp.py": 19531,     # socket 单例锁 (与微信共用)
-    "frontends/conductor.py": CONDUCTOR_PORT,       # uvicorn 监听
+    # conductor 已并入本进程 (见 _serve_dual), 不再是子进程; 若在此登记 :8900
+    # 会让 _reap_orphan 按端口 kill 掉 bridge 自己。
     "reflect/scheduler.py": SCHEDULER_LOCK_PORT,    # socket 单例锁 (agentmain --reflect)
 }
 
@@ -2169,14 +2170,6 @@ def discover_extra_services(ga_root: Path) -> List[dict]:
         out.append({
             "id": "reflect/scheduler.py",
             "cmd": [sys.executable, "agentmain.py", "--reflect", "reflect/scheduler.py"],
-        })
-    # conductor 跟 scheduler 一样,bridge 启动时自动拉起。它已是 headless API(UI 在「协作」页),
-    # --no-browser 仅为兼容旧调用保留。
-    conductor = ga_root / "frontends" / "conductor.py"
-    if conductor.is_file():
-        out.append({
-            "id": "frontends/conductor.py",
-            "cmd": [sys.executable, "frontends/conductor.py", "--no-browser"],
         })
     return out
 
@@ -6841,8 +6834,55 @@ def create_app():
     return app
 
 
+async def _serve_dual(host: str, bridge_port: int, conductor_port: int):
+    # Start the merged conductor (sibling of the bridge in this process) first so
+    # its WS broadcast loop shares this loop. Any failure degrades to bridge-only.
+    has_conductor = False
+    try:
+        import conductor_core
+        conductor_core.init()
+        has_conductor = True
+    except Exception as e:
+        print(f"[bridge] conductor merge failed, serving bridge only: {e}", file=sys.stderr)
+
+    bridge_app = create_app()
+    runner_b = web.AppRunner(bridge_app)
+    await runner_b.setup()
+    await web.TCPSite(runner_b, host, bridge_port).start()
+    print(f"GenericAgent Web2 bridge: http://{host}:{bridge_port}  ws://{host}:{bridge_port}/ws", file=sys.stderr)
+
+    runner_c = None
+    if has_conductor:
+        cond_app = conductor_core.create_conductor_app()
+        runner_c = web.AppRunner(cond_app)
+        await runner_c.setup()
+        await web.TCPSite(runner_c, host, conductor_port).start()
+        print(f"[bridge] conductor (merged) API: ws://{host}:{conductor_port}/ws", file=sys.stderr)
+
+    stop = asyncio.Event()
+    loop = asyncio.get_event_loop()
+    def _sig(*_):
+        stop.set()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, _sig)
+        except (NotImplementedError, RuntimeError, ValueError):
+            pass
+    try:
+        await stop.wait()
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass
+    finally:
+        for r in (runner_b, runner_c):
+            if r is not None:
+                try:
+                    await r.cleanup()
+                except Exception:
+                    pass
+
+
 if __name__ == "__main__":
     host = os.environ.get("BRIDGE_HOST", "127.0.0.1")
-    port = int(os.environ.get("BRIDGE_PORT", "14168"))
-    print(f"GenericAgent Web2 bridge: http://{host}:{port}  ws://{host}:{port}/ws", file=sys.stderr)
-    web.run_app(create_app(), host=host, port=port, print=None)
+    bridge_port = int(os.environ.get("BRIDGE_PORT", "14169"))
+    conductor_port = int(os.environ.get("CONDUCTOR_PORT", "8900"))
+    asyncio.run(_serve_dual(host, bridge_port, conductor_port))
