@@ -11,6 +11,7 @@
 //! deployment) and a library so the Tauri shell can embed the axum server in-process
 //! (Phase 2: single Rust process + a single Python kernel subprocess).
 
+pub mod bridge;
 pub mod kernel;
 pub mod proxy;
 
@@ -23,7 +24,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use axum::body::Body;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, State};
-use axum::http::{header, StatusCode};
+use axum::http::{header, HeaderMap, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get, post};
 use axum::{Json, Router};
@@ -31,11 +32,13 @@ use serde_json::{json, Value};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
-use kernel::KernelClient;
+use kernel::KernelSupervisor;
+use bridge::BridgeSupervisor;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub kernel: Arc<KernelClient>,
+    pub kernel: Arc<KernelSupervisor>,
+    pub bridge: Arc<BridgeSupervisor>,
     pub fallback: String,
     pub static_dir: PathBuf,
     pub bridge_port: u16,
@@ -120,15 +123,66 @@ async fn static_file_handler(State(s): State<AppState>, uri: axum::http::Uri) ->
 // Kernel-backed JSON-RPC routes
 // ---------------------------------------------------------------------------
 
+/// True when the failure means "there is no kernel to talk to" rather than "the kernel replied
+/// with an error". The frontend keys off the resulting 503 to offer a restart instead of
+/// rendering a generic failure (or hanging on a spinner forever).
+fn is_kernel_down(err: &str) -> bool {
+    err.contains("restarting")
+        || err.contains("process exited")
+        || err.contains("process is gone")
+        || err.contains("dropped the response channel")
+}
+
 async fn kernel_json(state: &AppState, method: &str, params: Value) -> Response {
     match state.kernel.call(method, params).await {
         Ok(v) => Json(v).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
+        Err(e) => {
+            let code = if is_kernel_down(&e) {
+                StatusCode::SERVICE_UNAVAILABLE
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            (code, e).into_response()
+        }
     }
 }
 
 async fn status_handler(State(s): State<AppState>) -> Response {
     kernel_json(&s, "status", json!({})).await
+}
+
+async fn kernel_state_handler(State(s): State<AppState>) -> Response {
+    Json(json!({ "up": s.kernel.is_up().await, "generation": s.kernel.generation() }))
+        .into_response()
+}
+
+async fn kernel_restart_handler(State(s): State<AppState>) -> Response {
+    match s.kernel.clone().restart().await {
+        Ok(()) => Json(json!({ "success": true, "generation": s.kernel.generation() }))
+            .into_response(),
+        Err(e) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "success": false, "error": e })),
+        )
+            .into_response(),
+    }
+}
+
+async fn bridge_state_handler(State(s): State<AppState>) -> Response {
+    Json(json!({ "up": s.bridge.is_up().await, "generation": s.bridge.generation() }))
+        .into_response()
+}
+
+async fn bridge_restart_handler(State(s): State<AppState>) -> Response {
+    match s.bridge.clone().restart().await {
+        Ok(()) => Json(json!({ "success": true, "generation": s.bridge.generation() }))
+            .into_response(),
+        _ => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "success": false, "error": "bridge restart failed" })),
+        )
+            .into_response(),
+    }
 }
 
 async fn config_get(State(s): State<AppState>) -> Response {
@@ -370,6 +424,12 @@ fn build_router(state: AppState) -> Router {
         .nest_service("/vendor", ServeDir::new(vendor_dir))
         // core routes -> kernel
         .route("/status", get(status_handler))
+        // Kernel liveness + manual respawn. Served by the gateway itself, so they still answer
+        // while the kernel (and with it the legacy bridge) is down.
+        .route("/kernel/state", get(kernel_state_handler))
+        .route("/kernel/restart", post(kernel_restart_handler))
+        .route("/bridge/state", get(bridge_state_handler))
+        .route("/bridge/restart", post(bridge_restart_handler))
         .route("/config", get(config_get).post(config_set))
         .route("/conv-folders", get(conv_folders_get).put(conv_folders_put))
         .route("/sessions", get(sessions_list))
@@ -402,11 +462,30 @@ fn build_router(state: AppState) -> Router {
         .route("/proxy", any(proxy::proxy_grok))
         .route("/proxy/", any(proxy::proxy_grok))
         .route("/proxy/{*rest}", any(proxy::proxy_grok))
-        // everything else -> legacy bridge (strangler fallback)
-        .fallback(any(proxy::proxy_handler))
+        // everything else -> try static_dir first, then legacy bridge (strangler fallback)
+        .fallback(any(fallback_static_or_proxy))
         .layer(CorsLayer::permissive())
         .with_state(state)
-}
+    }
+
+    /// Fallback that serves a file from `static_dir` directly when it exists (so the
+    /// frontend never depends on the legacy bridge being booted), and only proxies to
+    /// the bridge otherwise. This eliminates the startup race where the WebView
+    /// requested static assets before the bridge was ready (HTTP 502 → `<script>`/`<img>`
+    /// load failures → invisible icons).
+    async fn fallback_static_or_proxy(
+        State(s): State<AppState>,
+        method: Method,
+        uri: Uri,
+        headers: HeaderMap,
+        body: Body,
+    ) -> Response {
+        let path = uri.path().trim_start_matches('/').to_string();
+        if !path.is_empty() && !path.contains("..") && s.static_dir.join(&path).is_file() {
+            return static_file_handler(State(s), uri).await;
+        }
+        proxy::proxy_handler(State(s), method, uri, headers, body).await
+    }
 
 /// Configuration for running the embedded gateway.
 pub struct GatewayConfig {
@@ -424,8 +503,13 @@ pub struct GatewayConfig {
     /// Explicit fallback URL for un-migrated routes. When empty, the gateway proxies to
     /// `http://127.0.0.1:<legacy_port>` (the kernel-spawned legacy bridge).
     pub fallback: String,
-    /// Port the kernel spawns the legacy `desktop_bridge.py` on for the strangler fallback.
+    /// Port the gateway spawns the legacy `desktop_bridge.py` on for the strangler fallback.
+    /// The bridge is a *sibling* of the kernel (owned by the gateway), so it survives a
+    /// kernel crash; it reconnects to the kernel's loopback config server after a respawn.
     pub legacy_port: u16,
+    /// Fixed port for the kernel's loopback config store server. The kernel binds it and
+    /// the bridge connects to it, so the bridge keeps working across kernel restarts.
+    pub config_port: u16,
     /// Python interpreter used to run the kernel.
     pub kernel_python: String,
     /// Isolation dir for the kernel. Empty = kernel runs against the real project root (so it
@@ -435,9 +519,10 @@ pub struct GatewayConfig {
 
 /// Run the gateway until the TCP listener closes.
 ///
-/// Spawns the Python kernel (JSON-RPC over stdio) and serves the axum HTTP/WS frontend.
-/// Un-migrated routes are reverse-proxied to the legacy bridge, which the kernel spawns
-/// on `legacy_port` — so from the caller's perspective the kernel is the only Python subprocess.
+/// Spawns the Python kernel (JSON-RPC over stdio) AND the legacy `desktop_bridge.py` as
+/// sibling subprocesses, and serves the axum HTTP/WS frontend. Un-migrated routes are
+/// reverse-proxied to the bridge. The bridge is a sibling of the kernel (not a child), so a
+/// kernel crash no longer takes the bridge — and the sessions it serves — down with it.
 pub async fn serve(cfg: GatewayConfig) -> Result<(), String> {
     let root = cfg.root.clone();
     let port = cfg.port;
@@ -456,7 +541,10 @@ pub async fn serve(cfg: GatewayConfig) -> Result<(), String> {
     let static_dir = root.join("frontends").join("desktop").join("static");
 
     let mut extra_env: HashMap<String, String> = HashMap::new();
-    extra_env.insert("GA_LEGACY_PORT".to_string(), cfg.legacy_port.to_string());
+    // The kernel publishes its DuckDB store on this fixed loopback port so the bridge can
+    // reconnect to it after a kernel restart. The gateway owns the bridge lifecycle now, so
+    // we no longer tell the kernel to spawn it (GA_LEGACY_PORT is ignored by the kernel).
+    extra_env.insert("GA_CONFIG_PORT".to_string(), cfg.config_port.to_string());
     extra_env.insert("GA_CONDUCTOR_PORT".to_string(), conductor_port.to_string());
     if let Ok(v) = std::env::var("GA_NO_IM_AUTOSTART") {
         extra_env.insert("GA_NO_IM_AUTOSTART".to_string(), v);
@@ -473,10 +561,14 @@ pub async fn serve(cfg: GatewayConfig) -> Result<(), String> {
         kernel_script.display(),
         data_label
     );
-    let kernel = KernelClient::spawn(&python, &kernel_script, &root, &kernel_data_dir, extra_env)
-        .await
-        .map_err(|e| format!("failed to spawn kernel subprocess: {}", e))?;
+    let kernel =
+        KernelSupervisor::start(&python, &kernel_script, &root, &kernel_data_dir, extra_env)
+            .await
+            .map_err(|e| format!("failed to spawn kernel subprocess: {}", e))?;
 
+    // Block until the kernel answers: this also guarantees its config server is published
+    // on the fixed port, so the bridge spawned next never starts against a dead address
+    // (which would make its first reads degrade to the stale legacy json).
     let default_root = root.to_string_lossy().into_owned();
     let ga_root = match kernel.call("status", json!({})).await {
         Ok(v) => v
@@ -490,6 +582,30 @@ pub async fn serve(cfg: GatewayConfig) -> Result<(), String> {
         }
     };
 
+    // Spawn the legacy bridge as a sibling of the kernel (owned by the gateway). It is a
+    // replica of the store, reading/writing config through the kernel's loopback config
+    // server on config_port; it survives a kernel crash and reconnects after a respawn.
+    let bridge_script = root.join("frontends").join("desktop_bridge.py");
+    let bridge_log = root.join("temp").join("legacy_bridge.log");
+    let mut bridge_env: HashMap<String, String> = HashMap::new();
+    bridge_env.insert("BRIDGE_PORT".to_string(), cfg.legacy_port.to_string());
+    bridge_env.insert("CONDUCTOR_PORT".to_string(), conductor_port.to_string());
+    bridge_env.insert("GA_STORAGE_SECONDARY".to_string(), "1".to_string());
+    bridge_env.insert("GA_CONFIG_PORT".to_string(), cfg.config_port.to_string());
+    bridge_env.insert("GA_NO_IM_AUTOSTART".to_string(), "1".to_string());
+    bridge_env.insert("GA_ROOT".to_string(), root.to_string_lossy().into_owned());
+    eprintln!(
+        "[gateway] spawning bridge: {} {} (bridge_port={}, config_port={})",
+        python,
+        bridge_script.display(),
+        cfg.legacy_port,
+        cfg.config_port
+    );
+    let bridge =
+        BridgeSupervisor::start(&python, &bridge_script, &root, &bridge_log, bridge_env)
+            .await
+            .map_err(|e| format!("failed to spawn bridge subprocess: {}", e))?;
+
     let client = reqwest::Client::builder()
         // Bound upstream latency so a hung/missing upstream returns 502 instead of hanging the
         // gateway connection (which would surface to the caller as an empty response / curl 000).
@@ -498,6 +614,7 @@ pub async fn serve(cfg: GatewayConfig) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let state = AppState {
         kernel,
+        bridge,
         fallback: fallback.clone(),
         static_dir,
         bridge_port: port,

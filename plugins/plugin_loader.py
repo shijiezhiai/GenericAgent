@@ -28,39 +28,87 @@ import threading
 import subprocess
 
 try:
+    import ga_config
+except ImportError:  # imported outside a ga_root-on-sys.path context
+    import sys as _sys
+    _sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import ga_config
+
+try:
     from plugins import hooks
 except Exception:
     hooks = None
 
 _PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
-_GA_ROOT = os.path.dirname(_PLUGIN_DIR)  # GA 项目根目录
-_CONFIG_PATH = os.environ.get("GA_SKILLS_CONFIG", os.path.join(_PLUGIN_DIR, "skills_config.json"))
+_GA_ROOT = os.path.dirname(_PLUGIN_DIR)            # 实际运行根目录（dev=仓库; bundle=app-support/app）
+def _is_bundle_mode():
+    # 优先用 Rust 注入的 env 判定；env 若未达 bridge 子进程，退回路径启发式：
+    # clone 目标位于 ~/Library/Application Support 或 .app 包内即视为 bundle 部署。
+    if os.environ.get("GA_BUILD_ID"):
+        return True
+    p = _GA_ROOT
+    if "Application Support" in p or ".app/Contents/Resources/runtime" in p:
+        return True
+    return False
+_IS_BUNDLE = _is_bundle_mode()   # bundle 模式：配置/数据持久到 app-support（app/ 外）
+# 持久根：bundle 下为 app-support（与 app/ 同级，升级不被 clone 覆盖）；dev 下等同仓库根
+_SUPPORT_ROOT = os.path.dirname(_GA_ROOT) if _IS_BUNDLE else _GA_ROOT
+
+# bundle 模式下配置放到 app-support 根（app/ 外），随用户持久、升级不被覆盖；
+# dev 模式保持原 plugins/skills_config.json。
+if _IS_BUNDLE:
+    _CONFIG_PATH = os.environ.get("GA_SKILLS_CONFIG", os.path.join(_SUPPORT_ROOT, "skills_config.json"))
+else:
+    _CONFIG_PATH = os.environ.get("GA_SKILLS_CONFIG", os.path.join(_PLUGIN_DIR, "skills_config.json"))
 _injection_cache = None   # (key, text)
 _plugin_cache = None      # (key, plugins_list)
 
 
+def _resolve_root(entry):
+    """把 skills_config.json 里的 plugin_dir 解析为绝对路径。
+
+    - 绝对路径：原样返回（兼容旧配置）。
+    - 相对路径：优先按 _GA_ROOT 解析（自带 skills_external/... 在 app/ 内）；
+      否则按 _SUPPORT_ROOT 解析（用户安装的 ext_plugins/... 在 app/ 外的持久目录）。
+    """
+    if not entry:
+        return entry
+    entry = os.path.expanduser(entry)
+    if os.path.isabs(entry):
+        return entry
+    in_app = os.path.join(_GA_ROOT, entry)
+    if os.path.isdir(in_app):
+        return in_app
+    return os.path.join(_SUPPORT_ROOT, entry)
+
+
+def _effective_config_path():
+    """退役的 json 配置路径。真源已是 DuckDB；仅一次性导入与 GA_STORAGE=json 回滚会用到。"""
+    if os.path.isfile(_CONFIG_PATH):
+        return _CONFIG_PATH
+    seed = os.path.join(_GA_ROOT, "plugins", "skills_config.json")
+    if os.path.isfile(seed):
+        return seed
+    return _CONFIG_PATH
+
+
 def _cache_key():
-    cfg_mtime = os.path.getmtime(_CONFIG_PATH) if os.path.isfile(_CONFIG_PATH) else 0
-    env_key = os.environ.get("GA_PLUGIN_DIRS", "")
-    return (cfg_mtime, env_key)
+    return (ga_config.config_rev(), os.environ.get("GA_PLUGIN_DIRS", ""))
 
 
 def _load_plugin_dirs():
-    """读取 plugin 目录列表。优先级：env > 配置文件。返回 dirs 列表或 None。"""
+    """读取 plugin 目录列表。优先级：env > DuckDB。返回 dirs 列表或 None。"""
+    # 升级迁移：把旧运行态里用户自定义的 plugin_dirs 合并进持久配置（幂等）
+    try:
+        from plugins.skills_loader import _migrate_legacy_config
+        _migrate_legacy_config()
+    except Exception:
+        pass
     env_dirs = os.environ.get("GA_PLUGIN_DIRS", "").strip()
     if env_dirs:
         return [d.strip() for d in env_dirs.split(":") if d.strip()]
-    if not os.path.isfile(_CONFIG_PATH):
-        return None
-    try:
-        with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-        dirs = cfg.get("plugin_dirs", [])
-        if not dirs:
-            return None
-        return dirs
-    except Exception:
-        return None
+    dirs = [_resolve_root(d) for d in ga_config.skills_config().get("plugin_dirs", [])]
+    return dirs or None
 
 
 def _parse_frontmatter(text):
@@ -146,25 +194,63 @@ def _plugin_data_dir(name):
 
 
 def _user_config_path():
-    """userConfig options 明文存储文件（与 _CONFIG_PATH 同目录）。
-    格式 {"pluginConfigs": {<plugin-id>: {"options": {KEY: val}}}}。用户选 E：敏感值统一明文。"""
-    return os.path.join(_PLUGIN_DIR, "plugin_configs.json")
+    """退役的 json 存储位置（现为 DuckDB plugin_configs 表）。保留用于一次性导入、
+    GA_STORAGE=json 回滚，以及提示信息里指明来源。"""
+    return os.path.join(os.path.dirname(_CONFIG_PATH), "plugin_configs.json")
+
+
+def _migrate_legacy_plugin_configs():
+    """升级迁移：把旧运行态 app/plugins/plugin_configs.json（Rust 在 clone 前 stash 到
+    <support_root>/.plugin_configs_migrate.json）合并进持久位置 <support_root>/plugin_configs.json。
+
+    内容是按 plugin-id 聚合的用户选项值；合并规则：持久已有 key 优先，仅补充旧配置里缺失的 key。
+    幂等：stash 用完即删。dev 模式无 stash，直接返回。
+    """
+    import sys as _sys
+    _dbg = (lambda *a: print("[migrate-pcfg]", *_a, file=_sys.stderr, flush=True)) \
+        if os.environ.get("GA_MIGRATE_DEBUG") else (lambda *a: None)
+    _dbg("IS_BUNDLE=", _IS_BUNDLE, "GA_ROOT=", _GA_ROOT, "SUPPORT_ROOT=", _SUPPORT_ROOT)
+    cand = []
+    if _IS_BUNDLE:
+        cand.append(_SUPPORT_ROOT)
+    cand.append(os.path.dirname(_GA_ROOT))
+    cand.append(os.path.dirname(os.path.dirname(_PLUGIN_DIR)))
+    stash = None
+    for c in cand:
+        if c and os.path.isfile(os.path.join(c, ".plugin_configs_migrate.json")):
+            stash = os.path.join(c, ".plugin_configs_migrate.json")
+            break
+    _dbg("stash=", stash)
+    if not stash:
+        return
+    try:
+        with open(stash, "r", encoding="utf-8") as f:
+            legacy = json.load(f)
+    except Exception:
+        legacy = {}
+    if not isinstance(legacy, dict):
+        legacy = {}
+    legacy_cfgs = legacy.get("pluginConfigs") if isinstance(legacy.get("pluginConfigs"), dict) else {}
+    cur = ga_config.plugin_configs()
+    added = False
+    for pid, v in legacy_cfgs.items():
+        opts = v.get("options") if isinstance(v, dict) else None
+        if pid not in cur and isinstance(opts, dict):
+            cur[pid] = opts
+            added = True
+    if added:
+        ga_config.save_plugin_configs(cur)
+    try:
+        os.remove(stash)
+    except Exception:
+        pass
 
 
 def _load_user_configs():
     """读取所有 plugin 的用户配置 options，返回 {plugin_id: {KEY: val}}。fail-open。"""
-    path = _user_config_path()
+    _migrate_legacy_plugin_configs()
     try:
-        if not os.path.isfile(path):
-            return {}
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        configs = data.get("pluginConfigs", {}) if isinstance(data, dict) else {}
-        out = {}
-        for pid, v in configs.items():
-            if isinstance(v, dict) and isinstance(v.get("options"), dict):
-                out[pid] = v["options"]
-        return out
+        return ga_config.plugin_configs()
     except Exception:
         return {}
 
@@ -771,35 +857,17 @@ def collect_mcp_tools():
 
 
 def _load_global_mcp_config():
-    """加载全局 MCP server 配置（非 plugin 绑定）。
+    """加载全局 MCP server 配置（非 plugin 绑定），来自 DuckDB mcp_servers 表。
 
-    查找路径（优先级）：
-      1. GA_ROOT/mcp_servers.json
-      2. ~/.config/ga/mcp_servers.json
-    格式同 Claude Code .mcp.json：{"serverName": {command, args, env, ...}}
-    也支持 {"mcpServers": {...}} 包裹格式。
-    fail-open：文件不存在/解析失败返回 {}。
+    条目格式同 Claude Code .mcp.json：{"serverName": {command, args, env, ...}}。
+    fail-open：读不到返回 {}。
     """
-    candidates = [
-        os.path.join(_GA_ROOT, "mcp_servers.json"),
-        os.path.expanduser("~/.config/ga/mcp_servers.json"),
-    ]
-    for path in candidates:
-        if not os.path.isfile(path):
-            continue
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if not isinstance(data, dict):
-                return {}
-            servers = data.get("mcpServers", data)
-            if not isinstance(servers, dict):
-                return {}
-            return {k: v for k, v in servers.items()
-                    if isinstance(v, dict) and ("command" in v or "url" in v)}
-        except Exception:
-            return {}
-    return {}
+    try:
+        servers = ga_config.mcp_servers()
+    except Exception:
+        return {}
+    return {k: v for k, v in servers.items()
+            if isinstance(v, dict) and ("command" in v or "url" in v)}
 
 
 def collect_lsp_clients():

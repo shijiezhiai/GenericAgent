@@ -188,7 +188,7 @@ class Session:
     expert: Optional[str] = None   # 会话级专家（方案B：用户主动选择才注入，None=普通模式）
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
-    messages: List[dict] = field(default_factory=list)
+    messages: List[dict] = field(default_factory=list, repr=False)  # repr=False: never materialize a lazy session just to log it
     msg_seq: int = 0
     partial: Optional[dict] = None
     status: str = "idle"  # idle|running|error|cancelled
@@ -206,10 +206,69 @@ class Session:
     llm_history: Optional[List[dict]] = None
 
 
-def _load_plan_baseline(item: dict, msgs: list) -> int:
+_LAZY_MESSAGES = object()  # sentinel: this session's messages are not materialized yet
+
+
+def _session_messages_get(self) -> List[dict]:
+    msgs = self.__dict__.get("_messages")
+    if msgs is _LAZY_MESSAGES:
+        loader = self.__dict__.get("_msg_loader")
+        try:
+            msgs = loader(self.id) if loader else []
+        except Exception as e:  # noqa: BLE001
+            print(f"[bridge] lazy message load failed for {self.id}: {e}", file=sys.stderr)
+            msgs = []
+        self.__dict__["_messages"] = msgs
+        self.__dict__["_msg_loader"] = None
+    return msgs
+
+
+def _session_messages_set(self, value):
+    self.__dict__["_messages"] = [] if value is None else value
+    self.__dict__["_msg_loader"] = None
+
+
+def _session_set_lazy_messages(self, loader):
+    """Defer reading this session's messages from the store until first access."""
+    self.__dict__["_messages"] = _LAZY_MESSAGES
+    self.__dict__["_msg_loader"] = loader
+
+
+# Installed after @dataclass so the generated __init__ assignment goes through the setter.
+Session.messages = property(_session_messages_get, _session_messages_set)
+Session.set_lazy_messages = _session_set_lazy_messages
+Session.messages_loaded = property(lambda self: self.__dict__.get("_messages") is not _LAZY_MESSAGES)
+
+
+def _round_label(m: dict) -> str:
+    raw = m.get("display") if isinstance(m.get("display"), str) and m.get("display") else m.get("content")
+    text = " ".join(str(raw or "").split())
+    if not text:
+        return "（图片/附件）"
+    return text[:40] + "…" if len(text) > 40 else text
+
+
+def compute_rounds(msgs: list) -> List[dict]:
+    """Sidebar rounds (one per user turn). Mirrors extractRounds() in static/app.js so the
+    server can supply them for sessions whose messages are not loaded."""
+    rounds: List[dict] = []
+    cur = None
+    for i, m in enumerate(msgs):
+        if m.get("role") == "user":
+            if cur:
+                rounds.append(cur)
+            cur = {"startIdx": i, "endIdx": i, "label": _round_label(m), "ts": m.get("ts") or 0}
+        elif cur:
+            cur["endIdx"] = i
+    if cur:
+        rounds.append(cur)
+    return rounds
+
+
+def _load_plan_baseline(item: dict, msg_count: int) -> int:
     """Persisted per-session baseline (tuiapp_v2: set on /continue, not on preset text)."""
     base = int(item.get("plan_scan_baseline", 0) or 0)
-    if base >= len(msgs):
+    if base >= msg_count:
         return 0
     return max(0, base)
 
@@ -234,13 +293,77 @@ class AgentManager:
         self.active_session_id: Optional[str] = None
         self._sessions_file = Path(self.ga_root) / "temp" / "desktop_sessions.json"
         self._conv_folders_file = Path(self.ga_root) / "temp" / "conv_folders.json"
+        # Storage backend: "json" (legacy file), "duckdb" (owner) or "replica".
+        # Resolution: GA_STORAGE env wins; if unset, auto-detect — a migrated root has
+        # temp/ga_store.duckdb, so use duckdb; otherwise json. This matters because the
+        # packaged .app launched from Finder has no GA_STORAGE in its environment.
+        # Explicit GA_STORAGE=json remains the rollback switch even when a DB exists.
+        # "replica": DuckDB takes an EXCLUSIVE file lock, so only one process may own
+        # the store. The kernel is the owner; the legacy-bridge grandchild it spawns is
+        # marked GA_STORAGE_SECONDARY=1 and keeps no session state and never persists
+        # (it only serves un-migrated, storage-free routes). Without this it would fail
+        # to open the DB, silently fall back to json, and rewrite desktop_sessions.json.
+        self.store = None
+        self._storage_mode = self._resolve_storage_mode(self.ga_root)
+        if self._storage_mode == "duckdb":
+            self._open_store(self.ga_root)
         self._load_sessions()
+
+    @staticmethod
+    def _resolve_storage_mode(root: str) -> str:
+        mode = os.environ.get("GA_STORAGE", "")
+        if not mode:
+            mode = "duckdb" if (Path(root) / "temp" / "ga_store.duckdb").is_file() else "json"
+        if mode == "duckdb" and os.environ.get("GA_STORAGE_SECONDARY") == "1":
+            mode = "replica"
+        return mode
+
+    def _open_store(self, root: str):
+        """(Re)open the DuckDB store at root; on failure fall back to json mode."""
+        if self.store is not None and getattr(self.store, "con", None) is not None:
+            try:
+                self.store.con.close()
+            except Exception:
+                pass
+        self.store = None
+        try:
+            try:
+                from db_store import DBStore
+            except ImportError:
+                sys.path.insert(0, str(APP_DIR))
+                from db_store import DBStore
+            self.store = DBStore(root, mode="duckdb")
+        except Exception as e:  # noqa: BLE001
+            print(f"[bridge] duckdb store init failed, falling back to json: {e}", file=sys.stderr)
+            self._storage_mode = "json"
+        if self.store is not None:
+            # We hold the lock, so skill/plugin/mcp config must go through this very
+            # connection — otherwise ga_config would open a second transient one per call.
+            # (Under the kernel this is a no-op: the kernel attaches the same store first.)
+            try:
+                if str(APP_DIR.parent) not in sys.path:
+                    sys.path.insert(0, str(APP_DIR.parent))
+                import ga_config
+                ga_config.attach(self.store)
+            except Exception as e:  # noqa: BLE001 - config falls back to its own connection
+                print(f"[bridge] ga_config attach skipped: {e}", file=sys.stderr)
 
     @property
     def mykey_path(self) -> str:
         return str(Path(self.ga_root) / "mykey.py")
 
     def _persist(self):
+        if self._storage_mode == "replica":
+            return
+        if self._storage_mode == "duckdb":
+            try:
+                # low-frequency full sync; the hot per-message path (add_message) uses O(1) writes
+                with self.lock:
+                    snapshot = list(self.sessions.values())
+                self.store.upsert_all(snapshot)
+            except Exception as e:  # noqa: BLE001
+                print(f"[bridge] persist sessions to db failed: {e}", file=sys.stderr)
+            return
         try:
             self._sessions_file.parent.mkdir(parents=True, exist_ok=True)
             arr = []
@@ -262,34 +385,65 @@ class AgentManager:
                                 "project": s.project or "",
                                 "folder_id": s.folder_id or "",
                                 "llm_history": llm_hist})
-            self._sessions_file.write_text(json.dumps(arr, ensure_ascii=False, default=str), encoding="utf-8")
+            f = self._sessions_file
+            # 防呆：内存里一个会话都没有时，不允许把已有的非空会话文件覆盖成空
+            # （如加载失败/启动早期误触发 persist，避免全量会话被抹掉）。
+            if not arr and f.is_file() and f.stat().st_size > 2:
+                print("[bridge] refuse empty overwrite of desktop_sessions.json",
+                      file=sys.stderr)
+                return
+            # 原子写：先写临时文件再 rename，避免大文件写一半进程被杀导致损坏
+            tmp = f.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(arr, ensure_ascii=False, default=str), encoding="utf-8")
+            os.replace(tmp, f)
         except Exception as e:
             print(f"[bridge] persist sessions failed: {e}", file=sys.stderr)
 
+    def _build_session(self, item: dict, msgs: Optional[list] = None) -> "Session":
+        """msgs=None means "load from the store on first access" (duckdb lazy mode)."""
+        lazy = msgs is None
+        msg_count = int(item.get("msg_count", 0)) if lazy else len(msgs)
+        sess = self._make_session(item, [] if lazy else msgs, msg_count)
+        if lazy:
+            sess.set_lazy_messages(self._lazy_messages)
+        return sess
+
+    def _lazy_messages(self, sid: str) -> list:
+        return self.store.get_messages(sid) if self.store else []
+
+    def _make_session(self, item: dict, msgs: list, msg_count: int) -> "Session":
+        return Session(id=item["id"], title=item.get("title", "New chat"),
+                       cwd=item.get("cwd", self.ga_root),
+                       created_at=item.get("created_at", time.time()),
+                       updated_at=item.get("updated_at", time.time()),
+                       messages=msgs,
+                       msg_seq=item.get("msg_seq", 0),
+                       pinned=item.get("pinned", False),
+                       untitled=item.get("untitled", True),
+                       plan_scan_baseline=_load_plan_baseline(item, msg_count),
+                       plan_path=_sanitize_desktop_plan_path(
+                           item["id"], item.get("plan_path") or ""),
+                       workspace=item.get("workspace", ""),
+                       project=item.get("project", ""),
+                       folder_id=item.get("folder_id", ""),
+                       status="idle", agent=None,
+                       llm_history=item.get("llm_history"))
+
     def _load_sessions(self):
+        if self._storage_mode == "replica":
+            return
         try:
-            if not self._sessions_file.exists():
-                return
-            arr = json.loads(self._sessions_file.read_text(encoding="utf-8"))
+            lazy = self._storage_mode == "duckdb"
+            if lazy:
+                # Metadata only: message rows stay in the DB until a session is opened.
+                arr = self.store.load_all_sessions(with_messages=False)
+            else:
+                if not self._sessions_file.exists():
+                    return
+                arr = json.loads(self._sessions_file.read_text(encoding="utf-8"))
             for item in arr:
-                msgs = item.get("messages", [])
-                sess = Session(id=item["id"], title=item.get("title", "New chat"),
-                               cwd=item.get("cwd", self.ga_root),
-                               created_at=item.get("created_at", time.time()),
-                               updated_at=item.get("updated_at", time.time()),
-                               messages=msgs,
-                               msg_seq=item.get("msg_seq", 0),
-                               pinned=item.get("pinned", False),
-                               untitled=item.get("untitled", True),
-                               plan_scan_baseline=_load_plan_baseline(item, msgs),
-                               plan_path=_sanitize_desktop_plan_path(
-                                   item["id"], item.get("plan_path") or ""),
-                               workspace=item.get("workspace", ""),
-                               project=item.get("project", ""),
-                               folder_id=item.get("folder_id", ""),
-                               status="idle", agent=None,
-                               llm_history=item.get("llm_history"))
-                self.sessions[sess.id] = sess
+                msgs = None if lazy else item.get("messages", [])
+                self.sessions[item["id"]] = self._build_session(item, msgs)
             if self.sessions:
                 self.active_session_id = max(self.sessions.values(), key=lambda s: s.updated_at).id
         except Exception as e:
@@ -297,6 +451,14 @@ class AgentManager:
 
     def _load_conv_folders(self) -> List[dict]:
         """读取对话文件夹定义（服务端共享）。返回规范化的 folder 列表。"""
+        if self._storage_mode == "replica":
+            return []
+        if self._storage_mode == "duckdb":
+            try:
+                return self.store.load_conv_folders()
+            except Exception as e:  # noqa: BLE001
+                print(f"[bridge] load conv_folders from db failed: {e}", file=sys.stderr)
+                return []
         try:
             f = self._conv_folders_file
             if not f.exists():
@@ -323,9 +485,36 @@ class AgentManager:
             return []
 
     def _save_conv_folders(self, folders: List[dict]):
+        if self._storage_mode == "replica":
+            return
+        if self._storage_mode == "duckdb":
+            try:
+                self.store.save_conv_folders(folders)
+            except Exception as e:  # noqa: BLE001
+                print(f"[bridge] save conv_folders to db failed: {e}", file=sys.stderr)
+            return
         try:
             f = self._conv_folders_file
             f.parent.mkdir(parents=True, exist_ok=True)
+            # 防呆：空列表不允许覆盖已有的非空文件夹定义（前端未初始化时会上报空，
+            # 曾有同类机制抹掉 token 历史）。正常客户端至少会带 default/archived。
+            if not folders and f.is_file():
+                try:
+                    old = json.loads(f.read_text(encoding="utf-8"))
+                except Exception:
+                    old = []
+                if old:
+                    print("[bridge] refuse empty overwrite of conv_folders "
+                          f"(kept {len(old)})", file=sys.stderr)
+                    return
+            # 覆盖前留一份快照
+            if f.is_file():
+                try:
+                    prev = f.read_text(encoding="utf-8")
+                    if len(prev) > 2:
+                        (f.parent / (f.name + ".bak")).write_text(prev, encoding="utf-8")
+                except Exception:
+                    pass
             f.write_text(json.dumps(folders, ensure_ascii=False, default=str), encoding="utf-8")
         except Exception as e:
             print(f"[bridge] save conv_folders failed: {e}", file=sys.stderr)
@@ -334,6 +523,88 @@ class AgentManager:
         """从各 session 汇总 folder_id 分配（sid -> folderId）。"""
         with self.lock:
             return {sid: (s.folder_id or "") for sid, s in self.sessions.items() if s.folder_id}
+
+    def _save_session(self, sess: Session):
+        """Persist a single session (duckdb: O(1) upsert; json: legacy full rewrite)."""
+        if self._storage_mode == "replica":
+            return
+        if self._storage_mode == "duckdb":
+            try:
+                self.store.upsert_session_meta(sess)
+            except Exception as e:  # noqa: BLE001
+                print(f"[bridge] save session to db failed: {e}", file=sys.stderr)
+            return
+        self._persist()
+
+    def set_storage_root(self, root: str):
+        """Re-point the storage backend at a new ga_root (used by kernel _apply_root)."""
+        root = os.path.abspath(root)
+        self.ga_root = root
+        self._sessions_file = Path(root) / "temp" / "desktop_sessions.json"
+        self._conv_folders_file = Path(root) / "temp" / "conv_folders.json"
+        # Re-resolve mode for the NEW root: the kernel boots with a default root and
+        # switches later; whether temp/ga_store.duckdb exists can differ per root.
+        prev_mode = self._storage_mode
+        self._storage_mode = self._resolve_storage_mode(root)
+        if self._storage_mode == "duckdb":
+            self._open_store(root)
+        elif prev_mode == "duckdb" and self.store is not None:
+            try:
+                self.store.con.close()
+            except Exception:
+                pass
+            self.store = None
+        # Self-contained reload: callers must never be left with stale/empty in-memory
+        # state after a root switch (an empty sessions dict + a later persist is the
+        # classic "empty overwrite" incident pattern).
+        with self.lock:
+            self.sessions = {}
+            self.active_session_id = None
+        try:
+            self._load_sessions()
+        except Exception as e:  # noqa: BLE001
+            print(f"[bridge] reload sessions after root switch failed: {e}", file=sys.stderr)
+
+    def _logid_of(self, sess: Session) -> Optional[str]:
+        agent = sess.agent
+        if agent is None:
+            return None
+        lp = getattr(agent, "log_path", None)
+        if not lp:
+            return None
+        stem = Path(lp).stem
+        if stem.startswith("model_responses_"):
+            return stem[len("model_responses_"):]
+        return stem
+
+    def _record_log_mapping(self, sess: Session):
+        """Persist logid<->session_id so raw logs are queryable in DB (duckdb only)."""
+        if self._storage_mode != "duckdb" or self.store is None:
+            return
+        try:
+            logid = self._logid_of(sess)
+            if logid:
+                self.store.map_log_session(logid, sess.id)
+        except Exception as e:  # noqa: BLE001
+            print(f"[bridge] record log mapping failed: {e}", file=sys.stderr)
+
+    def _mirror_raw_log(self, sess: Session):
+        """Mirror the session's model_responses txt into raw_logs (duckdb only).
+
+        Coarse-grained (once per completed turn) rather than per-token, so the LLM
+        write path is never touched. txt stays the source of truth for /continue.
+        """
+        if self._storage_mode != "duckdb" or self.store is None:
+            return
+        try:
+            logid = self._logid_of(sess)
+            lp = getattr(sess.agent, "log_path", None) if sess.agent else None
+            if not logid or not lp or not Path(lp).is_file():
+                return
+            lines = Path(lp).read_text(encoding="utf-8", errors="replace").splitlines()
+            self.store.replace_raw_log(logid, lines, sess.id)
+        except Exception as e:  # noqa: BLE001
+            print(f"[bridge] mirror raw log failed: {e}", file=sys.stderr)
 
     def _datasources_file(self):
         return Path(self.ga_root) / "temp" / "desktop_datasources.json"
@@ -1318,7 +1589,37 @@ class AgentManager:
         except Exception:
             return ""
 
-    def snapshot(self, sess: Session, include_messages: bool = True) -> dict:
+    def rounds_map(self) -> Dict[str, List[dict]]:
+        """Sidebar rounds for every session, without materializing message payloads.
+
+        One digest query covers all sessions; already-loaded sessions are computed from
+        memory so rounds reflect messages appended since load."""
+        out: Dict[str, List[dict]] = {}
+        digests: Dict[str, List[dict]] = {}
+        if self._storage_mode == "duckdb" and self.store is not None:
+            try:
+                digests = self.store.load_message_digests()
+            except Exception as e:  # noqa: BLE001
+                print(f"[bridge] load message digests failed: {e}", file=sys.stderr)
+        with self.lock:
+            items = list(self.sessions.items())
+        for sid, sess in items:
+            src = sess.messages if sess.messages_loaded else digests.get(sid, [])
+            out[sid] = compute_rounds(src)
+        return out
+
+    def session_rounds(self, sess: Session) -> List[dict]:
+        if sess.messages_loaded:
+            return compute_rounds(sess.messages)
+        if self._storage_mode == "duckdb" and self.store is not None:
+            try:
+                return compute_rounds(self.store.load_message_digests(sess.id).get(sess.id, []))
+            except Exception as e:  # noqa: BLE001
+                print(f"[bridge] session rounds failed: {e}", file=sys.stderr)
+        return compute_rounds(sess.messages)
+
+    def snapshot(self, sess: Session, include_messages: bool = True,
+                 rounds: Optional[List[dict]] = None) -> dict:
         out = {
             "sessionId": sess.id,
             "id": sess.id,
@@ -1340,6 +1641,9 @@ class AgentManager:
         if include_messages:
             out["messages"] = list(sess.messages)
             out["partial"] = dict(sess.partial) if sess.partial else None
+        if rounds is not None:
+            # Sidebar round list; lets the session list stay free of message payloads.
+            out["rounds"] = rounds
         return out
 
     def add_message(self, sess: Session, role: str, content: str, **extra) -> dict:
@@ -1350,7 +1654,14 @@ class AgentManager:
         sess.updated_at = time.time()
         if role == "user" and content.strip() and sess.title == "New chat":
             sess.title = content.strip().replace("\n", " ")[:40]
-        self._persist()
+        if self._storage_mode == "duckdb":
+            try:
+                self.store.append_message(sess.id, msg)
+                self.store.upsert_session_meta(sess)
+            except Exception as e:  # noqa: BLE001
+                print(f"[bridge] db save message failed: {e}", file=sys.stderr)
+        else:
+            self._persist()
         return msg
 
     def create_session(self, cwd: Optional[str] = None, project: Optional[str] = None) -> Session:
@@ -1374,7 +1685,7 @@ class AgentManager:
             self.sessions[sid] = sess
             self.active_session_id = sid
         emit_session_state(sess, "created")
-        self._persist()
+        self._save_session(sess)
         return sess
 
     def get_session(self, sid: str) -> Session:
@@ -1396,7 +1707,7 @@ class AgentManager:
             changed = sess.status == "done"
             if changed:
                 sess.status = "idle"
-                self._persist()
+                self._save_session(sess)
         if changed:
             emit_session_state(sess, "viewed")
         return {"ok": True, "sessionId": sid, "status": sess.status}
@@ -1415,7 +1726,13 @@ class AgentManager:
                 with contextlib.suppress(Exception):
                     sess.agent.abort()
         emit_session_state(sess, "closed")
-        self._persist()
+        if self._storage_mode == "duckdb":
+            try:
+                self.store.delete_session(sid)
+            except Exception as e:  # noqa: BLE001
+                print(f"[bridge] db delete session failed: {e}", file=sys.stderr)
+        else:
+            self._persist()
         _purge_session_uploads(sid)
         return {"ok": True, "sessionId": sid}
 
@@ -1447,7 +1764,7 @@ class AgentManager:
             import plan_state
             if plan_state.is_plan_preset_prompt(prompt):
                 plan_state.bind_plan_session(sess, prompt)
-                self._persist()
+                self._save_session(sess)
             sess.status = "running"
             sess.cancel_requested = False
             sess.last_error = ""
@@ -1464,6 +1781,7 @@ class AgentManager:
         try:
             if sess.agent is None:
                 sess.agent = self.make_agent(sess)
+            self._record_log_mapping(sess)
             agent = sess.agent
             no = self.config.get("llmNo") if llm_no is None else llm_no
             if no is not None and hasattr(agent, "next_llm"):
@@ -1560,6 +1878,7 @@ class AgentManager:
                 except Exception: pass
                 sess.status = "done"
                 sess.last_error = ""
+            self._mirror_raw_log(sess)
             emit_session_state(sess, "done")
         except Exception as e:
             tb = traceback.format_exc()
@@ -1851,9 +2170,8 @@ def discover_extra_services(ga_root: Path) -> List[dict]:
             "id": "reflect/scheduler.py",
             "cmd": [sys.executable, "agentmain.py", "--reflect", "reflect/scheduler.py"],
         })
-    # conductor 跟 scheduler 一样,bridge 启动时自动拉起。--no-browser 是关键:
-    # conductor.py 默认会用 webbrowser.open 在用户浏览器弹一个 8900 端口 UI,
-    # 桌面版自启时不需要这个独立 UI(用户从「指挥家」页直接访问)。
+    # conductor 跟 scheduler 一样,bridge 启动时自动拉起。它已是 headless API(UI 在「协作」页),
+    # --no-browser 仅为兼容旧调用保留。
     conductor = ga_root / "frontends" / "conductor.py"
     if conductor.is_file():
         out.append({
@@ -2581,8 +2899,10 @@ async def list_sessions_handler(request):
     # 并发预取所有 workspace 的 git branch 填入缓存,
     # 使后续 snapshot 中 _workspace_branch 全部命中缓存(并发 ~20ms vs 串行 32 次 ~220ms)
     manager._prefetch_branches(s.workspace for s in sessions)
+    rounds = manager.rounds_map()
     with manager.lock:
-        snapshots = [manager.snapshot(s, include_messages=False) for s in sessions]
+        snapshots = [manager.snapshot(s, include_messages=False, rounds=rounds.get(s.id, []))
+                     for s in sessions]
     return json_ok({"sessions": snapshots, "activeSessionId": manager.active_session_id})
 
 
@@ -4122,11 +4442,19 @@ async def project_assets_handler(request):
     # 3) 会话上传文件（属于该项目的 session 的 uploads）
     uploads_root = Path(DEFAULT_GA_ROOT) / "temp" / "desktop_uploads"
     if uploads_root.is_dir():
-        # 找到属于该项目的 session id
+        # 找到属于该项目的 session id（replica 模式本进程无会话状态，向网关取列表）
         project_sids = set()
-        for s in manager.sessions.values():
-            if (s.project or "") == name:
-                project_sids.add(s.id)
+        if manager._storage_mode == "replica":
+            try:
+                for s in (_gateway_call("GET", "/sessions").get("sessions") or []):
+                    if (s.get("project") or "") == name:
+                        project_sids.add(s.get("id"))
+            except Exception as e:  # noqa: BLE001
+                print(f"[bridge] replica sessions via gateway failed: {e}", file=sys.stderr)
+        else:
+            for s in manager.sessions.values():
+                if (s.project or "") == name:
+                    project_sids.add(s.id)
         for sess_dir in sorted(uploads_root.iterdir()):
             if not sess_dir.is_dir():
                 continue
@@ -4354,37 +4682,40 @@ async def skills_pull_update_handler(request):
         return json_ok({"success": False, "error": str(e)})
 
 
+def _app_support_root():
+    """持久根目录：bundle 下为 ~/Library/Application Support/GenericAgent（与 app/ 同级，
+    升级不被 clone 覆盖）；dev 下为仓库根（一切仍在仓库内）。"""
+    ga = Path(manager.ga_root)
+    if os.environ.get("GA_BUILD_ID"):
+        return str(ga.parent)
+    return str(ga)
+
+
 def _skills_external_dir():
-    """skills_external 目录（所有安装的 skill 仓库都放这里）"""
-    return os.path.join(manager.ga_root, "skills_external")
+    """用户安装的 skill/plugin 仓库放这里。
+
+    bundle 下位于 app-support/ext_plugins（app/ 之外，升级不丢）；dev 下为 <仓库>/ext_plugins。
+    """
+    return os.path.join(_app_support_root(), "ext_plugins")
+
+
+def _ga_config():
+    """The skill/plugin/mcp config store. Imported lazily so ga_root is on the path."""
+    import sys as _sys
+    if manager.ga_root not in _sys.path:
+        _sys.path.insert(0, manager.ga_root)
+    import ga_config
+    return ga_config
 
 
 def _skills_read_full_config():
-    """读取完整 config dict（保留 plugin_dirs/enabled 等字段）"""
-    import sys as _sys
-    _ga_root = manager.ga_root
-    if _ga_root not in _sys.path:
-        _sys.path.insert(0, _ga_root)
-    from plugins.skills_loader import _CONFIG_PATH
-    if os.path.isfile(_CONFIG_PATH):
-        try:
-            with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {"skills_roots": [], "plugin_dirs": [], "enabled": True}
+    """完整 config dict（skills_roots / plugin_dirs / enabled / disabled_skills）"""
+    return _ga_config().skills_config()
 
 
 def _skills_write_full_config(cfg: dict):
-    """写回 config 并 touch 刷新 skills_loader 缓存"""
-    import sys as _sys
-    _ga_root = manager.ga_root
-    if _ga_root not in _sys.path:
-        _sys.path.insert(0, _ga_root)
-    from plugins.skills_loader import _CONFIG_PATH
-    with open(_CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2, ensure_ascii=False)
-    os.utime(_CONFIG_PATH, None)
+    """写回 config；配置版本号随之推进，loader 的缓存据此失效"""
+    _ga_config().save_skills_config(cfg)
 
 
 def _do_skills_install(name: str, url: str) -> dict:
@@ -4533,7 +4864,12 @@ async def skills_uninstall_handler(request):
 
 def _do_plugins_list():
     """列出内置 plugins/*.py 与外部 Claude plugins"""
+    import sys
     ga_root = str(DEFAULT_GA_ROOT)
+    # bridge 进程必须把 GA 根目录加入 sys.path，否则 import plugins 失败
+    # （其它 handler 都通过 ensure_ga_import_path / manager.ga_root 注入，本函数独立调用需手动补）
+    if ga_root not in sys.path:
+        sys.path.insert(0, ga_root)
     result = {"builtin": [], "external": [], "plugin_dirs": [], "external_error": None}
     plugins_dir = os.path.join(ga_root, "plugins")
     if os.path.isdir(plugins_dir):
@@ -4574,6 +4910,30 @@ def _do_plugins_list():
     return result
 
 
+def _resolve_plugin_path(path):
+    """相对路径按 manager.ga_root 再按 app-support 根解析；绝对路径原样返回。"""
+    if os.path.isabs(path):
+        return path
+    for base in (manager.ga_root, _app_support_root()):
+        cand = os.path.join(base, path)
+        if os.path.isdir(cand):
+            return cand
+    return os.path.join(_app_support_root(), path)
+
+
+def _rel_or_abs(path):
+    """尽量把绝对路径转成相对 ga_root / app-support 根的相对路径，跨机器可移植。"""
+    best = path
+    for base in (manager.ga_root, _app_support_root()):
+        try:
+            rel = os.path.relpath(path, base)
+        except Exception:
+            continue
+        if not rel.startswith("..") and (best is path or len(rel) < len(best)):
+            best = rel
+    return best
+
+
 def _do_plugins_dir_update(action, path):
     """添加/移除 plugin_dir（写回 skills_config.json）"""
     path = (path or "").strip()
@@ -4611,12 +4971,12 @@ def _do_plugins_dir_update(action, path):
                 if os.path.isdir(target):
                     _shutil.rmtree(target, ignore_errors=True)
                 return {"success": False, "error": "git clone 超时（120s）", "status": 500}
-            path = target
+            path = _rel_or_abs(target)
         else:
-            if not os.path.isabs(path):
-                path = os.path.abspath(os.path.join(str(DEFAULT_GA_ROOT), path))
-            if not os.path.isdir(path):
-                return {"success": False, "error": "目录不存在: " + path, "status": 400}
+            resolved = _resolve_plugin_path(path)
+            if not os.path.isdir(resolved):
+                return {"success": False, "error": "目录不存在: " + resolved, "status": 400}
+            path = _rel_or_abs(resolved)
         if path in dirs:
             return {"success": False, "error": "该目录已存在", "status": 400}
         dirs.append(path)
@@ -4761,36 +5121,18 @@ async def experts_toggle_handler(request):
 # ─── MCP Server 管理 API ─────────────────────────────────────────────────────────
 
 def _mcp_config_path():
-    """返回全局 MCP 配置文件路径（优先 GA_ROOT/mcp_servers.json）。"""
-    p = os.path.join(manager.ga_root, "mcp_servers.json")
-    if os.path.isfile(p):
-        return p
-    alt = os.path.expanduser("~/.config/ga/mcp_servers.json")
-    if os.path.isfile(alt):
-        return alt
-    return p  # 默认写 GA_ROOT
+    """Where the config lives, for display in the UI."""
+    return os.path.join(manager.ga_root, "temp", "ga_store.duckdb") + " (mcp_servers)"
 
 
 def _mcp_read_config():
     """读取全局 MCP 配置。"""
-    path = _mcp_config_path()
-    if not os.path.isfile(path):
-        return {}
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        servers = data.get("mcpServers", data) if isinstance(data, dict) else {}
-        return {k: v for k, v in servers.items() if isinstance(v, dict)} if isinstance(servers, dict) else {}
-    except Exception:
-        return {}
+    return _ga_config().mcp_servers()
 
 
 def _mcp_write_config(servers: dict):
     """写入全局 MCP 配置。"""
-    path = _mcp_config_path()
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({"mcpServers": servers}, f, ensure_ascii=False, indent=2)
+    _ga_config().save_mcp_servers(servers)
 
 
 async def mcp_list_handler(request):
@@ -5916,6 +6258,12 @@ def _tok_file() -> Path:
         _TOKEN_HISTORY_FILE = Path(manager.ga_root) / "temp" / "desktop_token_history.json"
     return _TOKEN_HISTORY_FILE
 
+# NOTE: token history intentionally stays a JSON file even in duckdb mode. The
+# /token-history route is not a gateway/kernel route -- it falls through to the legacy
+# bridge, which runs as a "replica" process and cannot open the DuckDB file (exclusive
+# lock). Keeping it a file preserves a single source of truth. It is tiny and written
+# on demand, so it is not part of the performance problem. Move it into the DB only
+# once the legacy bridge fallback is retired and the kernel serves this route.
 async def get_token_history_handler(request):
     f = _tok_file()
     if f.is_file():
@@ -5930,6 +6278,25 @@ async def post_token_history_handler(request):
     data = await read_json(request)
     f = _tok_file()
     f.parent.mkdir(parents=True, exist_ok=True)
+    new_hist = data.get("history") or []
+    # 防护：绝不允许用空历史覆盖已有的非空历史（前端未拉取到旧数据时会回写空数组，
+    # 曾导致全部用量记录被抹掉）。
+    if not new_hist and f.is_file():
+        try:
+            old = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            old = {}
+        if old.get("history"):
+            return json_ok({"ok": False, "skipped": "refuse_empty_overwrite",
+                            "kept": len(old.get("history") or [])})
+    # 覆盖前保留一份上一版快照，便于事故回滚
+    if f.is_file():
+        try:
+            prev = f.read_text(encoding="utf-8")
+            if len(prev) > 2:
+                (f.parent / "desktop_token_history.json.bak").write_text(prev, encoding="utf-8")
+        except Exception:
+            pass
     f.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     return json_ok({"ok": True})
 
@@ -5971,11 +6338,65 @@ async def remove_workspace_handler(request):
     return json_ok({"ok": True})
 
 
+def _gateway_call(method: str, path: str, body: Optional[dict] = None) -> dict:
+    """Replica-mode helper: read/write session state via the gateway (kernel owner).
+
+    In replica mode this process keeps NO session state (the kernel owns the DuckDB
+    store), so session-scoped legacy routes must round-trip through the gateway's
+    explicit /session routes. Localhost only; bypasses HTTP(S)_PROXY env vars.
+    """
+    port = os.environ.get("GA_GATEWAY_PORT", "14168")
+    url = f"http://127.0.0.1:{port}{path}"
+    import urllib.request
+    data = json.dumps(body, ensure_ascii=False).encode() if body is not None else None
+    req = urllib.request.Request(url, data=data, method=method,
+                                 headers={"Content-Type": "application/json"})
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with opener.open(req, timeout=10) as r:
+        return json.loads(r.read().decode())
+
+
+def _session_workspace_name(sid: str) -> Optional[str]:
+    """Resolve a session's bound workspace name in any storage mode.
+
+    Returns None if the session does not exist; '' if it has no workspace.
+    """
+    if manager._storage_mode == "replica":
+        try:
+            snap = _gateway_call("GET", f"/session/{sid}")
+        except Exception:
+            return None
+        sess_d = snap.get("session", snap) if isinstance(snap, dict) else {}
+        if not sess_d or not sess_d.get("id"):
+            return None
+        return sess_d.get("workspace") or ""
+    with manager.lock:
+        sess = manager.sessions.get(sid)
+    return None if sess is None else (sess.workspace or "")
+
+
+def _session_workspace_bind(sid: str, name: str) -> bool:
+    """Persist a session's workspace binding in any storage mode."""
+    if manager._storage_mode == "replica":
+        try:
+            r = _gateway_call("PATCH", f"/session/{sid}", {"workspace": name})
+            return bool(r.get("ok"))
+        except Exception as e:  # noqa: BLE001
+            print(f"[bridge] replica workspace bind via gateway failed: {e}", file=sys.stderr)
+            return False
+    sess = manager.get_session(sid)
+    sess.workspace = name
+    sess.updated_at = time.time()
+    manager._save_session(sess)
+    return True
+
+
 async def session_workspace_get_handler(request):
     """GET /session/{sid}/workspace → get workspace bound to session."""
     sid = request.match_info["sid"]
-    sess = manager.get_session(sid)
-    ws_name = sess.workspace
+    ws_name = _session_workspace_name(sid)
+    if ws_name is None:
+        return json_ok({"error": f"session not found: {sid}"}, status=404)
     if not ws_name:
         return json_ok({"workspace": None})
     ent = workspace_cmd.registry_load().get(ws_name) or {}
@@ -5985,7 +6406,6 @@ async def session_workspace_get_handler(request):
 async def session_workspace_set_handler(request):
     """POST /session/{sid}/workspace → bind workspace to session. Body: {name}."""
     sid = request.match_info["sid"]
-    sess = manager.get_session(sid)
     data = await read_json(request)
     name = (data or {}).get("name", "")
     if not name:
@@ -5998,20 +6418,17 @@ async def session_workspace_set_handler(request):
         r = workspace_cmd.prepare(path)
     except Exception as e:
         return json_ok({"error": str(e)}, status=500)
-    sess.workspace = name
-    sess.updated_at = time.time()
+    if not _session_workspace_bind(sid, name):
+        return json_ok({"error": f"failed to bind workspace for session: {sid}"}, status=500)
     workspace_cmd.registry_upsert(name, path)
-    manager._persist()
     return json_ok({"ok": True, "workspace": {"name": name, "path": path}})
 
 
 async def session_workspace_off_handler(request):
     """POST /session/{sid}/workspace/off → unbind workspace from session."""
     sid = request.match_info["sid"]
-    sess = manager.get_session(sid)
-    sess.workspace = ""
-    sess.updated_at = time.time()
-    manager._persist()
+    if not _session_workspace_bind(sid, ""):
+        return json_ok({"error": f"failed to unbind workspace for session: {sid}"}, status=500)
     return json_ok({"ok": True})
 
 

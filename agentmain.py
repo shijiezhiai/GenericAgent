@@ -223,7 +223,7 @@ class GenericAgent:
                 # 关闭所有 LSP client 进程（fail-open）
                 try:
                     from plugins.plugin_loader import stop_all_lsp
-                    stop_all_lsp()
+                    stop_all_lsp(getattr(self, 'lsp_clients', None))
                 except Exception as _e:
                     print(f"[LSP] stop failed: {_e}")
 

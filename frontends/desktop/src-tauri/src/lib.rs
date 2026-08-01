@@ -75,17 +75,51 @@ fn app_support_dir() -> Option<PathBuf> {
 }
 
 /// 递归复制目录（把只读的包内 runtime/ 克隆到可写的 app-support）。
-fn clone_dir(src: &Path, dst: &Path) -> bool {
+///
+/// 必须用 tar 管道做逐字节保真的复制：`cp -R` 在 macOS 上会把
+/// `bin/python3` 这种符号链接物化为普通文件，且对 relocatable 的
+/// python-build-standalone 偶发复制不全，导致克隆出的 python 报
+/// `sys.prefix='/install'` 且 `No module named 'encodings'`，进而
+/// `pip install` 退出码 1、prepare 失败、:14168 永不监听。
+/// tar 管道完整保留符号链接与元数据，克隆出的 python 与源一致。
+/// 克隆 src -> dst。
+/// - `exclude` 为空：整目录克隆（先清空 dst 再 tar 字节级复制），用于无用户数据的 python 等。
+/// - `exclude` 非空：合并模式 —— tar 用 `--exclude` 跳过这些条目，dst 中已存在的同名条目
+///   （用户数据目录 temp/、sche_tasks/、memory/、mykey.py、.file_favorites.json 等）**原样保留，
+///   永不被删除或覆盖**。app 升级克隆必须用此模式，否则会误删用户数据。
+fn clone_dir(src: &Path, dst: &Path, exclude: &[&str]) -> bool {
     // dst 的父目录（如 ~/Library/Application Support/GenericAgent）可能不存在，
-    // 必须先创建，否则 cp -R src dst 因父缺失直接失败。
+    // 必须先创建，否则 tar 解包因目标不存在直接失败。
     if let Some(parent) = dst.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let _ = std::fs::remove_dir_all(dst);
-    Command::new("cp")
-        .arg("-R")
-        .arg(src)
-        .arg(dst)
+    let script = if exclude.is_empty() {
+        // 整拷：彻底清空 dst 后字节级复制
+        format!(
+            "rm -rf '{}' && mkdir -p '{}' && tar -C '{}' -cf - . | tar -C '{}' -xf -",
+            dst.display(),
+            dst.display(),
+            src.display(),
+            dst.display()
+        )
+    } else {
+        // 合并：排除用户数据条目，dst 原有这些目录/文件原样保留
+        let excl = exclude
+            .iter()
+            .map(|e| format!("--exclude={}", e))
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!(
+            "mkdir -p '{}' && tar -C '{}' -cf - {} . | tar -C '{}' -xf -",
+            dst.display(),
+            src.display(),
+            excl,
+            dst.display()
+        )
+    };
+    Command::new("sh")
+        .arg("-c")
+        .arg(&script)
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
@@ -199,25 +233,38 @@ fn ensure_writable_runtime() -> Option<PathBuf> {
     };
     // python 只在「不存在或从未成功 prepare」时克隆，避免覆盖已装 wheels 的可写副本
     // （否则每次升级重克隆都会清掉 wheels，还得重装）。prepare 成功标记见 prepared_marker()。
+    // 升级(app_need_copy)时也一并刷新 python 克隆：bundle 是构建期预装好的(baked)，
+    // 新版本可能带不同 wheels，必须让 app-support/python 跟进。
     let py_need_copy = !dst_py.join("bin").join("python3").exists()
-        || !dst_py.join(".prepared").exists();
+        || !dst_py.join(".prepared").exists()
+        || app_need_copy;
 
     let mut ok = true;
 
     if app_need_copy {
-        // 升级重克隆会整体删掉 dst_app，但其中的用户数据（会话历史 temp/、定时任务、
-        // 运行期演化的 memory/、mykey.py 等）必须跨版本保留：先挪到 hold 目录，克隆后挪回。
-        let hold = base.join(".upgrade-hold");
-        let _ = std::fs::remove_dir_all(&hold);
-        let preserved = stash_user_data(&dst_app, &hold);
-        if !clone_dir(&src_app, &dst_app) {
+        // 升级重克隆：用「合并模式」只把新源码覆盖进 dst_app，用户数据目录
+        // (temp/sche_tasks/memory/mykey.py/.file_favorites.json) 通过 tar --exclude 永久跳过，
+        // 原样保留、永不被删除。这样升级绝不会误删用户会话/项目数据。
+        // 升级前先暂存旧配置里用户自定义的 plugin_dirs/skills_roots：clone（合并模式）会用
+        // 包内种子覆盖 app/plugins/skills_config.json，之后由 Python 端合并进持久配置
+        // app-support/skills_config.json（见 plugins/skills_loader._migrate_legacy_config）。
+        let legacy_cfg = dst_app.join("plugins").join("skills_config.json");
+        let migrate_stash = base.join(".skills_config_migrate.json");
+        if legacy_cfg.is_file() {
+            let _ = std::fs::copy(&legacy_cfg, &migrate_stash);
+        }
+        // 同理暂存用户 plugin 选项值（plugin_configs.json，见 plugin_loader._migrate_legacy_plugin_configs）
+        let legacy_pcfg = dst_app.join("plugins").join("plugin_configs.json");
+        let pcfg_stash = base.join(".plugin_configs_migrate.json");
+        if legacy_pcfg.is_file() {
+            let _ = std::fs::copy(&legacy_pcfg, &pcfg_stash);
+        }
+        if !clone_dir(&src_app, &dst_app, USER_DATA_ENTRIES) {
             ok = false;
         }
-        restore_user_data(&hold, &dst_app, &preserved);
-        let _ = std::fs::remove_dir_all(&hold);
     }
 
-    if py_need_copy && !clone_dir(&src_py, &dst_py) {
+    if py_need_copy && !clone_dir(&src_py, &dst_py, &[]) {
         ok = false;
     }
 
@@ -633,7 +680,18 @@ fn run_offline_prepare(project_dir: &str, report: &dyn Fn(i32, &str)) -> Result<
         c
     };
 
-    cmd.stdout(Stdio::piped()).stderr(Stdio::null());
+    // prepare 子进程的输出默认被吞掉，真机排查时两眼一抹黑。改为把 stderr 落盘到
+    // ~/Library/Application Support/GenericAgent/prepare.log，stdout 仍取 GAPROGRESS。
+    let stderr = if let Some(p) = dirs::data_dir().map(|d| d.join("GenericAgent").join("prepare.log")) {
+        let _ = std::fs::create_dir_all(p.parent().unwrap());
+        match std::fs::File::create(&p) {
+            Ok(f) => Stdio::from(f),
+            Err(_) => Stdio::null(),
+        }
+    } else {
+        Stdio::null()
+    };
+    cmd.stdout(Stdio::piped()).stderr(stderr);
     sanitize_bundle_env(&mut cmd);
     #[cfg(windows)]
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
@@ -713,11 +771,12 @@ fn wait_for_port(port: u16, timeout: Duration) -> bool {
     false
 }
 
-/// Phase 2: run the Rust/axum gateway in-process (Tauri's async runtime) and supervise only the
-/// Python kernel subprocess. The kernel spawns the legacy `desktop_bridge.py` on `GA_LEGACY_PORT`
-/// for any not-yet-migrated routes (strangler fallback), so the kernel is the only Python
-/// subprocess Tauri manages directly. Once every route is migrated (plan 2.1) the legacy fallback
-/// is removed and the kernel becomes the sole subprocess.
+/// Phase 2: run the Rust/axum gateway in-process (Tauri's async runtime). The gateway supervises
+/// BOTH the Python kernel and the legacy `desktop_bridge.py` as sibling subprocesses: the kernel
+/// owns the DuckDB store and publishes it on a fixed loopback config port, and the bridge is a
+/// replica that reverse-proxies not-yet-migrated routes (`/api/*`, …). The bridge survives a kernel
+/// crash and reconnects to the kernel's config server after a respawn — that is why the gateway,
+/// not the kernel, owns the bridge lifecycle.
 fn spawn_gateway(python_path: &str, project_dir: &str) {
     let cfg = GatewayConfig {
         root: PathBuf::from(project_dir),
@@ -727,6 +786,7 @@ fn spawn_gateway(python_path: &str, project_dir: &str) {
         grok_port: 15433, // supergrok_proxy upstream, folded as /proxy
         fallback: String::new(),
         legacy_port: 14169,
+        config_port: 14170,
         kernel_python: python_path.to_string(),
         kernel_data_dir: String::new(), // production: kernel shares the real project root
     };

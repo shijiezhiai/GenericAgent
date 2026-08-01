@@ -27,6 +27,7 @@ async fn main() {
         grok_port: parse_port("GA_GROK_PORT", 15433),
         fallback: std::env::var("GA_FALLBACK_URL").unwrap_or_default(),
         legacy_port: parse_port("GA_LEGACY_PORT", 14169),
+        config_port: parse_port("GA_CONFIG_PORT", 14170),
         kernel_python: std::env::var("GA_KERNEL_PYTHON").unwrap_or_else(|_| "python3".to_string()),
         kernel_data_dir: std::env::var("GA_KERNEL_ROOT").unwrap_or_default(),
     };

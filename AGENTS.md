@@ -88,7 +88,7 @@ GenericAgent/
 │   ├── stapp.py         # Streamlit Web UI（launch.pyw 启动）
 │   ├── tuiapp.py / tuiapp_v2.py / tui_v3.py  # 终端 TUI（三代）
 │   ├── desktop_bridge.py + desktop/ (Tauri)  # Tauri 桌面应用
-│   ├── conductor.py + conductor.html         # 多 IM 聚合调度
+│   ├── conductor.py     # 总管 agent + subagent 池 + IM 信号（headless API，UI 在桌面 App「协作」页）
 │   ├── tgapp / qqapp / fsapp / dcapp / wechatapp / wecomapp / dingtalkapp.py  # 各 IM bot
 │   ├── slash_cmds.py    # /update /autorun /morphling /goal /hive /scheduler 命令构建
 │   └── chatapp_common.py / cost_tracker.py / plan_state.py / remote_channels.py

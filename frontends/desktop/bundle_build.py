@@ -12,6 +12,7 @@
   python3 bundle_build.py --only app      # 仅复制源码
   python3 bundle_build.py --only python   # 仅下载嵌入式 python
   python3 bundle_build.py --only wheels   # 仅收集 wheels
+  python3 bundle_build.py --only bake     # 仅把已收集 wheels 预装进 bundle python
   python3 bundle_build.py --clean         # 清掉 runtime/ 重来
 
 设计约束（与 src-tauri/src/lib.rs 对齐）：
@@ -40,7 +41,7 @@ STANDALONE_URL = (
 CORE_DEPS = [
     "requests", "beautifulsoup4", "bottle", "simple-websocket-server",
     "aiohttp", "fastapi", "uvicorn", "websockets",
-    "psutil", "pillow", "pyyaml", "aiofiles", "python-dotenv", "markdown",
+    "psutil", "pillow", "pyyaml", "aiofiles", "python-dotenv", "markdown", "duckdb",
 ]
 
 # 复制源码时的排除项
@@ -126,6 +127,15 @@ def step_app():
             src = os.path.join(root, f)
             if _skipped(src):
                 continue
+            # 跳过特殊文件（socket/pipe/device 等），它们不可用 copy2 复制
+            try:
+                st = os.lstat(src)
+                import stat as _stat
+                if _stat.S_ISSOCK(st.st_mode) or _stat.S_ISFIFO(st.st_mode) \
+                        or _stat.S_ISCHR(st.st_mode) or _stat.S_ISBLK(st.st_mode):
+                    continue
+            except OSError:
+                continue
             tgt = os.path.join(dst, rel, f)
             os.makedirs(os.path.dirname(tgt), exist_ok=True)
             shutil.copy2(src, tgt)
@@ -157,6 +167,80 @@ def step_wheels():
     )
     n = len([f for f in os.listdir(wheels_dir) if f.endswith(".whl")])
     log(f"wheels 就绪: {n} 个")
+
+
+def _parse_wheel(fname: str):
+    """解析 wheel 文件名 -> (规范包名小写, 版本)，纯标准库，不依赖 packaging。"""
+    base = fname[:-4] if fname.endswith(".whl") else fname
+    parts = base.split("-")
+    if len(parts) < 5:
+        return None
+    return parts[0].lower(), parts[1]
+
+
+def _verkey(v: str):
+    out = []
+    for x in v.split("."):
+        out.append((0, x.zfill(8)) if x.isdigit() else (1, x))
+    return out
+
+
+def _dedup_wheels(wheels_dir: str):
+    """同一包只保留最新版本，旧版本挪到 _dupes/，避免 pip install *.whl 报 ResolutionImpossible。"""
+    wheels = [os.path.join(wheels_dir, f)
+              for f in os.listdir(wheels_dir) if f.endswith(".whl")]
+    best = {}
+    for f in wheels:
+        p = _parse_wheel(os.path.basename(f))
+        if not p:
+            continue
+        name, ver = p
+        if name not in best or _verkey(ver) > _verkey(best[name]):
+            best[name] = ver
+    keep = set()
+    for f in wheels:
+        p = _parse_wheel(os.path.basename(f))
+        if not p:
+            keep.add(f)
+            continue
+        name, ver = p
+        if ver == best[name]:
+            keep.add(f)
+    dup = os.path.join(wheels_dir, "_dupes")
+    for f in wheels:
+        if f not in keep:
+            os.makedirs(dup, exist_ok=True)
+            os.rename(f, os.path.join(dup, os.path.basename(f)))
+    log(f"wheels 去重后保留 {len(keep)} 个")
+
+
+def step_bake():
+    """构建期把 wheels 离线装进 bundle 自带 python，并写 .prepared 标记。
+
+    真机首次打开时 clone_dir(tar) 会把「已装好包」的 python 整体克隆到
+    app-support/python，故不再触发 run_offline_prepare —— 没有首次启动的 pip
+    子进程，也就没有 SIGKILL(137) / encodings  relocation 这类脆点。
+    install_macos.sh 仍保留作为强制重装的兜底（用户删掉 .prepared 时）。"""
+    py = os.path.join(RUNTIME, "python", "bin", "python3")
+    if not os.path.exists(py):
+        step_python()
+    wheels_dir = os.path.join(RUNTIME, "wheels")
+    if not os.path.isdir(wheels_dir) or not any(
+        f.endswith(".whl") for f in os.listdir(wheels_dir)
+    ):
+        step_wheels()
+    _dedup_wheels(wheels_dir)
+    wheels = [os.path.join(wheels_dir, f)
+              for f in os.listdir(wheels_dir) if f.endswith(".whl")]
+    log(f"构建期预装 {len(wheels)} 个 wheel 进 bundle python (免去首次启动装包)")
+    subprocess.run(
+        [py, "-m", "pip", "install", "--no-index", "--upgrade", *wheels],
+        check=True,
+    )
+    marker = os.path.join(RUNTIME, "python", ".prepared")
+    with open(marker, "w") as f:
+        f.write("baked-at-build\n")
+    log("bundle python 已预装并写 .prepared 标记")
 
 
 INSTALL_SH = r"""#!/usr/bin/env bash
@@ -229,7 +313,7 @@ def gen_install():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", choices=["app", "python", "wheels"], default=None)
+    ap.add_argument("--only", choices=["app", "python", "wheels", "bake"], default=None)
     ap.add_argument("--clean", action="store_true")
     args = ap.parse_args()
 
@@ -244,6 +328,8 @@ def main():
         step_app()
     if only in (None, "wheels"):
         step_wheels()
+    if only in (None, "bake"):
+        step_bake()
     gen_install()
     log("全部完成 -> " + RUNTIME)
 

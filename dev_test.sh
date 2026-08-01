@@ -16,8 +16,8 @@
 #   ./dev_test.sh status     查看 dev 实例是否在跑
 #   ./dev_test.sh stop       停掉 dev 实例（含孤儿 worker）
 #
-# 端口约定（全部避开日常 .app 的 14168/8900/45762）:
-#   gateway 25168(单端口) / legacy-bridge 25169(仅内部) / conductor 29900 / cdp 28766 / supergrok 25433
+# 端口约定（全部避开日常 .app 的 14168/8900/45762/14170）:
+#   gateway 25168(单端口) / legacy-bridge 25169(仅内部) / config 25170(内核 store loopback) / conductor 29900 / cdp 28766 / supergrok 25433
 # 环境:
 #   GA_NO_IM_AUTOSTART=1  不拉起 IM 机器人，避免与日常 .app 重复收发
 # 验证提醒: 本机 shell 有 HTTP_PROXY，curl 必须 --noproxy '*'
@@ -32,6 +32,7 @@ DEV_CONDUCTOR_PORT="${DEV_CONDUCTOR_PORT:-29900}"
 DEV_CDP_PORT="${DEV_CDP_PORT:-28766}"
 DEV_GROK_PORT="${DEV_GROK_PORT:-25433}"
 DEV_SCHED_LOCK_PORT="${DEV_SCHED_LOCK_PORT:-45764}"
+DEV_CONFIG_PORT="${DEV_CONFIG_PORT:-25170}"
 PY="$SRC_DIR/.venv/bin/python"
 
 if [[ ! -x "$PY" ]]; then
@@ -114,6 +115,7 @@ case "${1:-start}" in
     export GA_KERNEL_PYTHON="$PY"
     export GA_GATEWAY_PORT="$DEV_GATEWAY_PORT"
     export GA_LEGACY_PORT="$DEV_LEGACY_PORT"
+    export GA_CONFIG_PORT="$DEV_CONFIG_PORT"
     export GA_CONDUCTOR_PORT="$DEV_CONDUCTOR_PORT"
     export GA_CDP_PORT="$DEV_CDP_PORT"
     export GA_GROK_PORT="$DEV_GROK_PORT"

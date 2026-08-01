@@ -1,14 +1,15 @@
 {
   "skills_roots": [
-    "/Users/mayangyang/code/ai/GenericAgent/skills_external/ponytail",
-    "/Users/mayangyang/code/ai/GenericAgent/skills_external/open-codex-computer-use",
-    "/Users/mayangyang/code/ai/GenericAgent/skills_external/bili-gitlab-pipeline",
-    "/Users/mayangyang/code/ai/GenericAgent/skills_external/anthropic-skills",
-    "/Users/mayangyang/code/ai/GenericAgent/skills_external/flink-skills"
+    "skills_external/ponytail",
+    "skills_external/open-codex-computer-use",
+    "skills_external/bili-gitlab-pipeline",
+    "skills_external/anthropic-skills",
+    "skills_external/flink-skills",
+    "skills_external/obsidian-agent"
   ],
   "plugin_dirs": [
-    "/Users/mayangyang/code/ai/GenericAgent/temp/flink-diagnostics-plugin",
-    "/Users/mayangyang/code/ai/GenericAgent/skills_external/claude-plugins"
+    "skills_external/claude-plugins",
+    "ext_plugins/flink-diagnostics-plugin"
   ],
   "enabled": true,
   "disabled_skills": [

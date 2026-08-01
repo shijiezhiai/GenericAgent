@@ -99,59 +99,79 @@ legacy_child = None
 
 
 def _maybe_spawn_legacy_bridge():
+    """Deprecated: the legacy bridge is now spawned by the gateway (sibling of the
+    kernel) so it survives a kernel crash. This is a no-op; the gateway owns its
+    lifecycle. Kept only so an older gateway that still passes GA_LEGACY_PORT does
+    not spawn a stray grandchild."""
     port = int(os.environ.get("GA_LEGACY_PORT", "0") or "0")
-    if port <= 0:
-        return None
-    legacy = REPO_ROOT / "frontends" / "desktop_bridge.py"
-    if not legacy.exists():
-        print(f"[kernel] legacy bridge not found at {legacy}; skipping fallback", file=sys.stderr)
-        return None
-    env = dict(os.environ)
-    env["BRIDGE_PORT"] = str(port)
-    # Conductor port: prefer the one the gateway forwarded (GA_CONDUCTOR_PORT), else default 8900.
-    env["CONDUCTOR_PORT"] = os.environ.get("GA_CONDUCTOR_PORT", "8900")
-    # Don't spawn IM bots in the fallback unless explicitly requested.
-    env.setdefault("GA_NO_IM_AUTOSTART", "1")
-    # Redirect the legacy bridge's stdout/stderr to a log file so it does NOT inherit the kernel's
-    # stdout (which is the JSON-RPC pipe to the gateway — inheriting it would corrupt the protocol).
-    log_path = REPO_ROOT / "temp" / "legacy_bridge.log"
-    try:
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        logf = open(log_path, "a")
-    except Exception:
-        logf = None
-    try:
-        child = subprocess.Popen(
-            [sys.executable, str(legacy)],
-            cwd=str(REPO_ROOT),
-            env=env,
-            stdout=logf,
-            stderr=subprocess.STDOUT,
-        )
-        print(f"[kernel] spawned legacy bridge on :{port} (pid={child.pid}); log={log_path}", file=sys.stderr)
-        return child
-    except Exception as e:
-        print(f"[kernel] failed to spawn legacy bridge: {e}", file=sys.stderr)
-        if logf is not None:
-            logf.close()
-        return None
+    if port:
+        print(f"[kernel] GA_LEGACY_PORT={port} ignored: bridge is owned by the gateway now",
+              file=sys.stderr)
+    return None
 
 
 def _cleanup_legacy():
-    global legacy_child
-    if legacy_child is not None:
+    """No-op: the gateway owns the bridge lifecycle now, the kernel does not."""
+    return None
+
+
+def _reap_port(port):
+    """Kill a process holding `port` that is not us (e.g. a stale config server
+    left by a kernel that was SIGKILLed before its atexit ran). Only ever kills a
+    process whose command line references our own repo, so we never touch strangers."""
+    if os.name == "nt":
+        return
+    try:
+        out = subprocess.run(["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"],
+                             capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return
+    for pid in [p for p in out.split() if p.isdigit()]:
+        if int(pid) == os.getpid():
+            continue
         try:
-            legacy_child.terminate()
+            cmd = subprocess.run(["ps", "-p", pid, "-o", "command="],
+                                 capture_output=True, text=True, timeout=5).stdout
         except Exception:
-            pass
+            continue
+        if "frontends" not in cmd and "GenericAnt" not in cmd:
+            print(f"[kernel] :{port} held by pid {pid} ({cmd.strip()[:80]}); not ours, leaving it",
+                  file=sys.stderr)
+            continue
         try:
-            legacy_child.wait(timeout=5)
-        except Exception:
-            try:
-                legacy_child.kill()
-            except Exception:
-                pass
-        legacy_child = None
+            os.kill(int(pid), signal.SIGKILL)
+            print(f"[kernel] reaped stale pid {pid} on :{port}", file=sys.stderr)
+        except Exception as e:
+            print(f"[kernel] failed to reap pid {pid}: {e}", file=sys.stderr)
+    time.sleep(0.3)
+
+
+def _start_config_server():
+    """Publish the skill/plugin/mcp store to processes that cannot open the DB.
+
+    DuckDB takes an exclusive file lock and this process holds it. The gateway now
+    spawns the legacy bridge as a *sibling* process (not our grandchild); that bridge
+    is a non-owning replica that must still reach the store. We attach our live store
+    and serve it over a FIXED loopback port (GA_CONFIG_PORT) so the bridge — which the
+    gateway launches independently and may outlive us — always has a stable address to
+    reconnect to after a kernel crash/restart. Returns the bound port, 0 when there is
+    nothing to share."""
+    store = getattr(manager, "store", None)
+    if store is None:
+        return 0
+    port = int(os.environ.get("GA_CONFIG_PORT", "0") or "0")
+    if port:
+        _reap_port(port)
+    try:
+        import ga_config
+        ga_config.attach(store)
+        bound = ga_config.serve(port=port)
+        atexit.register(ga_config.stop_serving)
+        print(f"[kernel] config store server on :{bound}", file=sys.stderr)
+        return bound
+    except Exception as e:
+        print(f"[kernel] config store server unavailable: {e}", file=sys.stderr)
+        return 0
 
 
 # Optional root isolation (smoketest / multi-instance). Overrides ga_root and clears
@@ -405,15 +425,19 @@ def main():
     if root:
         _apply_root(root)
 
-    global legacy_child
-    legacy_child = _maybe_spawn_legacy_bridge()
-    atexit.register(_cleanup_legacy)
+    # The gateway spawns and owns the legacy bridge as a sibling process, so the
+    # kernel no longer manages its lifecycle. We only publish the store over a fixed
+    # loopback port so that bridge (a non-owning replica) can reach it across our
+    # own crashes/restarts.
+    config_port = _start_config_server()
+    if config_port:
+        print(f"[kernel] ready; config store published on :{config_port} for the bridge",
+              file=sys.stderr)
 
     # handshake so a gateway knows the kernel is ready on stdio
     _notify("kernel.ready", {"gaRoot": manager.ga_root})
 
-    try:
-        for raw in sys.stdin:
+    for raw in sys.stdin:
             line = raw.strip()
             if not line:
                 continue
@@ -453,8 +477,6 @@ def main():
                 if rid is not None:
                     _write({"jsonrpc": "2.0", "id": rid, "error": {"code": -32000, "message": _extract_error(e)}})
                 print(f"[kernel] unhandled: {e}", file=sys.stderr)
-    finally:
-        _cleanup_legacy()
 
     sys.exit(0)
 

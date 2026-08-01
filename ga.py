@@ -10,7 +10,9 @@ from agent_loop import BaseHandler, StepOutcome, json_default
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 def safe_print(*args, **kwargs):
-    try: print(*args, **kwargs)
+    # 一律输出到 stderr。在桌面内核(kernel_server)中 sys.stdout 是 JSON-RPC 管道，
+    # 任何写向 stdout 的内容都会污染协议导致会话中断；kernel 自身日志也走 stderr。
+    try: print(*args, file=sys.stderr, **kwargs)
     except: pass
 
 def code_run(code, code_type="python", timeout=60, cwd=None, code_cwd=None, stop_signal=None, maxlen=10000, myprint=safe_print):
@@ -66,6 +68,7 @@ def code_run(code, code_type="python", timeout=60, cwd=None, code_cwd=None, stop
     try:
         process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
             bufsize=0, cwd=cwd, startupinfo=startupinfo,
             creationflags=0x08000000 if os.name == 'nt' else 0
         )
@@ -642,14 +645,23 @@ class GenericAgentHandler(BaseHandler):
         return StepOutcome(result, next_prompt=next_prompt)
 
     def _run_rg(self, cmd_args, cwd, timeout=30):
-        """Run ripgrep subprocess, return (stdout, stderr, returncode). Fallback to grep if rg missing."""
+        """Run ripgrep subprocess, return (stdout, stderr, returncode). Returns rg-not-found error if absent."""
         rg = shutil.which('rg')
+        if not rg:
+            # 打包桌面 app 的内核继承 launchd 极简 PATH(无 /opt/homebrew/bin)，
+            # shutil.which('rg') 会返回 None；直接探测常见安装位置兜底。
+            for _cand in ('/opt/homebrew/bin/rg', '/usr/local/bin/rg', '/usr/bin/rg',
+                          os.path.expanduser('~/homebrew/bin/rg')):
+                if os.path.isfile(_cand) and os.access(_cand, os.X_OK):
+                    rg = _cand
+                    break
         if rg:
             cmd = [rg] + cmd_args
         else:
             return None, "rg not found", -1
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd)
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
+                                  stdin=subprocess.DEVNULL)
             return proc.stdout, proc.stderr, proc.returncode
         except subprocess.TimeoutExpired:
             return "", "Search timed out (30s)", -1

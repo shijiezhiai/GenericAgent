@@ -620,7 +620,7 @@ const I18N = {
     'files.confirmDelete': '确定删除该文件？', 'files.empty': '暂无文件',
     'files.sizeB': 'B', 'files.sizeKB': 'KB', 'files.sizeMB': 'MB',
     'files.viewList': '列表视图', 'files.viewGrid': '网格视图', 'files.refresh': '刷新',
-    'files.menu': '更多操作', 'files.open': '打开文件', 'files.preview': '预览文件', 'files.openLocation': '打开文件位置', 'files.copy': '复制文件', 'files.sort.name': '名称', 'files.sort.size': '大小', 'files.sort.mtime': '修改时间', 'files.sort.created': '创建时间', 'files.sortAsc': '升序', 'files.sortDesc': '降序',
+    'files.menu': '更多操作', 'files.open': '打开文件', 'files.preview': '预览文件', 'files.preview.rendered': '渲染', 'files.preview.source': '源码', 'files.openLocation': '打开文件位置', 'files.copy': '复制文件', 'files.sort.name': '名称', 'files.sort.size': '大小', 'files.sort.mtime': '修改时间', 'files.sort.created': '创建时间', 'files.sortAsc': '升序', 'files.sortDesc': '降序',
     'files.confirmDelete': '确定删除该文件？', 'files.confirmDeleteMulti': '确定删除选中的 {n} 个文件？',
     'files.confirmCopy': '确定复制该文件？', 'files.copied': '已复制', 'files.copying': '复制中…',
     'files.selectMode': '选择', 'files.selectAll': '全选', 'files.deselectAll': '取消全选',
@@ -859,7 +859,7 @@ const I18N = {
     'files.confirmDelete': 'Delete this file?', 'files.empty': 'No files',
     'files.sizeB': 'B', 'files.sizeKB': 'KB', 'files.sizeMB': 'MB',
     'files.viewList': 'List View', 'files.viewGrid': 'Grid View', 'files.refresh': 'Refresh',
-    'files.menu': 'More actions', 'files.open': 'Open File', 'files.preview': 'Preview', 'files.openLocation': 'Reveal in Folder', 'files.copy': 'Duplicate', 'files.sort.name': 'Name', 'files.sort.size': 'Size', 'files.sort.mtime': 'Modified', 'files.sort.created': 'Created', 'files.sortAsc': 'Ascending', 'files.sortDesc': 'Descending',
+    'files.menu': 'More actions', 'files.open': 'Open File', 'files.preview': 'Preview', 'files.preview.rendered': 'Rendered', 'files.preview.source': 'Source', 'files.openLocation': 'Reveal in Folder', 'files.copy': 'Duplicate', 'files.sort.name': 'Name', 'files.sort.size': 'Size', 'files.sort.mtime': 'Modified', 'files.sort.created': 'Created', 'files.sortAsc': 'Ascending', 'files.sortDesc': 'Descending',
     'files.confirmDelete': 'Delete this file?', 'files.confirmDeleteMulti': 'Delete {n} selected files?',
     'files.confirmCopy': 'Duplicate this file?', 'files.copied': 'Duplicated', 'files.copying': 'Duplicating…',
     'files.selectMode': 'Select', 'files.selectAll': 'Select All', 'files.deselectAll': 'Deselect All',
@@ -2455,6 +2455,8 @@ function patchSession(sess, fields) {
 function isEmptyUntitledSession(sess) {
   if (!sess) return false;
   if ((sess.messages || []).length) return false;
+  // 未 hydrate 的会话本地 messages 为空，仅凭它判空会误删有历史的会话 → 用服务端事实兜底
+  if ((sess.rounds || []).length || (sess.msgSeq || 0) > 0) return false;
   const title = String(sess.title || '').trim();
   return (sess.untitled ?? true) && (!title || isAutoTitle(title));
 }
@@ -2485,6 +2487,9 @@ async function loadSessions(opts = {}) {
       merged.project = s.project || merged.project || '';
       if (!merged.bridgeSessionId) merged.bridgeSessionId = s.id;
       merged.folderId = s.folderId || meta[s.id]?.folderId || merged.folderId || DEFAULT_CONV_FOLDER_ID;
+      // rounds 由服务端算好下发（列表不再携带消息正文）；已 hydrate 的会话以本地 messages 为准
+      merged.rounds = s.rounds || merged.rounds || [];
+      merged.msgSeq = s.msgSeq ?? merged.msgSeq ?? 0;
       remoteSessions.push(merged);
     }
     // stale 清理：删除远程存在但无内容的空会话（刷新/初始化时清理垃圾）。
@@ -3808,6 +3813,8 @@ function renderSessionList() {
 // 轮次 = 该用户消息 + 其后直到下一条用户消息之前的所有消息（助手/系统/错误等）。
 function extractRounds(sess) {
   const msgs = (sess && sess.messages) || [];
+  // 会话尚未 hydrate（列表不带消息正文）时，用服务端预算的 rounds，保证展开箭头照常出现
+  if (!msgs.length) return (sess && sess.rounds) || [];
   const rounds = [];
   let cur = null;
   msgs.forEach((m, i) => {
@@ -3836,9 +3843,15 @@ function clearRoundView() {
   if (bar) bar.hidden = true;
 }
 // 进入单轮查看：主窗口只渲染该轮消息
-function openRoundView(sessionId, roundIndex) {
+function openRoundView(sessionId, roundIndex, _retried) {
   const sess = state.sessions.get(sessionId);
   if (!sess) return;
+  // 列表只带 rounds 不带消息正文，未 hydrate 的会话直接渲染会是空白 → 先取回消息再进单轮视图。
+  // _retried 保证最多重试一次，避免会话真的没有消息时无限递归。
+  if (!_retried && !sess.messages.length && sessionNeedsHydrate(sess)) {
+    runSessionHydrate(sess).finally(() => openRoundView(sessionId, roundIndex, true));
+    return;
+  }
   state.roundView = { sessionId, roundIndex };
   state.activeId = sessionId;
   if (sessionId) localStorage.setItem('ga_active', sessionId);
@@ -4978,7 +4991,7 @@ async function fetchProjectLibrary(projectName) {
 function _libTypeMeta(item) {
   var type = item.type || 'file';
   if (type === 'web') return { icon: 'link', label: t('ph.lib.web'), cls: 'ph-lib-web' };
-  if (type === 'generated') return { icon: 'sparkle', label: t('ph.lib.generated'), cls: 'ph-lib-gen' };
+  if (type === 'generated') return { icon: 'lightning', label: t('ph.lib.generated'), cls: 'ph-lib-gen' };
   if (type === 'folder') return { icon: 'folder', label: t('ph.lib.folder'), cls: 'ph-lib-folder' };
   return { icon: 'paperclip', label: t('ph.lib.file'), cls: 'ph-lib-file' };
 }
@@ -14604,7 +14617,7 @@ async function filesExecPreview(fs) {
     try {
       const res = await fetch(`${BRIDGE_ORIGIN}/api/files/read?path=${encodeURIComponent(f.path)}`);
       const d = await res.json();
-      if (d.ok) openFilePreview('text', f.name, null, d.content);
+      if (d.ok) openFilePreview(/\.(md|markdown|mdx)$/i.test(f.name || '') ? 'markdown' : 'text', f.name, null, d.content);
       else alert(d.error || '无法预览');
     } catch (e) { alert('预览失败: ' + e.message); }
   }
@@ -14649,14 +14662,35 @@ function openFilePreview(kind, name, url, text) {
   closeFilePreview();
   const ov = document.createElement('div');
   ov.className = 'files-preview-overlay';
+  const isMd = kind === 'markdown';
   let body = '';
   if (kind === 'image') body = `<img src="${url}" alt="${escapeHtml(name)}" />`;
   else if (kind === 'pdf') body = `<iframe src="${url}" title="${escapeHtml(name)}"></iframe>`;
+  else if (isMd) body = `<div class="files-preview-md">${renderMarkdown(text || '')}</div>`;
   else body = `<pre>${escapeHtml(text || '')}</pre>`;
-  ov.innerHTML = `<div class="files-preview-modal"><div class="files-preview-header"><span class="files-preview-name">${escapeHtml(name)}</span><button type="button" class="files-preview-close" title="关闭"><span data-ga-icon="x"></span></button></div><div class="files-preview-body">${body}</div></div>`;
+  const modeSwitch = isMd
+    ? `<div class="files-preview-mode"><button type="button" class="files-preview-mode-btn active" data-mode="rendered">${t('files.preview.rendered')}</button><button type="button" class="files-preview-mode-btn" data-mode="source">${t('files.preview.source')}</button></div>`
+    : '';
+  ov.innerHTML = `<div class="files-preview-modal${isMd ? ' has-md' : ''}"><div class="files-preview-header"><span class="files-preview-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>${modeSwitch}<button type="button" class="files-preview-close" title="关闭"><span data-ga-icon="x"></span></button></div><div class="files-preview-body">${body}</div></div>`;
   document.body.appendChild(ov);
   _filesRenderIcons(ov);
   _filesPreviewEl = ov;
+  if (isMd) {
+    const bodyEl = ov.querySelector('.files-preview-body');
+    postRenderEnhance(bodyEl);
+    ov.querySelectorAll('.files-preview-mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.classList.contains('active')) return;
+        ov.querySelectorAll('.files-preview-mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+        if (btn.dataset.mode === 'source') {
+          bodyEl.innerHTML = `<pre class="files-preview-src">${escapeHtml(text || '')}</pre>`;
+        } else {
+          bodyEl.innerHTML = `<div class="files-preview-md">${renderMarkdown(text || '')}</div>`;
+          postRenderEnhance(bodyEl);
+        }
+      });
+    });
+  }
   ov.querySelector('.files-preview-close').addEventListener('click', closeFilePreview);
   ov.addEventListener('click', (e) => { if (e.target === ov) closeFilePreview(); });
   document.addEventListener('keydown', _filesPreviewEsc);
@@ -15066,6 +15100,73 @@ function formatFileMtime(mtime) {
 window.initFilesPage = loadFilesPage;
 
 /* ===== Skill Hub ===== */
+
+/* 这些面板由 desktop_bridge 提供，而 bridge 是内核的子进程 —— 内核一退出，请求就变成 502
+   或干脆悬挂，面板会永远停在「加载中…」。下面的封装保证请求必然有结局：要么成功，要么给出
+   一张说明原因、可重试、可重启内核的卡片。 */
+const SH_API_TIMEOUT = 12000;
+
+function shKernelError(msg) {
+  const e = new Error(msg);
+  e.kernelDown = true;
+  return e;
+}
+
+async function shApi(url, opts) {
+  opts = opts || {};
+  const ctl = new AbortController();
+  const ms = opts.timeoutMs || SH_API_TIMEOUT;
+  const timer = setTimeout(function () { ctl.abort(); }, ms);
+  try {
+    const res = await fetch(url, Object.assign({}, opts, { signal: ctl.signal }));
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      throw shKernelError('内核未就绪（HTTP ' + res.status + '）');
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res;
+  } catch (e) {
+    if (e && e.name === 'AbortError') {
+      throw shKernelError('内核无响应（超时 ' + Math.round(ms / 1000) + ' 秒）');
+    }
+    if (e instanceof TypeError) throw shKernelError('无法连接后端服务');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function shRenderError(container, err, retry) {
+  if (!container) return;
+  const down = !!(err && err.kernelDown);
+  container.innerHTML =
+    '<div class="sh-down">' +
+      '<div class="sh-down-title">' + (down ? '内核已断开' : '加载失败') + '</div>' +
+      '<div class="sh-down-msg">' + escapeHtml((err && err.message) || '未知错误') + '</div>' +
+      '<div class="sh-down-acts">' +
+        '<button class="sh-down-btn" data-act="retry">重试</button>' +
+        (down ? '<button class="sh-down-btn sh-down-primary" data-act="restart">重启内核</button>' : '') +
+      '</div>' +
+    '</div>';
+  const rb = container.querySelector('[data-act="retry"]');
+  if (rb) rb.addEventListener('click', function () { retry(); });
+  const kb = container.querySelector('[data-act="restart"]');
+  if (kb) kb.addEventListener('click', async function () {
+    kb.disabled = true;
+    kb.textContent = '重启中…';
+    try {
+      const res = await fetch('/kernel/restart', { method: 'POST' });
+      const data = await res.json().catch(function () { return {}; });
+      if (!res.ok || data.success === false) throw new Error(data.error || ('HTTP ' + res.status));
+      shToast('内核已重启');
+      setTimeout(retry, 1500);
+    } catch (e2) {
+      kb.disabled = false;
+      kb.textContent = '重启内核';
+      shToast('重启失败: ' + e2.message);
+    }
+  });
+}
+
 function openSkillHubPage() {
   gaGoPage('skillhub');
   loadSkillHub();
@@ -15075,14 +15176,13 @@ async function loadSkillHub() {
   if (!list) return;
   list.innerHTML = '<div class="sh-loading">加载中…</div>';
   try {
-    const res = await fetch('/api/skills');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const res = await shApi('/api/skills');
     const data = await res.json();
     window._shAllSkills = data.skills || [];
     renderShCategories(window._shAllSkills);
     renderSkillHubList(window._shAllSkills);
   } catch (e) {
-    list.innerHTML = '<div class="sh-empty">加载失败: ' + escapeHtml(e.message) + '</div>';
+    shRenderError(list, e, loadSkillHub);
   }
 }
 
@@ -15096,12 +15196,11 @@ async function loadExperts() {
   if (!list) return;
   list.innerHTML = '<div class="sh-loading">加载中…</div>';
   try {
-    const res = await fetch('/api/experts');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const res = await shApi('/api/experts');
     const data = await res.json();
     renderExpertsList(data.experts || [], data.active);
   } catch (e) {
-    list.innerHTML = '<div class="sh-empty">加载失败: ' + escapeHtml(e.message) + '</div>';
+    shRenderError(list, e, loadExperts);
   }
 }
 function renderExpertsList(experts, active) {
@@ -15571,14 +15670,17 @@ function switchShTab(tab) {
 }
 
 async function loadShPlugins() {
+  var extBox = document.getElementById('sh-pg-ext-list');
+  if (extBox) extBox.innerHTML = '<div class="sh-loading">加载中…</div>';
   try {
-    var res = await fetch('/api/plugins');
+    var res = await shApi('/api/plugins');
     var data = await res.json();
     renderShPluginDirs(data.plugin_dirs || []);
     renderShExtPlugins(data.external || [], data.external_error || '');
     renderShBuiltinPlugins(data.builtin || []);
   } catch (e) {
-    if (window.shToast) shToast('加载 plugin 失败: ' + e.message);
+    // 失败时必须落到 DOM 上：只弹 toast 会让面板一直空着，看起来就像还在加载。
+    shRenderError(extBox, e, loadShPlugins);
   }
 }
 
@@ -15782,7 +15884,7 @@ async function loadMcpServers() {
   if (!list) return;
   list.innerHTML = '<div class="sh-loading">加载中…</div>';
   try {
-    var res = await fetch('/api/mcp');
+    var res = await shApi('/api/mcp');
     var data = await res.json();
     if (!data.success) {
       list.innerHTML = '<div class="sh-pg-empty sh-pg-error">' + escapeHtml(data.error || '加载失败') + '</div>';
@@ -15792,7 +15894,7 @@ async function loadMcpServers() {
     var cfgEl = document.getElementById('sh-mcp-cfg-path');
     if (cfgEl && data.config_path) cfgEl.textContent = data.config_path;
   } catch (e) {
-    list.innerHTML = '<div class="sh-pg-empty sh-pg-error">加载 MCP 失败: ' + escapeHtml(e.message) + '</div>';
+    shRenderError(list, e, loadMcpServers);
   }
 }
 
