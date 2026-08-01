@@ -45,6 +45,7 @@ SCHEMA_VERSION = 3
 COMPACT_MIN_BYTES = 64 * 1024 * 1024
 COMPACT_FREE_RATIO = 0.35
 CHECKPOINT_INTERVAL = 600
+BACKUP_RETAIN_DAYS = 7
 
 
 class DBStore:
@@ -65,6 +66,7 @@ class DBStore:
             self.ensure_schema()
             if maintain:  # owner only; transient readers must not rewrite the file
                 self.compact()
+                self._cleanup_backups()
                 self.start_maintenance()
 
     def close(self):
@@ -172,13 +174,52 @@ class DBStore:
             return
         self._maint_stop = threading.Event()
         stop = self._maint_stop
+        ticks = 0
 
         def loop():
+            nonlocal ticks
             while not stop.wait(interval):
                 self.checkpoint()
+                ticks += 1
+                if ticks % 5 == 0:  # ~50 min: log growth metrics
+                    try:
+                        st = self.storage_stats()
+                        self.kv_set("db_metrics", {
+                            "bytes": st.get("bytes_total", 0),
+                            "free_ratio": st.get("free_ratio", 0),
+                            "wal": st.get("wal_size", 0),
+                            "at": time.time(),
+                        })
+                    except Exception as e:  # noqa: BLE001
+                        print(f"[db_store] metrics skipped: {e}", file=sys.stderr)
 
         self._maint_thread = threading.Thread(target=loop, name="db-maint", daemon=True)
         self._maint_thread.start()
+
+    def _cleanup_backups(self, retain_days: int = BACKUP_RETAIN_DAYS) -> int:
+        """Rotate stale runtime backups out of temp/.
+
+        Matches ONLY backup-named files (*.bak*, *.pre-compact, *.imported-*); the
+        live store is never matched. The .pre-compact swap is only a recovery source
+        while the live file is missing -- _recover_swap already ran, so a leftover
+        alongside a healthy live file is safe to drop."""
+        temp = self.db_path.parent
+        if not temp.is_dir():
+            return 0
+        now = time.time()
+        removed = 0
+        for pat in ("*.bak*", "*.pre-compact", "*.imported-*"):
+            for p in temp.glob(pat):
+                if not p.is_file():
+                    continue
+                try:
+                    if now - p.stat().st_mtime > retain_days * 86400:
+                        p.unlink()
+                        removed += 1
+                        print(f"[db_store] rotated stale backup: {p.name}", file=sys.stderr)
+                except OSError as e:
+                    print(f"[db_store] cleanup skip {p.name}: {e}", file=sys.stderr)
+        return removed
 
     def stop_maintenance(self):
         if self._maint_stop is not None:
