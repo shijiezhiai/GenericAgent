@@ -26,6 +26,7 @@ Design notes
 from __future__ import annotations
 
 import json
+import sys
 import threading
 import time
 from pathlib import Path
@@ -36,27 +37,153 @@ _JSON_PLACEHOLDER = "{}"
 # Bump when the physical schema changes; add a branch in _migrate_schema for the step.
 SCHEMA_VERSION = 2
 
+# Runtime maintenance. DuckDB's CHECKPOINT only folds the WAL into the main file; it
+# never hands free blocks back to the OS (a 268MB production store measured 514/1041
+# blocks free). The only effective reclaim is a full rewrite via COPY FROM DATABASE,
+# which needs exclusive access -- so it runs at open time, the one guaranteed
+# single-writer moment, and only past a threshold so normal startups stay instant.
+COMPACT_MIN_BYTES = 64 * 1024 * 1024
+COMPACT_FREE_RATIO = 0.35
+CHECKPOINT_INTERVAL = 600
+
 
 class DBStore:
-    def __init__(self, ga_root: str, mode: str = "duckdb", db_filename: str = "ga_store.duckdb"):
+    def __init__(self, ga_root: str, mode: str = "duckdb", db_filename: str = "ga_store.duckdb",
+                 maintain: bool = False):
         self.ga_root = str(ga_root)
         self.mode = mode
         self.db_path = Path(self.ga_root) / "temp" / db_filename
         self._lock = threading.RLock()
         self.con = None
+        self._maint_stop = None
+        self._maint_thread = None
         if self.mode == "duckdb":
             import duckdb  # lazy: only required when actually using duckdb
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._recover_swap()
             self.con = duckdb.connect(str(self.db_path))
             self.ensure_schema()
+            if maintain:  # owner only; transient readers must not rewrite the file
+                self.compact()
+                self.start_maintenance()
 
     def close(self):
         """Release the file lock. Callers that only borrow the store (transient
         readers outside the owning process) must call this."""
+        self.stop_maintenance()
         with self._lock:
             if self.con is not None:
                 self.con.close()
                 self.con = None
+
+    # ------------------------------------------------------------------
+    # runtime maintenance (WAL fold + free-block reclaim)
+    # ------------------------------------------------------------------
+    @property
+    def _swap_path(self) -> Path:
+        return self.db_path.with_name(self.db_path.name + ".pre-compact")
+
+    def _recover_swap(self):
+        """A crash mid-swap leaves the live file missing and the original parked at
+        .pre-compact. Put it back before anyone opens the store."""
+        swap = self._swap_path
+        if swap.exists() and not self.db_path.exists():
+            swap.replace(self.db_path)
+            print(f"[db_store] recovered interrupted compaction: {swap.name}", file=sys.stderr)
+
+    def storage_stats(self) -> Dict[str, Any]:
+        if self.con is None:
+            return {}
+        with self._lock:
+            cur = self.con.execute("PRAGMA database_size")
+            row, cols = cur.fetchone(), [d[0] for d in cur.description]
+        st = dict(zip(cols, row)) if row else {}
+        block, total, free = st.get("block_size") or 0, st.get("total_blocks") or 0, st.get("free_blocks") or 0
+        st["bytes_total"] = block * total
+        st["free_ratio"] = free / total if total else 0.0
+        return st
+
+    def checkpoint(self):
+        """Fold the WAL into the main file. Milliseconds; safe while serving."""
+        if self.con is None:
+            return
+        try:
+            self._w("CHECKPOINT")
+        except Exception as e:  # noqa: BLE001 - a busy checkpoint just retries next tick
+            print(f"[db_store] checkpoint skipped: {e}", file=sys.stderr)
+
+    def _table_counts(self) -> Dict[str, int]:
+        rows = self.con.execute(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema='main'").fetchall()
+        return {t: self.con.execute(f'SELECT count(*) FROM "{t}"').fetchone()[0] for (t,) in rows}
+
+    def compact(self, force: bool = False) -> Optional[Dict[str, Any]]:
+        """Rewrite the store to reclaim free blocks; returns a report or None when
+        skipped. Owner only -- it briefly closes and reopens the connection."""
+        if self.con is None:
+            return None
+        import duckdb
+        self.checkpoint()
+        before = self.storage_stats().get("bytes_total", 0)
+        if not force and (before < COMPACT_MIN_BYTES
+                          or self.storage_stats().get("free_ratio", 0) < COMPACT_FREE_RATIO):
+            return None
+        tmp, swap = self.db_path.with_name(self.db_path.name + ".compact"), self._swap_path
+        for p in (tmp, tmp.with_name(tmp.name + ".wal")):
+            p.unlink(missing_ok=True)
+        with self._lock:
+            counts = self._table_counts()
+            try:
+                name = self.con.execute("SELECT current_database()").fetchone()[0]
+                self.con.execute(f"ATTACH '{tmp}' AS _compact")
+                self.con.execute(f'COPY FROM DATABASE "{name}" TO _compact')
+                self.con.execute("DETACH _compact")
+            except Exception as e:  # noqa: BLE001 - keep serving from the original file
+                print(f"[db_store] compaction aborted: {e}", file=sys.stderr)
+                tmp.unlink(missing_ok=True)
+                return None
+            self.con.close()
+            self.con = None
+            try:
+                probe = duckdb.connect(str(tmp), read_only=True)
+                fresh = {t: probe.execute(f'SELECT count(*) FROM "{t}"').fetchone()[0] for t in counts}
+                probe.close()
+                if fresh != counts:
+                    raise RuntimeError(f"row count mismatch {fresh} != {counts}")
+                self.db_path.replace(swap)   # park the original
+                tmp.replace(self.db_path)    # promote the rewrite
+                self.db_path.with_name(self.db_path.name + ".wal").unlink(missing_ok=True)
+                self.con = duckdb.connect(str(self.db_path))
+                swap.unlink(missing_ok=True)  # committed
+            except Exception as e:  # noqa: BLE001 - roll back to the parked original
+                print(f"[db_store] compaction rolled back: {e}", file=sys.stderr)
+                tmp.unlink(missing_ok=True)
+                if swap.exists() and not self.db_path.exists():
+                    swap.replace(self.db_path)
+                self.con = duckdb.connect(str(self.db_path))
+                return None
+        after = self.storage_stats().get("bytes_total", 0)
+        print(f"[db_store] compacted {before / 1048576:.0f}MB -> {after / 1048576:.0f}MB", file=sys.stderr)
+        return {"before": before, "after": after, "freed": before - after}
+
+    def start_maintenance(self, interval: int = CHECKPOINT_INTERVAL):
+        """Periodic WAL fold so a long-lived store never carries an unbounded WAL."""
+        if self._maint_thread is not None or self.con is None:
+            return
+        self._maint_stop = threading.Event()
+        stop = self._maint_stop
+
+        def loop():
+            while not stop.wait(interval):
+                self.checkpoint()
+
+        self._maint_thread = threading.Thread(target=loop, name="db-maint", daemon=True)
+        self._maint_thread.start()
+
+    def stop_maintenance(self):
+        if self._maint_stop is not None:
+            self._maint_stop.set()
+        self._maint_thread = None
 
     # ------------------------------------------------------------------
     # low-level helpers
@@ -76,7 +203,7 @@ class DBStore:
                     time.sleep(0.1 * (attempt + 1))
                     continue
                 raise
-        print(f"[db_store] write failed after retries: {last}", file=__import__("sys").stderr)
+        print(f"[db_store] write failed after retries: {last}", file=sys.stderr)
         raise last
 
     def _q(self, sql: str, params: Optional[List[Any]] = None) -> List[tuple]:

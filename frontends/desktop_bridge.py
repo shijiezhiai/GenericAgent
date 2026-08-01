@@ -332,7 +332,9 @@ class AgentManager:
             except ImportError:
                 sys.path.insert(0, str(APP_DIR))
                 from db_store import DBStore
-            self.store = DBStore(root, mode="duckdb")
+            # maintain=True: we are the single owner, so this is the one safe moment to
+            # reclaim free blocks; it also starts the periodic WAL fold.
+            self.store = DBStore(root, mode="duckdb", maintain=True)
         except Exception as e:  # noqa: BLE001
             print(f"[bridge] duckdb store init failed, falling back to json: {e}", file=sys.stderr)
             self._storage_mode = "json"
