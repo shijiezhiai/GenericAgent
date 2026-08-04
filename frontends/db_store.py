@@ -415,6 +415,19 @@ class DBStore:
                     applied_at DOUBLE
                 )
             """)
+            # In-flight assistant partial snapshot. The kernel is the sole owner of the
+            # store; when it dies mid-turn (crash or /kernel/restart) the in-memory
+            # partial is gone forever. A throttled on-disk snapshot lets the next kernel
+            # salvage the interrupted output instead of silently dropping it.
+            self.con.execute("""
+                CREATE TABLE IF NOT EXISTS partial_state (
+                    session_id VARCHAR PRIMARY KEY,
+                    content VARCHAR,
+                    curr_turn BIGINT,
+                    turn_segs VARCHAR,
+                    updated_at DOUBLE
+                )
+            """)
         self._migrate_schema()
 
     def _current_schema_version(self) -> int:
@@ -542,9 +555,48 @@ class DBStore:
         self._w("DELETE FROM messages WHERE session_id=?", [sid])
         self._w("DELETE FROM sessions WHERE id=?", [sid])
         self._w("DELETE FROM raw_logs WHERE session_id=?", [sid])
+        self._w("DELETE FROM partial_state WHERE session_id=?", [sid])
 
     def append_message(self, sid: str, msg: dict):
         self._insert_message(sid, msg)
+
+    # ------------------------------------------------------------------
+    # partial_state: throttled snapshot of the in-flight assistant turn
+    # ------------------------------------------------------------------
+    def save_partial(self, sid: str, content: str, curr_turn: int, turn_segs: Optional[List[str]]):
+        self._w(
+            """INSERT INTO partial_state (session_id, content, curr_turn, turn_segs, updated_at)
+               VALUES (?,?,?,?,?)
+               ON CONFLICT(session_id) DO UPDATE SET
+                 content=excluded.content, curr_turn=excluded.curr_turn,
+                 turn_segs=excluded.turn_segs, updated_at=excluded.updated_at""",
+            [sid, content or "", int(curr_turn or 0),
+             json.dumps(turn_segs or [], ensure_ascii=False), time.time()],
+        )
+
+    def clear_partial(self, sid: str):
+        self._w("DELETE FROM partial_state WHERE session_id=?", [sid])
+
+    def bump_message_seq(self, sid: str, seq: int):
+        """Advance a session's msg_seq after an out-of-band message insert (salvage)."""
+        self._w("UPDATE sessions SET msg_seq=?, updated_at=? WHERE id=?",
+                [int(seq), time.time(), sid])
+
+    def get_session_msg_seq(self, sid: str) -> Optional[int]:
+        row = self._q1("SELECT msg_seq FROM sessions WHERE id=?", [sid])
+        return int(row[0]) if row and row[0] is not None else None
+
+    def load_all_partials(self) -> List[dict]:
+        rows = self._q("SELECT session_id, content, curr_turn, turn_segs, updated_at FROM partial_state")
+        out = []
+        for r in rows:
+            try:
+                segs = json.loads(r[3]) if r[3] else []
+            except Exception:  # noqa: BLE001
+                segs = []
+            out.append({"session_id": r[0], "content": r[1] or "", "curr_turn": int(r[2] or 0),
+                        "turn_segs": segs if isinstance(segs, list) else [], "updated_at": r[4]})
+        return out
 
     def _get_messages(self, sid: str, after: int = 0, limit: int = 0) -> List[dict]:
         sql = "SELECT seq, role, content, created_at, extra FROM messages WHERE session_id=? AND seq>?"

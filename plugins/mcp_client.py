@@ -19,12 +19,25 @@
 import os
 import json
 import time
+import shutil
 import threading
 import queue
 import subprocess
 import urllib.request
 import urllib.error
 import urllib.parse
+
+# 打包 app 由 launchd 拉起时 PATH 极简，MCP server 多是 npx/uvx 脚本，找不到解释器会
+# 起得来却不握手（表现为硬等超时）。这里统一补齐，与内核 _ensure_exec_path 同源。
+_EXTRA_BINS = ("/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin",
+               "/usr/bin", "/bin", "/usr/sbin", "/sbin")
+
+
+def _exec_path(base):
+    parts = [p for p in base.split(os.pathsep) if p]
+    return os.pathsep.join(parts + [p for p in _EXTRA_BINS
+                                    if os.path.isdir(p) and p not in parts])
+
 
 # MCP 协议版本（2025-03-26: 新增 OAuth/Streamable HTTP/Batching/Tool Annotations/Audio）
 PROTOCOL_VERSION = "2025-03-26"
@@ -135,8 +148,12 @@ class McpClient:
         self.config = config or {}
         self.transport = self.config.get("transport", "stdio")
         self.plugin_dir = self.config.get("plugin_dir")
+        # 工具调用可能很慢，保留 30s；握手/列举只是本地进程应答，配错的 server 不该拖满 30s
+        self.timeout = float(self.config.get("timeout") or 30)
+        self.handshake_timeout = float(self.config.get("handshake_timeout") or 8)
         self._id = 0
-        self._lock = threading.Lock()
+        self._lock = threading.Lock()        # 保护 stdin 写
+        self._req_lock = threading.RLock()   # 保证同一 client 同时只有一个在飞请求
         self._closed = False
         self.server_info = {}
         # stdio
@@ -168,18 +185,30 @@ class McpClient:
             "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {},
             "clientInfo": CLIENT_INFO,
-        })
+        }, timeout=self.handshake_timeout)
         if result:
             self.server_info = result.get("serverInfo", {})
         self._notify("notifications/initialized")
         return True
 
     def list_tools(self):
-        result = self._request("tools/list", {})
+        result = self._request("tools/list", {}, timeout=self.handshake_timeout)
         return (result or {}).get("tools", [])
 
     def call_tool(self, name, arguments=None):
         return self._request("tools/call", {"name": name, "arguments": arguments or {}})
+
+    def alive(self):
+        if self._closed:
+            return False
+        return self._proc is None or self._proc.poll() is None   # 非 stdio 无进程可探
+
+    def _stderr_tail(self, limit=300):
+        """进程已退出时读残留 stderr，给出可读的失败原因（不阻塞：管道已 EOF）。"""
+        try:
+            return (self._proc.stderr.read() or b"").decode("utf-8", "replace").strip()[-limit:]
+        except Exception:
+            return ""
 
     def stop(self):
         self._closed = True
@@ -205,13 +234,15 @@ class McpClient:
         except Exception:
             pass
 
-    def _request(self, method, params, timeout=30):
-        if self.transport == "stdio":
-            return self._stdio_request(method, params, timeout)
-        if self.transport == "http":
-            return self._http_request(method, params, timeout)
-        if self.transport == "sse":
-            return self._sse_request(method, params, timeout)
+    def _request(self, method, params, timeout=None):
+        timeout = self.timeout if timeout is None else timeout
+        with self._req_lock:   # client 跨会话共用，单飞请求保证 id 与响应一一对应
+            if self.transport == "stdio":
+                return self._stdio_request(method, params, timeout)
+            if self.transport == "http":
+                return self._http_request(method, params, timeout)
+            if self.transport == "sse":
+                return self._sse_request(method, params, timeout)
         raise ValueError("未知 transport: %s" % self.transport)
 
     def _notify(self, method, params=None):
@@ -224,9 +255,14 @@ class McpClient:
 
     # ---------- stdio ----------
     def _start_stdio(self):
-        cmd = [self.config["command"]] + list(self.config.get("args", []))
         env = dict(os.environ)
+        env["PATH"] = _exec_path(env.get("PATH", ""))
         env.update(self.config.get("env", {}) or {})
+        exe = shutil.which(self.config["command"], path=env["PATH"])
+        if not exe:
+            raise McpError({"code": -1, "message": "命令未找到: %s (PATH=%s)" % (
+                self.config["command"], env["PATH"])})
+        cmd = [exe] + list(self.config.get("args", []))
         cwd = self.config.get("cwd") or self.plugin_dir
         self._proc = subprocess.Popen(
             cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -272,6 +308,9 @@ class McpClient:
             except queue.Empty:
                 if self._closed:
                     raise McpError({"code": -1, "message": "client closed"})
+                if self._proc is not None and self._proc.poll() is not None:
+                    raise McpError({"code": -1, "message": "server 退出(code=%s): %s" % (
+                        self._proc.returncode, self._stderr_tail())})
                 continue
             if msg.get("id") == rid:
                 if "error" in msg:

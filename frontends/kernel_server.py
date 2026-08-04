@@ -15,17 +15,49 @@ This makes the gateway<->kernel boundary explicit and lets a future Rust/axum ga
 keeps working byte-for-byte.
 """
 import atexit
+import faulthandler
 import json
 import os
+import signal
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
 
+# 诊断用：`kill -USR1 <kernel pid>` 把所有线程栈 dump 到 /tmp/ga_kernel_fault.log（排查卡死）。
+# 每次重开文件，避免 fd 被内核 stdout(JSON-RPC 管道) 重定向干扰。
+_FAULT_PATH = "/tmp/ga_kernel_fault.log"
+
+
+def _dump_threads(signum, frame):
+    with open(_FAULT_PATH, "a") as f:
+        f.write("\n===== SIGUSR1 dump @ %s pid=%s =====\n" % (time.strftime("%H:%M:%S"), os.getpid()))
+        faulthandler.dump_traceback(file=f, all_threads=True)
+
+
+faulthandler.enable()
+signal.signal(signal.SIGUSR1, _dump_threads)
+
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+
+
+def _ensure_exec_path():
+    """打包 app 由 launchd 拉起，PATH 极简（无 /opt/homebrew/bin）。
+    子进程（rg / npx / git / MCP server）据此解析可执行文件，缺了会 FileNotFoundError
+    或起得来却依赖断裂而卡死握手。启动最早期补齐，所有 subprocess 自动继承。"""
+    cur = os.environ.get("PATH", "").split(os.pathsep)
+    extra = [p for p in ("/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin",
+                         "/usr/bin", "/bin", "/usr/sbin", "/sbin",
+                         os.path.expanduser("~/.local/bin"))
+             if os.path.isdir(p) and p not in cur]
+    if extra:
+        os.environ["PATH"] = os.pathsep.join(extra + [p for p in cur if p])
+
+
+_ensure_exec_path()
 
 # The GA core modules (agentmain, llmcore, ga, ...) live at the repo root. In the real
 # deployment ga_root IS the repo root (so ensure_ga_import_path() puts it on sys.path),

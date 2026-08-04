@@ -80,6 +80,7 @@ async fn index_handler(State(s): State<AppState>) -> Response {
         Ok(b) => Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+            .header(header::CACHE_CONTROL, "no-cache")
             .body(Body::from(b))
             .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response()),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
@@ -109,6 +110,7 @@ async fn static_file_handler(State(s): State<AppState>, uri: axum::http::Uri) ->
         Ok(b) => Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, content_type(&path))
+            .header(header::CACHE_CONTROL, "no-cache")
             .body(Body::from(b))
             .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response()),
         Err(_) => StatusCode::NOT_FOUND.into_response(),

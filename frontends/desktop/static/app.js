@@ -440,7 +440,7 @@ const I18N = {
     'collab.openDetail': '打开详情', 'collab.copyTitle': '复制标题', 'collab.copySummary': '复制摘要', 'collab.restart': '重新启动',
     'common.close': '关闭', 'common.more': '更多', 'common.optional': '选填', 'common.save': '保存',
     'common.expand': '展开', 'common.collapse': '收起', 'common.loading': '加载中…', 'common.new': '新建',
-    'modal.preset': '预设功能', 'modal.addModel': '添加模型', 'modal.editModel': '编辑模型', 'modal.settings': '配置',
+    'modal.preset': '预设功能', 'modal.addModel': '添加模型', 'modal.editModel': '编辑模型', 'modal.copyModel': '复制模型', 'modal.settings': '配置',
     'modal.customPreset': '自定义预设',
     'modal.editCustomPreset': '编辑任务',
     'customPreset.titlePh': '标题，例如「写周报」',
@@ -473,9 +473,9 @@ const I18N = {
     'model.protocol': '协议', 'model.protocolPick': '请选择…', 'model.protocolOai': 'OpenAI 兼容 (chat/completions)', 'model.protocolClaude': 'Anthropic (Claude /v1/messages)',
     'model.stream': '响应方式', 'model.streamOn': '流式', 'model.streamOff': '非流式',
     'model.model': '模型', 'model.modelPh': 'model 参数名',
-    'model.modelHint': '须与中转站/官方文档中的 model 字段完全一致',
+    'model.modelHint': '须与中转站/官方文档中的 model 字段完全一致', 'model.copySuffix': '副本',
     'model.retries': '重试 (次)', 'model.connTimeout': '连接超时 (s)', 'model.readTimeout': '读取超时 (s)',
-    'model.save': '保存', 'common.cancel': '取消', 'common.confirm': '确认', 'common.edit': '编辑', 'common.delete': '删除', 'common.add': '添加',
+    'model.save': '保存', 'common.cancel': '取消', 'common.confirm': '确认', 'common.edit': '编辑', 'common.delete': '删除', 'common.add': '添加', 'common.duplicate': '复制',
     'pq.title': '快速接入官方模型', 'pq.sub': '填好 API Key 即可使用', 'pq.toggle': '展开 / 收起',
     'pq.deepseekDesc': '官方 API · OpenAI 兼容', 'pq.qwenDesc': '通义千问 · 阿里云百炼',
     'guide.step1': '点击下方链接，登录后创建并复制 API Key',
@@ -707,7 +707,7 @@ const I18N = {
     'collab.openDetail': 'Open details', 'collab.copyTitle': 'Copy title', 'collab.copySummary': 'Copy summary', 'collab.restart': 'Restart',
     'common.close': 'Close', 'common.more': 'More', 'common.optional': 'Optional', 'common.save': 'Save',
     'common.expand': 'Expand', 'common.collapse': 'Collapse', 'common.loading': 'Loading…', 'common.new': 'New',
-    'modal.preset': 'Presets', 'modal.addModel': 'Add model', 'modal.editModel': 'Edit model', 'modal.settings': 'Settings',
+    'modal.preset': 'Presets', 'modal.addModel': 'Add model', 'modal.editModel': 'Edit model', 'modal.copyModel': 'Duplicate model', 'modal.settings': 'Settings',
     'modal.customPreset': 'Custom preset',
     'modal.editCustomPreset': 'Edit task',
     'customPreset.titlePh': 'Title, e.g. "Weekly report"',
@@ -740,9 +740,9 @@ const I18N = {
     'model.protocol': 'Protocol', 'model.protocolPick': 'Select…', 'model.protocolOai': 'OpenAI-compatible (chat/completions)', 'model.protocolClaude': 'Anthropic (Claude /v1/messages)',
     'model.stream': 'Response', 'model.streamOn': 'Stream', 'model.streamOff': 'Non-stream',
     'model.model': 'Model', 'model.modelPh': 'model parameter name',
-    'model.modelHint': 'Must match the model field in your provider docs exactly',
+    'model.modelHint': 'Must match the model field in your provider docs exactly', 'model.copySuffix': ' (copy)',
     'model.retries': 'Retries (×)', 'model.connTimeout': 'Connect (s)', 'model.readTimeout': 'Read (s)',
-    'model.save': 'Save', 'common.cancel': 'Cancel', 'common.confirm': 'Confirm', 'common.edit': 'Edit', 'common.delete': 'Delete', 'common.add': 'Add',
+    'model.save': 'Save', 'common.cancel': 'Cancel', 'common.confirm': 'Confirm', 'common.edit': 'Edit', 'common.delete': 'Delete', 'common.add': 'Add', 'common.duplicate': 'Duplicate',
     'pq.title': 'Quick connect a model', 'pq.sub': 'Add your API key to get started', 'pq.toggle': 'Expand / collapse',
     'pq.deepseekDesc': 'Official API · OpenAI-compatible', 'pq.qwenDesc': 'Tongyi Qwen · Aliyun Bailian',
     'guide.step1': 'Open the link, sign in, then create & copy your API key',
@@ -4131,6 +4131,8 @@ async function newSession(folderId = null) {
       try {
         await window.ga.setSessionWorkspace(sess.id, inheritWs);
         sess.workspace = inheritWs;
+        // 写入完成后主动刷 chip, 不依赖轮询竞态 (轮询可能在 set 完成前拿到 null)
+        try { gaRefreshWorkspaceChip?.(); } catch (_) {}
       } catch (_) {}
     }
   } catch (e) {
@@ -10693,6 +10695,7 @@ function bindMixinDrag(body, members) {
 }
 const MODEL_ACT_EDIT = GA_ICON('pencilSimple');
 const MODEL_ACT_DEL = GA_ICON('trash');
+const MODEL_ACT_COPY = GA_ICON('copy');
 let editingModelId = null;
 
 function setModelApikeyMode(isAdd) {
@@ -10787,6 +10790,26 @@ function openAddModelForm() {
   openModal('add-model-modal');
   applyI18n();
 }
+// 把 profile 数据回填进「添加模型」表单（编辑/复制共用）
+function fillModelForm(p) {
+  const form = document.getElementById('add-model-form');
+  if (!form) return;
+  form.reset();
+  form.model.value = p.model || '';
+  form.apibase.value = p.apibase || '';
+  form.name.value = p.name || '';
+  form.max_retries.value = p.max_retries ?? 5;
+  form.connect_timeout.value = p.connect_timeout ?? 15;
+  form.read_timeout.value = p.read_timeout ?? 300;
+  // 按 varName 回填协议分段控件
+  const pv = /claude/i.test(p.varName || '') ? 'claude' : 'oai';
+  const pr = form.querySelector(`input[name="protocol"][value="${pv}"]`);
+  if (pr) pr.checked = true;
+  // 回填流式开关(默认流式)
+  const sv = (p.stream === false) ? 'false' : 'true';
+  const sr = form.querySelector(`input[name="stream"][value="${sv}"]`);
+  if (sr) sr.checked = true;
+}
 async function openEditModelForm(id) {
   editingModelId = id;
   setModelGuide(null);
@@ -10796,28 +10819,43 @@ async function openEditModelForm(id) {
     const res = await bridgeFetch(`/model-profiles/${id}`);
     const p = res.profile;
     if (!p) throw new Error(t('err.modelSave'));
-    const form = document.getElementById('add-model-form');
     const title = document.getElementById('model-form-title');
     if (title) title.dataset.i18n = 'modal.editModel';
-    if (form) {
-      form.model.value = p.model || '';
-      form.apibase.value = p.apibase || '';
-      form.name.value = p.name || '';
-      form.max_retries.value = p.max_retries ?? 5;
-      form.connect_timeout.value = p.connect_timeout ?? 15;
-      form.read_timeout.value = p.read_timeout ?? 300;
-      // 编辑模式:按 varName 回填协议分段控件
-      const pv = /claude/i.test(p.varName || '') ? 'claude' : 'oai';
-      const pr = form.querySelector(`input[name="protocol"][value="${pv}"]`);
-      if (pr) pr.checked = true;
-      // 回填流式开关(默认流式)
-      const sv = (p.stream === false) ? 'false' : 'true';
-      const sr = form.querySelector(`input[name="stream"][value="${sv}"]`);
-      if (sr) sr.checked = true;
-    }
+    fillModelForm(p);
     setModelApikeyMode(false);
     openModal('add-model-modal');
     applyI18n();
+  } catch (ex) {
+    showChanToast(t('err.modelSave'), ex.message || '', 'err');
+  }
+}
+// 复制已有模型创建新模型:全量预填(含 API Key),editingModelId 置空 → 提交走新建
+async function openCopyModelForm(id) {
+  editingModelId = null;
+  setModelGuide(null);
+  const errEl = document.getElementById('add-model-err');
+  if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+  try {
+    const res = await bridgeFetch(`/model-profiles/${id}`);
+    const p = res.profile;
+    if (!p) throw new Error(t('err.modelSave'));
+    const title = document.getElementById('model-form-title');
+    if (title) title.dataset.i18n = 'modal.copyModel';
+    // 备注自动加「副本」后缀并避开已有名称,避免渠道组按名字引用时混淆
+    let nm = '';
+    if (p.name) {
+      const taken = new Set((state.modelProfiles || []).map(x => x.name));
+      nm = p.name + t('model.copySuffix');
+      for (let n = 2; taken.has(nm); n++) nm = `${p.name}${t('model.copySuffix')} ${n}`;
+    }
+    fillModelForm({ ...p, name: nm });
+    setModelApikeyMode(true);
+    const apikeyInput = document.getElementById('model-apikey-input');
+    if (apikeyInput && p.apikey) apikeyInput.value = p.apikey;
+    openModal('add-model-modal');
+    applyI18n();
+    const nameInput = document.querySelector('#add-model-form [name="name"]');
+    if (nameInput) setTimeout(() => nameInput.focus(), 60);
   } catch (ex) {
     showChanToast(t('err.modelSave'), ex.message || '', 'err');
   }
@@ -10905,8 +10943,9 @@ function renderSettingsModels() {
       // 独立列表按钮统一为「加入渠道组」（➕）；移除只在渠道组展开区做。
       // 已在渠道组的，按钮仍是「加入」，但点击只提示「已在渠道组中」，并用 is-in 给个淡淡的视觉区分。
       const mixToggle = !mixin ? '' : `<button type="button" class="model-act model-act-addmix${p.inMixin ? ' is-in' : ''}" data-act="addmix" title="${escapeHtml(p.inMixin ? t('model.alreadyInMixin') : t('model.addToMixin'))}">${GA_ICON('plus')}</button>`;
-      row.innerHTML = `<input type="radio" name="model-pick"${state.llmNo === id ? ' checked' : ''}><span class="model-row-name">${escapeHtml(label)}</span><span class="model-row-actions">${mixToggle}<button type="button" class="model-act" data-act="edit" title="${escapeHtml(t('common.edit'))}">${MODEL_ACT_EDIT}</button><button type="button" class="model-act model-act-del" data-act="delete" title="${escapeHtml(t('common.delete'))}">${MODEL_ACT_DEL}</button></span>`;
+      row.innerHTML = `<input type="radio" name="model-pick"${state.llmNo === id ? ' checked' : ''}><span class="model-row-name">${escapeHtml(label)}</span><span class="model-row-actions">${mixToggle}<button type="button" class="model-act" data-act="edit" title="${escapeHtml(t('common.edit'))}">${MODEL_ACT_EDIT}</button><button type="button" class="model-act" data-act="copy" title="${escapeHtml(t('common.duplicate'))}">${MODEL_ACT_COPY}</button><button type="button" class="model-act model-act-del" data-act="delete" title="${escapeHtml(t('common.delete'))}">${MODEL_ACT_DEL}</button></span>`;
       row.querySelector('[data-act="edit"]').addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); openEditModelForm(id); });
+      row.querySelector('[data-act="copy"]').addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); openCopyModelForm(id); });
       row.querySelector('[data-act="delete"]').addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); deleteModel(id, p.name); });
       const addBtn = row.querySelector('[data-act="addmix"]');
       if (addBtn) addBtn.addEventListener('click', (e) => {
@@ -14950,23 +14989,30 @@ function bindComposerInRoot(root, opts) {
 
   // Watch for session changes (poll state.activeId)
   let _lastActiveId = state.activeId;
+  let _wsFetching = false;   // 并发防抖: 重试 tick 不叠加多个请求
   setInterval(async () => {
-    if (state.activeId !== _lastActiveId) {
-      _lastActiveId = state.activeId;
-      try {
-        if (state.activeId) {
-          const res = await window.ga.getSessionWorkspace(state.activeId);
-          _currentWs = (res && res.workspace) || null;
-          const sess = activeSess();
-          if (sess && _currentWs?.path) {
-            sess._workspacePath = _currentWs.path;
-            state.lastWorkspacePath = _currentWs.path;
-          }
+    if (_wsFetching) return;
+    const sidChanged = state.activeId !== _lastActiveId;
+    // 修复"未选择"锁死: 上一次拿到 null 且当前会话仍有 id 时, 每 500ms 重试
+    // (竞态: newSession 轮询先于 bridge 会话创建/setSessionWorkspace 完成, 拿到 null 后
+    //  activeId 不再变化, 若不重试 chip 会永远停在"未选择")
+    if (!sidChanged && !(_currentWs === null && state.activeId)) return;
+    _lastActiveId = state.activeId;
+    _wsFetching = true;
+    try {
+      if (state.activeId) {
+        const res = await window.ga.getSessionWorkspace(state.activeId);
+        _currentWs = (res && res.workspace) || null;
+        const sess = activeSess();
+        if (sess && _currentWs?.path) {
+          sess._workspacePath = _currentWs.path;
+          state.lastWorkspacePath = _currentWs.path;
         }
-        // activeId 为 null 时保留 _currentWs 旧值，避免误显"无 workspace"
-        refreshChip();
-      } catch (_) { /* API 失败不清空，保留上一个已知值 */ refreshChip(); }
-    }
+      }
+      // activeId 为 null 时保留 _currentWs 旧值，避免误显"无 workspace"
+      refreshChip();
+    } catch (_) { /* API 失败不清空，保留上一个已知值 */ refreshChip(); }
+    _wsFetching = false;
   }, 500);
 
   // Initial load

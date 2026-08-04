@@ -304,9 +304,14 @@ class AgentManager:
         # (it only serves un-migrated, storage-free routes). Without this it would fail
         # to open the DB, silently fall back to json, and rewrite desktop_sessions.json.
         self.store = None
+        self._partial_snap_ts: Dict[str, float] = {}
         self._storage_mode = self._resolve_storage_mode(self.ga_root)
         if self._storage_mode == "duckdb":
             self._open_store(self.ga_root)
+            # Must run BEFORE _load_sessions: salvage inserts messages out-of-band and
+            # bumps msg_seq in the DB; loading sessions first would leave in-memory
+            # msg_seq stale and collide with the next append_message.
+            self._salvage_interrupted_turns()
         self._load_sessions()
 
     @staticmethod
@@ -455,6 +460,41 @@ class AgentManager:
                 self.active_session_id = max(self.sessions.values(), key=lambda s: s.updated_at).id
         except Exception as e:
             print(f"[bridge] load sessions failed: {e}", file=sys.stderr)
+
+    def _salvage_interrupted_turns(self):
+        """Turn previous-lifetime partial_state leftovers into stopped messages.
+
+        The kernel is the sole store owner; when it dies mid-turn (crash or a manual
+        /kernel/restart) the in-memory partial dies with it, but the throttled on-disk
+        snapshot survives. Without salvage the session reloads as if the assistant had
+        never answered — exactly the "reply silently vanished" bug."""
+        try:
+            partials = self.store.load_all_partials()
+        except Exception as e:  # noqa: BLE001
+            print(f"[bridge] salvage: read partials failed: {e}", file=sys.stderr)
+            return
+        for p in partials:
+            sid = p.get("session_id")
+            try:
+                segs = [str(s) for s in (p.get("turn_segs") or []) if str(s).strip()]
+                content = "\n\n".join(segs) if segs else (p.get("content") or "").strip()
+                seq = self.store.get_session_msg_seq(sid) if sid else None
+                if not sid or seq is None or not content:  # session gone / nothing to keep
+                    if sid:
+                        self.store.clear_partial(sid)
+                    continue
+                msg = {"id": seq + 1, "role": "assistant", "content": content,
+                       "ts": p.get("updated_at") or time.time(),
+                       "stopped": True, "interrupted": True}
+                if segs:
+                    msg["turn_segs"] = segs
+                    msg["curr_turn"] = len(segs) - 1
+                self.store.append_message(sid, msg)
+                self.store.bump_message_seq(sid, seq + 1)
+                self.store.clear_partial(sid)
+                print(f"[bridge] salvaged interrupted turn for {sid} ({len(content)} chars)", file=sys.stderr)
+            except Exception as e:  # noqa: BLE001
+                print(f"[bridge] salvage failed for {sid}: {e}", file=sys.stderr)
 
     def _load_conv_folders(self) -> List[dict]:
         """读取对话文件夹定义（服务端共享）。返回规范化的 folder 列表。"""
@@ -1751,6 +1791,32 @@ class AgentManager:
             self._persist()
         return msg
 
+    def _snapshot_partial(self, sess: Session, force: bool = False):
+        """Throttled on-disk snapshot of the in-flight partial (crash-salvage source).
+
+        If the kernel dies mid-turn, the next kernel rebuilds the lost assistant turn
+        from the newest surviving snapshot instead of dropping it silently."""
+        if self._storage_mode != "duckdb" or self.store is None or sess.partial is None:
+            return
+        now = time.time()
+        if not force and now - self._partial_snap_ts.get(sess.id, 0.0) < 2.0:
+            return
+        self._partial_snap_ts[sess.id] = now
+        try:
+            self.store.save_partial(sess.id, sess.partial.get("content") or "",
+                                    sess.partial.get("curr_turn") or 0,
+                                    sess.partial.get("turn_segs") or [])
+        except Exception as e:  # noqa: BLE001
+            print(f"[bridge] partial snapshot failed: {e}", file=sys.stderr)
+
+    def _clear_partial_snapshot(self, sess: Session):
+        self._partial_snap_ts.pop(sess.id, None)
+        if self._storage_mode == "duckdb" and self.store is not None:
+            try:
+                self.store.clear_partial(sess.id)
+            except Exception as e:  # noqa: BLE001
+                print(f"[bridge] clear partial snapshot failed: {e}", file=sys.stderr)
+
     def create_session(self, cwd: Optional[str] = None, project: Optional[str] = None) -> Session:
         sid = "sess-" + uuid.uuid4().hex[:12]
         if not cwd:
@@ -1812,6 +1878,9 @@ class AgentManager:
             if sess.agent and hasattr(sess.agent, "abort"):
                 with contextlib.suppress(Exception):
                     sess.agent.abort()
+            if sess.agent and hasattr(sess.agent, "shutdown"):
+                with contextlib.suppress(Exception):
+                    sess.agent.shutdown()  # MCP/LSP 子进程随 agent 常驻，会话删除时才回收
         emit_session_state(sess, "closed")
         if self._storage_mode == "duckdb":
             try:
@@ -1857,6 +1926,7 @@ class AgentManager:
             sess.last_error = ""
             sess.partial = {"id": sess.msg_seq + 1, "role": "assistant", "content": "", "ts": time.time(), "partial": True,
                             "curr_turn": 0, "turn_segs": []}  # turn_segs[i]=第i轮全文(权威结构化,前端按轮渲染);content保留双轨兜底
+            self._snapshot_partial(sess, force=True)
             t = threading.Thread(target=self.run_agent_turn, args=(sess, prompt, None, llm_no), daemon=True, name=f"Turn-{sid}")
             sess.thread = t
             t.start()
@@ -1866,14 +1936,13 @@ class AgentManager:
 
     def run_agent_turn(self, sess: Session, prompt: str, images: Optional[list] = None, llm_no: Optional[int] = None):
         try:
-            if sess.agent is None:
-                sess.agent = self.make_agent(sess)
+            self._ensure_agent(sess)
             self._record_log_mapping(sess)
             agent = sess.agent
             no = self.config.get("llmNo") if llm_no is None else llm_no
             if no is not None and hasattr(agent, "next_llm"):
-                with contextlib.suppress(Exception):
-                    agent.next_llm(int(no))
+                try: agent.next_llm(int(no))
+                except Exception as e: print(f"[Turn] next_llm({no}) failed, keep current llm: {e}", file=sys.stderr)
             full = ""
             done_outputs = None  # done时agent给的全量轮文本(turn_resps.copy())
             _file_snap = _snapshot_cwd(sess.cwd or str(self.ga_root))  # 产出文件检测: 执行前快照
@@ -1892,6 +1961,7 @@ class AgentManager:
                             if sess.partial is not None:
                                 sess.partial["ts"] = time.time()
                                 sess.updated_at = time.time()
+                        self._snapshot_partial(sess)
                         continue
                     if isinstance(item, dict):
                         if item.get("next"):
@@ -1914,6 +1984,7 @@ class AgentManager:
                                         _segs[_idx] = str(_outs[-1])
                                         if len(_outs) >= 2 and _idx >= 1:
                                             _segs[_idx - 1] = str(_outs[-2])
+                            self._snapshot_partial(sess)
                         if "done" in item:
                             full = strip_final_info_marker(item.get("done") or "")
                             done_outputs = item.get("outputs")  # done时=turn_resps.copy()全量轮
@@ -1943,6 +2014,7 @@ class AgentManager:
                     if sess.status != "cancelled":
                         sess.status = "cancelled"
                     sess.updated_at = time.time()
+                self._clear_partial_snapshot(sess)
                 emit_session_state(sess, "cancelled")
                 return
             with self.lock:
@@ -1965,6 +2037,7 @@ class AgentManager:
                 except Exception: pass
                 sess.status = "done"
                 sess.last_error = ""
+            self._clear_partial_snapshot(sess)
             self._mirror_raw_log(sess)
             emit_session_state(sess, "done")
         except Exception as e:
@@ -1974,6 +2047,7 @@ class AgentManager:
                 sess.status = "error"
                 sess.last_error = str(e)
                 self.add_message(sess, "error", str(e))
+            self._clear_partial_snapshot(sess)
             print(tb, file=sys.stderr)
             emit_session_state(sess, "error")
 
@@ -2017,26 +2091,10 @@ class AgentManager:
                 raise web.HTTPNotFound(text=json.dumps({"error": f"session not found: {sid}"}, ensure_ascii=False), content_type="application/json")
             agent = getattr(sess, "agent", None)
             recent = [m for m in sess.messages[-12:] if m.get("role") in ("user", "assistant")]
-        # 会话结束后 agent 可能已被释放（从磁盘加载的会话 agent=None）。
-        # 临时创建一个 agent 用于生成建议，复用 restore_context 的 history 注入逻辑。
+        # 会话结束后 agent 可能已被释放（从磁盘加载的会话 agent=None），按需重建。
         if not agent or not getattr(agent, "llmclient", None):
             try:
-                agent = self.make_agent(sess)
-                if sess.llm_history:
-                    try: agent.llmclient.backend.history = sess.llm_history
-                    except Exception: pass
-                else:
-                    history = []
-                    for m in sess.messages:
-                        role = m.get("role"); content = m.get("content", "")
-                        if role == "user":
-                            history.append({"role": "user", "content": [{"type": "text", "text": content}]})
-                        elif role == "assistant":
-                            history.append({"role": "assistant", "content": [{"type": "text", "text": content}]})
-                    if history:
-                        try: agent.llmclient.backend.history = history
-                        except Exception: pass
-                sess.agent = agent
+                agent = self._ensure_agent(sess)
             except Exception as e:
                 return {"suggestions": [], "error": f"failed to create agent: {e}"}
         if len(recent) < 2:
@@ -2104,40 +2162,41 @@ class AgentManager:
             sess.status = "cancelled"
             sess.partial = None
             sess.updated_at = time.time()
+        self._clear_partial_snapshot(sess)
         emit_session_state(sess, "cancelled")
         return {"ok": True, "sessionId": sid}
 
+    def _ensure_agent(self, sess: Session):
+        """惰性创建 agent 并回灌对话历史。建 agent 要拉起 MCP 子进程（秒级），
+        故只能在后台线程调用，绝不可放在 HTTP handler 的同步路径上。"""
+        agent = getattr(sess, "agent", None)
+        if agent is not None and getattr(agent, "llmclient", None):
+            return agent
+        agent = self.make_agent(sess)
+        history = sess.llm_history or [
+            {"role": m["role"], "content": [{"type": "text", "text": m.get("content", "")}]}
+            for m in sess.messages if m.get("role") in ("user", "assistant")]
+        if history:
+            try:
+                agent.llmclient.backend.history = history
+            except Exception as e:
+                print(f"[bridge] restore history failed: {e}", file=sys.stderr)
+        sess.agent = agent
+        return agent
+
     def restore_context(self, sid: str) -> dict:
+        """会话存活探测。前端每次发送前都会调它，故必须是 O(1)：
+        真正的 agent 创建交给 run_agent_turn 的后台线程，否则整个事件循环被 MCP 启动卡住。"""
         with self.lock:
             sess = self.sessions.get(sid)
             if not sess:
                 raise web.HTTPNotFound(text=json.dumps({"error": f"session not found: {sid}"}, ensure_ascii=False), content_type="application/json")
-            if sess.agent is not None:
-                return {"ok": True, "sessionId": sid, "restored": False, "reason": "agent already alive"}
-        agent = self.make_agent(sess)
-        if sess.llm_history:
-            try:
-                agent.llmclient.backend.history = sess.llm_history
-            except Exception as e:
-                print(f"[bridge] restore llm_history failed: {e}", file=sys.stderr)
-        else:
-            history = []
-            for m in sess.messages:
-                role = m.get("role")
-                content = m.get("content", "")
-                if role == "user":
-                    history.append({"role": "user", "content": [{"type": "text", "text": content}]})
-                elif role == "assistant":
-                    history.append({"role": "assistant", "content": [{"type": "text", "text": content}]})
-            if history:
-                try:
-                    agent.llmclient.backend.history = history
-                except Exception as e:
-                    print(f"[bridge] inject history failed: {e}", file=sys.stderr)
-        with self.lock:
-            sess.agent = agent
-            sess.status = "idle"
-        return {"ok": True, "sessionId": sid, "restored": True, "messageCount": len(sess.llm_history or sess.messages)}
+            alive = sess.agent is not None
+            if not alive:
+                sess.status = "idle"
+        return {"ok": True, "sessionId": sid, "restored": False,
+                "reason": "agent already alive" if alive else "agent will be created on next turn",
+                "messageCount": len(sess.llm_history or sess.messages)}
 
 
 import base64
@@ -3116,7 +3175,7 @@ async def viewed_handler(request):
 
 async def restore_handler(request):
     sid = request.match_info["sid"]
-    return json_ok(manager.restore_context(sid))
+    return json_ok(await asyncio.to_thread(manager.restore_context, sid))
 
 
 def _apply_project_workspace(pdir, ws_name, ws_path):
@@ -3152,15 +3211,50 @@ def _apply_project_workspace(pdir, ws_name, ws_path):
     return {"workspace": ""}
 
 
+def _workspace_link_names() -> set:
+    """已注册 workspace 的 junction 名集合。它们住在 temp/projects/ 下(project_mode
+    锚点需要),但不是项目——列项目时必须排除,否则加一个 workspace 就凭空多一个项目。"""
+    try:
+        return set(workspace_cmd.registry_load().keys())
+    except Exception:
+        return set()
+
+
+def _workspace_project_bindings() -> dict:
+    """{workspace_name: [project name, ...]}，扫 temp/projects/*/.workspace.json。"""
+    base = os.path.join(manager.ga_root, 'temp', 'projects')
+    ws_links = _workspace_link_names()
+    out: dict = {}
+    if not os.path.isdir(base):
+        return out
+    for name in os.listdir(base):
+        if name.startswith('.') or name in ws_links:
+            continue
+        ws_file = os.path.join(base, name, '.workspace.json')
+        if not os.path.isfile(ws_file):
+            continue
+        try:
+            with open(ws_file, encoding='utf-8') as f:
+                ws = ((json.load(f) or {}).get("workspace") or "").strip()
+        except (OSError, ValueError):
+            continue
+        if ws:
+            out.setdefault(ws, []).append(name)
+    return out
+
+
 async def projects_list_handler(request):
     """列出 temp/projects/ 下所有项目目录（路径与 project_mode._project_dir 一致）。"""
     base = os.path.join(manager.ga_root, 'temp', 'projects')
     items = []
+    ws_links = _workspace_link_names()
     if os.path.isdir(base):
         for name in sorted(os.listdir(base)):
             pdir = os.path.join(base, name)
             if not os.path.isdir(pdir) or name.startswith('.'):
                 continue
+            if name in ws_links and workspace_cmd.is_dir_link(pdir):
+                continue  # workspace junction，不是项目
             mem = os.path.join(pdir, 'project_memory.md')
             has_mem = os.path.isfile(mem)
             mem_lines = 0
@@ -3413,6 +3507,27 @@ def _library_existing_keys(items):
     return keys
 
 
+def _library_is_folder_like(item):
+    """判断条目是否为「文件夹类」：虚拟资料夹(libfolder) 或 文件系统文件夹引用(is_dir/type=folder)。"""
+    if not isinstance(item, dict):
+        return False
+    return item.get("type") == "libfolder" or bool(item.get("is_dir")) or item.get("type") == "folder"
+
+
+def _library_descendants(items, folder_id):
+    """返回 folder_id 的所有后代条目 id 集合（按 parent_id 链迭代，不含自身）。"""
+    out = set()
+    changed = True
+    while changed:
+        changed = False
+        for it in items:
+            pid = it.get("parent_id") or ""
+            if pid and pid in (out | {folder_id}) and it.get("id") not in out:
+                out.add(it.get("id"))
+                changed = True
+    return out
+
+
 # 添加本地文件夹 / 展开文件夹子项时跳过的无关目录
 _LIB_SKIP_DIRS = {'.git', 'node_modules', '__pycache__', '.venv', 'venv',
                   '.idea', '.vscode', 'dist', 'build', '.codegraph', '.cache'}
@@ -3604,8 +3719,8 @@ async def project_library_add_handler(request):
         return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
     data = await read_json(request)
     typ = str(data.get("type") or "").strip()
-    if typ not in ("file", "web", "generated"):
-        return web.json_response({"error": "type must be file|web|generated"}, status=400, headers=cors_headers())
+    if typ not in ("file", "web", "generated", "libfolder"):
+        return web.json_response({"error": "type must be file|web|generated|libfolder"}, status=400, headers=cors_headers())
     item_name = str(data.get("name") or "").strip()
     path = str(data.get("path") or "").strip()
     url = str(data.get("url") or "").strip()
@@ -3727,7 +3842,17 @@ async def project_library_add_handler(request):
         "added_at": int(time.time()),
         "parent_id": "",
     }
+    # 虚拟资料夹（libfolder）无 path/url/is_dir，仅作资料库内的逻辑分组
+    if typ == "libfolder":
+        item.pop("path", None)
+        item.pop("url", None)
     items = _read_library(pdir)
+    # parent_id 校验：必须为空，或指向一个已存在的「文件夹类」条目（资料夹/文件系统文件夹）
+    pid = str(data.get("parent_id") or "").strip()
+    if pid:
+        if not any((it.get("id") == pid and _library_is_folder_like(it)) for it in items):
+            return web.json_response({"error": "invalid parent_id"}, status=400, headers=cors_headers())
+        item["parent_id"] = pid
     # 去重：web 按 URL、file 按路径，已存在则直接返回现有条目
     dkey = _library_dedupe_key(item)
     if dkey:
@@ -3758,7 +3883,21 @@ async def project_library_delete_handler(request):
         return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
     item_id = request.match_info.get("id", "")
     items = _read_library(pdir)
-    # 级联删除：收集目标条目 + 其所有后代（按 parent_id 链迭代）
+    target = next((it for it in items if it.get("id") == item_id), None)
+    if target is None:
+        return web.json_response({"error": "item not found"}, status=404, headers=cors_headers())
+    # 文件夹类条目删除：仅移除文件夹节点本身，其直接子项「移回根目录」（parent_id 置空），
+    # 不级联删除资料，避免误删用户整理好的资料。
+    if _library_is_folder_like(target):
+        for it in items:
+            if (it.get("parent_id") or "") == item_id:
+                it["parent_id"] = ""
+        new_items = [it for it in items if it.get("id") != item_id]
+        deleted = len(items) - len(new_items)
+        if deleted and not _write_library(pdir, new_items):
+            return web.json_response({"error": "write failed"}, status=500, headers=cors_headers())
+        return json_ok({"ok": True, "name": name, "deleted": deleted, "reparented": True})
+    # 非文件夹条目：级联删除目标 + 其所有后代（按 parent_id 链迭代）
     to_delete = {item_id}
     changed = True
     while changed:
@@ -3893,7 +4032,7 @@ def _library_find_item(pdir, item_id):
 
 
 async def project_library_patch_handler(request):
-    """修改资料库条目（PATCH /projects/{name}/library/{id}）：当前支持 pinned 置顶。"""
+    """修改资料库条目（PATCH /projects/{name}/library/{id}）：支持 pinned 置顶 / name 重命名 / parent_id 移动。"""
     name = request.match_info.get("name", "")
     if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
         return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
@@ -3907,9 +4046,26 @@ async def project_library_patch_handler(request):
         return web.json_response({"error": "item not found"}, status=404, headers=cors_headers())
     if "pinned" in data:
         item["pinned"] = bool(data["pinned"])
+    if "name" in data:
+        new_name = str(data.get("name") or "").strip()
+        if new_name:
+            item["name"] = new_name
+    if "parent_id" in data:
+        new_pid = str(data.get("parent_id") or "").strip()
+        if new_pid == item_id:
+            return web.json_response({"error": "cannot move item into itself"}, status=400, headers=cors_headers())
+        if new_pid:
+            # 目标必须是已存在的「文件夹类」条目，且不能是自身的后代（防止环）
+            parent = next((it for it in items if it.get("id") == new_pid), None)
+            if parent is None or not _library_is_folder_like(parent):
+                return web.json_response({"error": "invalid parent_id"}, status=400, headers=cors_headers())
+            if item_id in _library_descendants(items, new_pid):
+                return web.json_response({"error": "cannot move folder into its own descendant"}, status=400, headers=cors_headers())
+        item["parent_id"] = new_pid
     if not _write_library(pdir, items):
         return web.json_response({"error": "write failed"}, status=500, headers=cors_headers())
-    return json_ok({"ok": True, "id": item_id, "pinned": item["pinned"]})
+    return json_ok({"ok": True, "id": item_id, "pinned": item.get("pinned", False),
+                    "name": item.get("name"), "parent_id": item.get("parent_id", "")})
 
 
 async def project_library_open_handler(request):
@@ -4014,6 +4170,16 @@ async def project_library_preview_handler(request):
         return web.json_response({"error": "item not found"}, status=404, headers=cors_headers())
     path = item.get("path") or ""
     if not path:
+        # 网页类型资料项（无本地文件）按网页处理：返回 url 供前端渲染网页预览卡，
+        # 而不是当成文件报 "no path" 错误。
+        if item.get("type") == "web" or (item.get("url") and not item.get("is_dir")):
+            return json_ok({
+                "is_web": True,
+                "url": item.get("url") or "",
+                "name": item.get("name"),
+                "desc": item.get("desc") or "",
+                "path": "",
+            })
         return web.json_response({"error": "no path"}, status=400, headers=cors_headers())
     if bool(item.get("is_dir")) or os.path.isdir(path):
         entries = []
@@ -4204,6 +4370,104 @@ async def _resolve_favicon(url):
     except Exception:
         pass
     return None
+
+
+async def project_library_webfetch_handler(request):
+    """抓取网页资料项对应 URL 的内容用于预览展现（GET /projects/{name}/library/{id}/web-fetch）。"""
+    name = _unquote_name(request.match_info.get("name", ""))
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir, real_name = _resolve_project_dir(name)
+    if pdir is None:
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    item_id = request.match_info.get("id", "")
+    item, _items, _idx = _library_find_item(pdir, item_id)
+    if item is None:
+        return web.json_response({"error": "item not found"}, status=404, headers=cors_headers())
+    url = (item.get("url") or "").strip()
+    if not re.match(r'^https?://', url):
+        return json_ok({"ok": False, "error": "not a web item", "url": url})
+    try:
+        from aiohttp import ClientSession, ClientTimeout
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0 Safari/537.36 GenericAgent/1.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        }
+        timeout = ClientTimeout(total=20)
+        async with ClientSession(headers=headers, timeout=timeout) as sess:
+            async with sess.get(url, allow_redirects=True) as resp:
+                ct = resp.headers.get("Content-Type", "") or ""
+                final_url = str(resp.url)
+                body = await resp.read()
+        max_bytes = 3 * 1024 * 1024
+        if len(body) > max_bytes:
+            body = body[:max_bytes]
+        is_html = ("text/html" in ct
+                   or url.rstrip("/").lower().endswith((".html", ".htm", ".asp", ".php", ".jsp", ".aspx"))
+                   or not ct)
+        if is_html:
+            try:
+                html = body.decode("utf-8", errors="replace")
+            except Exception:
+                html = body.decode("latin-1", errors="replace")
+            html = _sanitize_web_html(html, final_url)
+            return json_ok({"ok": True, "url": final_url, "content_type": ct,
+                            "html": html, "text": _extract_web_text(html)[:20000]})
+        import base64
+        mime = (ct.split(";")[0].strip() or "application/octet-stream")
+        b64 = base64.b64encode(body).decode("ascii")
+        return json_ok({"ok": True, "url": final_url, "content_type": ct,
+                        "data_url": "data:%s;base64,%s" % (mime, b64)})
+    except asyncio.TimeoutError:
+        return json_ok({"ok": False, "error": "抓取超时（>20s）", "url": url})
+    except Exception as e:
+        return json_ok({"ok": False, "error": str(e)[:300], "url": url})
+
+
+def _sanitize_web_html(html, base_url):
+    """清洗抓取到的网页 HTML：注入 <base> 让相对资源正确加载，移除 <script> 与内联事件，保留结构与样式以忠实展现。"""
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return html
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+    except Exception:
+        return html
+    if soup.head is None:
+        head = soup.new_tag("head")
+        if soup.html:
+            soup.html.insert(0, head)
+        else:
+            soup.insert(0, head)
+    else:
+        head = soup.head
+    if head.find("base") is None:
+        base = soup.new_tag("base")
+        base["href"] = base_url
+        head.insert(0, base)
+    for tag in soup.find_all(["script", "noscript"]):
+        tag.decompose()
+    for tag in soup.find_all(True):
+        for attr in list(tag.attrs.keys()):
+            if attr.lower().startswith("on"):
+                del tag[attr]
+    return str(soup)
+
+
+def _extract_web_text(html):
+    """从网页 HTML 抽取可读正文文本（去除 script/style），用于抓取失败或纯文本兜底展现。"""
+    try:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
+        for t in soup(["script", "style", "noscript"]):
+            t.decompose()
+        text = soup.get_text("\n")
+        return "\n".join(ln.strip() for ln in text.splitlines() if ln.strip())
+    except Exception:
+        return ""
 
 
 async def favicon_handler(request):
@@ -6195,6 +6459,26 @@ def _open_path_default(target: Path) -> None:
     subprocess.Popen(["xdg-open", path])
 
 
+async def open_url_handler(request):
+    """Open an http(s) URL in the system default browser (Tauri webview
+    can't open external URLs via window.open, so the frontend POSTs here)."""
+    data = await read_json(request)
+    url = (data.get("url") or "").strip()
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
+        return json_ok({"ok": False, "error": "invalid url"}, status=400)
+    import platform
+    try:
+        if platform.system() == "Windows":
+            os.startfile(url)
+        elif platform.system() == "Darwin":
+            subprocess.Popen(["open", url])
+        else:
+            subprocess.Popen(["xdg-open", url])
+    except OSError as e:
+        return json_ok({"ok": False, "error": str(e)}, status=500)
+    return json_ok({"ok": True, "url": url})
+
+
 def _mykey_file() -> Path:
     root = Path(manager.ga_root)
     target = root / "mykey.py"
@@ -6382,11 +6666,14 @@ async def post_token_history_handler(request):
 # Workspace handlers
 # ---------------------------------------------------------------------------
 async def list_workspaces_handler(request):
-    """GET /workspaces → list of registered workspaces."""
+    """GET /workspaces → list of registered workspaces (+ projects bound to each)."""
     try:
         items = workspace_cmd.registry_list()
     except Exception as e:
         return json_ok({"error": str(e)}, status=500)
+    bindings = _workspace_project_bindings()
+    for it in items:
+        it["projects"] = bindings.get(it.get("name", ""), [])
     return json_ok({"workspaces": items})
 
 
@@ -6404,15 +6691,26 @@ async def prepare_workspace_handler(request):
 
 
 async def remove_workspace_handler(request):
-    """DELETE /workspace/{name} → remove a workspace registration."""
+    """DELETE /workspace/{name} → 注销 workspace。
+
+    只摘 junction + 删注册表条目 + 解除引用它的项目绑定；**真实目录与文件一律不动**。
+    """
     name = request.match_info["name"]
     if not name:
         return json_ok({"error": "name is required"}, status=400)
+    bound = _workspace_project_bindings().get(name, [])
     try:
         workspace_cmd.remove(name)
     except Exception as e:
         return json_ok({"error": str(e)}, status=500)
-    return json_ok({"ok": True})
+    unbound = []
+    for proj in bound:
+        try:
+            os.remove(os.path.join(manager.ga_root, 'temp', 'projects', proj, '.workspace.json'))
+            unbound.append(proj)
+        except OSError:
+            pass
+    return json_ok({"ok": True, "unbound": unbound})
 
 
 def _gateway_call(method: str, path: str, body: Optional[dict] = None) -> dict:
@@ -6573,6 +6871,7 @@ def create_app():
     app.router.add_post("/projects/{name}/library/{id}/reveal", project_library_reveal_handler)
     app.router.add_get("/projects/{name}/library/{id}/preview", project_library_preview_handler)
     app.router.add_get("/projects/{name}/library/{id}/raw", project_library_raw_handler)
+    app.router.add_get("/projects/{name}/library/{id}/web-fetch", project_library_webfetch_handler)
     app.router.add_get("/api/favicon", favicon_handler)
     # 项目待办 (todos) CRUD —— /projects/{name}/todos 与 /projects/{name}/todos/{tid}
     app.router.add_get("/projects/{name}/todos", project_todos_handler)
@@ -6599,6 +6898,7 @@ def create_app():
     app.router.add_post("/datasources/{dsid}/sync", datasource_sync_handler)
     app.router.add_post("/datasources/{dsid}/webhook", datasource_webhook_handler)
     app.router.add_post("/path/open", path_open_handler)
+    app.router.add_post("/open-url", open_url_handler)
     app.router.add_post("/upload", upload_handler)
     app.router.add_delete("/upload", upload_delete_handler)
 

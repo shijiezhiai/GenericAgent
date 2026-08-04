@@ -1,4 +1,4 @@
-import os, sys, threading, queue, time, json, re, random, locale, glob
+import os, sys, threading, queue, time, json, re, random, locale, glob, atexit, weakref
 os.environ.setdefault('GA_LANG', 'zh' if any(k in (locale.getlocale()[0] or '').lower() for k in ('zh', 'chinese')) else 'en')
 if sys.stdout is None: sys.stdout = open(os.devnull, "w")
 elif hasattr(sys.stdout, 'reconfigure'): sys.stdout.reconfigure(errors='replace')
@@ -44,6 +44,9 @@ def get_system_prompt():
     prompt += get_global_memory()
     return prompt
 
+def _shutdown_agent(ref):
+    if (a := ref()) is not None: a.shutdown()
+
 # SDK:
 # agent = GenericAgent(); threading.Thread(target=agent.run, daemon=True).start()
 # output1_queue = agent.put_task(prompt1)
@@ -79,6 +82,7 @@ class GenericAgent:
             self.lsp_clients = collect_lsp_clients()
         except Exception as _e:
             import sys; print(f"[LSP] init failed: {_e}", file=sys.stderr)
+        atexit.register(_shutdown_agent, weakref.ref(self))  # 兜底回收子进程；弱引用避免挡住 GC
 
     def load_llm_sessions(self):
         mykeys, changed = reload_mykeys()
@@ -98,8 +102,9 @@ class GenericAgent:
                     mixin = MixinSession(llm_sessions, s['mixin_cfg'])
                     if isinstance(mixin._sessions[0], (NativeClaudeSession, NativeOAISession)): llm_sessions[i] = NativeToolClient(mixin)
                     else: llm_sessions[i] = ToolClient(mixin)
-                except Exception as e: print(f'\n\n\n[ERROR] Failed to init MixinSession with cfg {s["mixin_cfg"]}: {e}!!!\n\n')
-        self.llmclients = llm_sessions
+                except Exception as e:
+                    print(f'[ERROR] MixinSession dropped, cfg={s["mixin_cfg"]}: {e or type(e).__name__}', file=sys.stderr)
+        self.llmclients = [s for s in llm_sessions if not isinstance(s, dict)]  # 未转换成功的 mixin 必须丢弃：留着会让 llmclient 变 dict 而挂死整轮
         if not self.llmclients:
             raise ValueError('[ERROR] No LLM sessions configured! Please check your mykey.py configuration.')
         self.llmclient = self.llmclients[self.llm_no%len(self.llmclients)]
@@ -161,34 +166,36 @@ class GenericAgent:
             if raw_query is None:
                 self.task_queue.task_done(); continue
             self.is_running = True
-            if len(raw_query) > 2000:
-                task_file = os.path.join(script_dir, 'temp', f'user_prompt_{int(time.time())}.md')
-                with open(task_file, 'w', encoding='utf-8') as f: f.write(raw_query)
-                raw_query = f'Long user prompt saved to {task_file}. Read and execute.'
-            rquery = smart_format(raw_query.replace('\n', ' '), max_str_len=200)
-            self.history.append(f"[USER]: {rquery}")
-            sys_prompt = get_system_prompt() + '\n'.join(self.extra_sys_prompts) + getattr(self.llmclient.backend, 'extra_sys_prompt', '')
-            if self.peer_hint: sys_prompt += f"\n[Peer] 用户提及其他会话/后台任务状态时: temp/model_responses/ (只找近期修改的文件尾部)\n"
-            handler = GenericAgentHandler(self, self.history, os.path.join(script_dir, 'temp'))
-            # workspace 激活时让 code_run/bash 在真实 workspace 执行（而非 temp）
-            _ws = getattr(self, '_ga_project_mode_workspace_path', '') or ''
-            if _ws and os.path.isdir(_ws):
-                handler.cwd = _ws
-            if getattr(self, 'no_print', False): handler.print = lambda *a, **k: None
-            if self.handler and 'key_info' in self.handler.working: 
-                ki = re.sub(r'\n\[SYSTEM\] 此为.*?工作记忆[。\n]*', '', self.handler.working['key_info'])  # 去旧
-                handler.working['key_info'] = ki
-                handler.working['passed_sessions'] = ps = self.handler.working.get('passed_sessions', 0) + 1
-                if ps > 0: handler.working['key_info'] += f'\n[SYSTEM] 此为 {ps} 个对话前设置的key_info，若已在新任务，先更新或清除工作记忆。\n'
-            self.handler = handler  # although new handler, the **full** history is in llmclient, so it is full history!
-            self.llmclient.log_path = self.log_path
-            if self.force_non_stream:
-                self.llmclient.backend.stream = False
-                self.llmclient.backend.read_timeout = max(self.llmclient.backend.read_timeout, 1200)
-            gen = agent_runner_loop(self.llmclient, sys_prompt, raw_query, handler, TOOLS_SCHEMA + self.mcp_tools, 
-                                    max_turns=180, verbose=self.verbose, yield_info=True)
+            # 准备段(handler/sys_prompt/llmclient)也必须在 try 内：这里裸抛会让 run 线程静默死亡，
+            # 调用方永远等不到 display_queue 的 done，前端表现为"停止按钮一直转"。
+            full_resp = ""; last_pos = 0; curr_turn = 0; turn_resps = []; _last_push_ts = 0
             try:
-                full_resp = ""; last_pos = 0; curr_turn = 0; turn_resps = []; _last_push_ts = 0
+                if len(raw_query) > 2000:
+                    task_file = os.path.join(script_dir, 'temp', f'user_prompt_{int(time.time())}.md')
+                    with open(task_file, 'w', encoding='utf-8') as f: f.write(raw_query)
+                    raw_query = f'Long user prompt saved to {task_file}. Read and execute.'
+                rquery = smart_format(raw_query.replace('\n', ' '), max_str_len=200)
+                self.history.append(f"[USER]: {rquery}")
+                sys_prompt = get_system_prompt() + '\n'.join(self.extra_sys_prompts) + getattr(self.llmclient.backend, 'extra_sys_prompt', '')
+                if self.peer_hint: sys_prompt += f"\n[Peer] 用户提及其他会话/后台任务状态时: temp/model_responses/ (只找近期修改的文件尾部)\n"
+                handler = GenericAgentHandler(self, self.history, os.path.join(script_dir, 'temp'))
+                # workspace 激活时让 code_run/bash 在真实 workspace 执行（而非 temp）
+                _ws = getattr(self, '_ga_project_mode_workspace_path', '') or ''
+                if _ws and os.path.isdir(_ws):
+                    handler.cwd = _ws
+                if getattr(self, 'no_print', False): handler.print = lambda *a, **k: None
+                if self.handler and 'key_info' in self.handler.working: 
+                    ki = re.sub(r'\n\[SYSTEM\] 此为.*?工作记忆[。\n]*', '', self.handler.working['key_info'])  # 去旧
+                    handler.working['key_info'] = ki
+                    handler.working['passed_sessions'] = ps = self.handler.working.get('passed_sessions', 0) + 1
+                    if ps > 0: handler.working['key_info'] += f'\n[SYSTEM] 此为 {ps} 个对话前设置的key_info，若已在新任务，先更新或清除工作记忆。\n'
+                self.handler = handler  # although new handler, the **full** history is in llmclient, so it is full history!
+                self.llmclient.log_path = self.log_path
+                if self.force_non_stream:
+                    self.llmclient.backend.stream = False
+                    self.llmclient.backend.read_timeout = max(self.llmclient.backend.read_timeout, 1200)
+                gen = agent_runner_loop(self.llmclient, sys_prompt, raw_query, handler, TOOLS_SCHEMA + self.mcp_tools, 
+                                        max_turns=180, verbose=self.verbose, yield_info=True)
                 for chunk in gen:
                     if consume_file(self.task_dir, '_stop'): self.abort() 
                     if self.stop_sig: break
@@ -216,16 +223,17 @@ class GenericAgent:
                 self.is_running = self.stop_sig = False
                 self.task_queue.task_done()
                 if self.handler is not None: self.handler.code_stop_signal.append(1)
-                # 关闭所有 MCP client 进程/连接（fail-open）
-                for _c in list(getattr(self, 'mcp_clients', {}).values()):
-                    try: _c.stop()
-                    except Exception as _e: print(f"[MCP] stop failed: {_e}")
-                # 关闭所有 LSP client 进程（fail-open）
-                try:
-                    from plugins.plugin_loader import stop_all_lsp
-                    stop_all_lsp(getattr(self, 'lsp_clients', None))
-                except Exception as _e:
-                    print(f"[LSP] stop failed: {_e}")
+
+    def shutdown(self):
+        """释放本 agent 持有的资源。MCP client 由 plugin_loader 的进程级池共享（多会话复用，
+        进程退出时才回收），这里只丢引用；按轮或按会话 stop 会导致其他会话的 mcp__* 调用失败。"""
+        self.mcp_tools, self.mcp_tool_map, self.mcp_clients = [], {}, {}
+        try:
+            from plugins.plugin_loader import stop_all_lsp
+            stop_all_lsp(getattr(self, 'lsp_clients', None))
+        except Exception as _e:
+            print(f"[LSP] stop failed: {_e}")
+        self.lsp_clients = {}
 
 GeneraticAgent = GenericAgent
 

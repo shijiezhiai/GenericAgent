@@ -1060,8 +1060,12 @@ class MixinSession:
     def __init__(self, all_sessions, cfg):
         self._retries, self._base_delay = cfg.get('max_retries', 3), cfg.get('base_delay', 1.5)
         self._spring_sec = cfg.get('spring_back', 300)
-        self._sessions = [all_sessions[i].backend if isinstance(i, int) else 
-                          next(s.backend for s in all_sessions if type(s) is not dict and s.backend.name == i) for i in cfg.get('llm_nos', [])]
+        named = {s.backend.name: s.backend for s in all_sessions if type(s) is not dict}
+        wanted = cfg.get('llm_nos', [])
+        self._sessions = [all_sessions[i].backend if isinstance(i, int) else named[i] for i in wanted if isinstance(i, int) or i in named]
+        if missing := [i for i in wanted if not isinstance(i, int) and i not in named]:  # 失效成员降级跳过，全失效才算配置错误
+            print(f"[WARN] mixin 跳过不存在的会话名 {missing}，可选: {sorted(named)}", file=sys.stderr)
+        if not self._sessions: raise ValueError(f"mixin llm_nos={wanted} 没有任何一项匹配已配置会话，可选: {sorted(named)}")
         is_native = lambda s: 'Native' in s.__class__.__name__
         groups = {is_native(s) for s in self._sessions}
         assert len(groups) == 1, f"MixinSession: sessions must be in same group (Native or non-Native), got {[type(s).__name__ for s in self._sessions]}"

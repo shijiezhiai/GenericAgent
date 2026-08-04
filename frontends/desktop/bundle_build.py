@@ -42,6 +42,8 @@ CORE_DEPS = [
     "requests", "beautifulsoup4", "bottle", "simple-websocket-server",
     "aiohttp", "fastapi", "uvicorn", "websockets",
     "psutil", "pillow", "pyyaml", "aiofiles", "python-dotenv", "markdown", "duckdb",
+    # IM 通道依赖：wechatapp 需 pycryptodome(qrcode 内 AES)+qrcode；fsapp 需 lark-oapi
+    "pycryptodome", "qrcode", "lark-oapi",
 ]
 
 # 复制源码时的排除项

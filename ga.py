@@ -651,7 +651,9 @@ class GenericAgentHandler(BaseHandler):
             # 打包桌面 app 的内核继承 launchd 极简 PATH(无 /opt/homebrew/bin)，
             # shutil.which('rg') 会返回 None；直接探测常见安装位置兜底。
             for _cand in ('/opt/homebrew/bin/rg', '/usr/local/bin/rg', '/usr/bin/rg',
-                          os.path.expanduser('~/homebrew/bin/rg')):
+                          os.path.expanduser('~/homebrew/bin/rg'),
+                          os.path.expanduser('~/.cargo/bin/rg'),
+                          '/opt/homebrew/opt/ripgrep/bin/rg'):
                 if os.path.isfile(_cand) and os.access(_cand, os.X_OK):
                     rg = _cand
                     break
@@ -672,7 +674,7 @@ class GenericAgentHandler(BaseHandler):
         '''基于ripgrep的代码内容搜索'''
         pattern = args.get("pattern", "")
         if not pattern:
-            return StepOutcome("Error: pattern is required")
+            return StepOutcome("Error: pattern is required", next_prompt="\n")
         path = self._get_abs_path(args.get("path", "."))
         max_results = min(args.get("max_results", 50), 200)
         context_lines = min(args.get("context_lines", 0), 5)
@@ -704,9 +706,9 @@ class GenericAgentHandler(BaseHandler):
 
         stdout, stderr, rc = self._run_rg(cmd, cwd=self.working.get("cwd", "."))
         if stdout is None:
-            return StepOutcome(f"Error: {stderr}")
+            return StepOutcome(f"Error: {stderr}", next_prompt="\n")
         if rc > 1:  # rg error (not "no match")
-            return StepOutcome(f"Error: {stderr.strip() or stdout.strip()}")
+            return StepOutcome(f"Error: {stderr.strip() or stdout.strip()}", next_prompt="\n")
         if not stdout.strip():
             result = f"No matches found for '{pattern}' in {path}"
         else:
@@ -728,7 +730,7 @@ class GenericAgentHandler(BaseHandler):
         '''按文件名模式查找文件路径'''
         pattern = args.get("pattern", "")
         if not pattern:
-            return StepOutcome("Error: pattern is required")
+            return StepOutcome("Error: pattern is required", next_prompt="\n")
         path = self._get_abs_path(args.get("path", "."))
         max_results = min(args.get("max_results", 50), 200)
         sort_by = args.get("sort_by", "path")
@@ -746,9 +748,9 @@ class GenericAgentHandler(BaseHandler):
 
         stdout, stderr, rc = self._run_rg(cmd, cwd=self.working.get("cwd", "."))
         if stdout is None:
-            return StepOutcome(f"Error: {stderr}")
+            return StepOutcome(f"Error: {stderr}", next_prompt="\n")
         if rc > 1:
-            return StepOutcome(f"Error: {stderr.strip() or stdout.strip()}")
+            return StepOutcome(f"Error: {stderr.strip() or stdout.strip()}", next_prompt="\n")
         if not stdout.strip():
             result = f"No files matching '{pattern}' found in {path}"
         else:

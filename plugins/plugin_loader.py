@@ -23,9 +23,12 @@ plugin 根目录可为：
 
 import os
 import re
+import sys
 import json
+import atexit
 import threading
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     import ga_config
@@ -741,118 +744,152 @@ def _get_plugins():
     return plugins
 
 
-def collect_mcp_tools():
-    """启动所有 plugin 的 MCP servers，返回 (tools_schema, tool_map, clients)。
+_UNRESOLVED_VAR = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def _mcp_proc_key(cfg):
+    """同配置的 server 视为同一进程：transport/command/args/url/cwd/env 归一化成可比键。"""
+    c = cfg or {}
+    env = c.get("env")
+    env_items = sorted((str(k), str(v)) for k, v in env.items()) if isinstance(env, dict) else []
+    return json.dumps([c.get("transport", "stdio"), c.get("command", ""), [str(a) for a in (c.get("args") or [])],
+                       c.get("url", ""), c.get("cwd", ""), env_items], sort_keys=True, ensure_ascii=False)
+
+
+def _mcp_missing_vars(cfg):
+    """env 残留未解析的 ${VAR}：该 server 缺凭据，起进程也只会卡满握手超时。返回缺失变量名。"""
+    env = (cfg or {}).get("env")
+    if not isinstance(env, dict):
+        return []
+    return sorted({m for v in env.values() for m in _UNRESOLVED_VAR.findall(str(v))})
+
+
+def _mcp_tool_schema(full_name, tool, origin):
+    """MCP tool → OpenAI function schema，annotations 并入 description 供 LLM 感知行为特征。"""
+    desc = tool.get("description") or f"MCP tool {tool.get('name', '')} from {origin}"
+    ann = tool.get("annotations")
+    if isinstance(ann, dict):
+        hints = [h for k, h in (("readOnlyHint", "read-only"), ("destructiveHint", "destructive"),
+                                ("idempotentHint", "idempotent"), ("openWorldHint", "open-world")) if ann.get(k)]
+        if hints:
+            desc += f" [{', '.join(hints)}]"
+    return {"type": "function", "function": {
+        "name": full_name, "description": desc,
+        "parameters": tool.get("inputSchema") or {"type": "object", "properties": {}}}}
+
+
+_MCP_POOL = {}                       # proc_key -> (McpClient, tools)  进程级共享，跨 agent/会话复用
+_MCP_POOL_LOCK = threading.Lock()
+
+
+def shutdown_mcp_pool():
+    """进程退出时统一回收。单个 agent 结束不得关闭池内 client——其他会话还在用。"""
+    with _MCP_POOL_LOCK:
+        items = list(_MCP_POOL.values())
+        _MCP_POOL.clear()
+    for _c, _ in items:
+        try: _c.stop()
+        except Exception as _e: print(f"[MCP] pool stop failed: {_e}", file=sys.stderr)
+
+
+atexit.register(shutdown_mcp_pool)
+
+
+def collect_mcp_tools(max_workers=8):
+    """并行启动所有 plugin / 全局 MCP servers，返回 (tools_schema, tool_map, clients)。
 
     tools_schema: OpenAI function 数组，name=mcp__<plugin>__<server>__<tool>，合并到 TOOLS_SCHEMA 供 LLM 调用。
-    tool_map: {full_name: (McpClient, original_tool_name)}，dispatch else 据此刻路由到对应 client。
+    tool_map: {full_name: (McpClient, original_tool_name)}，dispatch else 据此路由到对应 client。
     clients: {server_key: McpClient}，由调用方持有生命周期（agent 退出时 stop）。
-    fail-open：单 server 启动/列出失败不影响其他 server，仅 stderr 警告。
+
+    串行启动会把首轮响应拖到分钟级，故：并行启动；同配置 server 只起一个进程（其余登记为路由别名，
+    不重复占 schema）；env 含未解析 ${VAR} 的直接跳过。
+    fail-open：单 server 失败不影响其他，仅 stderr 警告。
     """
     try:
         from plugins.mcp_client import McpClient
     except ImportError:
         return [], {}, {}
-    tools, tool_map, clients = [], {}, {}
     try:
         plugins = _get_plugins()
     except Exception:
-        return tools, tool_map, clients
+        plugins = []
+
+    specs = []
     for _p in plugins:
         _pn = _p.get("name", "")
         _mcp = _p.get("mcp") or {}
-        if not isinstance(_mcp, dict) or not _mcp:
+        if not isinstance(_mcp, dict):
             continue
         for _sn, _cfg in _mcp.items():
-            _key = f"{_pn}__{_sn}"
-            _c = None
+            if not isinstance(_cfg, dict):
+                continue
             try:
-                try:
-                    _pdir = _p.get("dir", "")
-                    _pid = _plugin_id(_pn) if _pn else ""
-                    _base_env = _build_plugin_env(_pdir, _pid, _p.get("user_config"))
-                    _ce = _cfg.get("env")
-                    if isinstance(_ce, dict):
-                        _base_env.update(_ce)
-                    _cfg["env"] = _base_env
-                except Exception:
-                    pass
-                _c = McpClient(_key, _cfg)
-                _c.start()
-                _tl = _c.list_tools() or []
-                for _t in _tl:
-                    _tname = _t.get("name", "")
-                    _fn = f"mcp__{_pn}__{_sn}__{_tname}"
-                    _schema = _t.get("inputSchema") or {"type": "object", "properties": {}}
-                    # P3: 将 Tool Annotations 附加到 description 供 LLM 感知工具行为特征
-                    _desc = _t.get("description", f"MCP tool {_tname} from {_pn}/{_sn}")
-                    _ann = _t.get("annotations")
-                    if isinstance(_ann, dict) and _ann:
-                        _hints = []
-                        if _ann.get("readOnlyHint"):
-                            _hints.append("read-only")
-                        if _ann.get("destructiveHint"):
-                            _hints.append("destructive")
-                        if _ann.get("idempotentHint"):
-                            _hints.append("idempotent")
-                        if _ann.get("openWorldHint"):
-                            _hints.append("open-world")
-                        if _hints:
-                            _desc += f" [{', '.join(_hints)}]"
-                    tools.append({
-                        "type": "function",
-                        "function": {
-                            "name": _fn,
-                            "description": _desc,
-                            "parameters": _schema,
-                        },
-                    })
-                    tool_map[_fn] = (_c, _tname)
-                clients[_key] = _c
-            except Exception as _e:
-                import sys
-                print(f"[MCP] skip server {_key}: {_e}", file=sys.stderr)
-                try:
-                    if _c: _c.stop()
-                except Exception:
-                    pass
-    # --- 全局 MCP servers（非 plugin 绑定，独立配置） ---
-    _global_mcp = _load_global_mcp_config()
-    for _sn, _cfg in _global_mcp.items():
-        _key = f"global__{_sn}"
-        if _key in clients:
-            continue
-        _c = None
-        try:
-            _c = McpClient(_key, _cfg)
-            _c.start()
-            _tl = _c.list_tools() or []
-            for _t in _tl:
-                _tname = _t.get("name", "")
-                _fn = f"mcp__global__{_sn}__{_tname}"
-                _schema = _t.get("inputSchema") or {"type": "object", "properties": {}}
-                _desc = _t.get("description", f"MCP tool {_tname} from global/{_sn}")
-                _ann = _t.get("annotations")
-                if isinstance(_ann, dict) and _ann:
-                    _hints = []
-                    if _ann.get("readOnlyHint"): _hints.append("read-only")
-                    if _ann.get("destructiveHint"): _hints.append("destructive")
-                    if _ann.get("idempotentHint"): _hints.append("idempotent")
-                    if _ann.get("openWorldHint"): _hints.append("open-world")
-                    if _hints: _desc += f" [{', '.join(_hints)}]"
-                tools.append({
-                    "type": "function",
-                    "function": {"name": _fn, "description": _desc, "parameters": _schema},
-                })
-                tool_map[_fn] = (_c, _tname)
-            clients[_key] = _c
-        except Exception as _e:
-            import sys
-            print(f"[MCP] skip global server {_key}: {_e}", file=sys.stderr)
-            try:
-                if _c: _c.stop()
+                _env = _build_plugin_env(_p.get("dir", ""), _plugin_id(_pn) if _pn else "", _p.get("user_config"))
+                _ce = _cfg.get("env")
+                if isinstance(_ce, dict):
+                    _env.update(_ce)
+                _cfg["env"] = _env
             except Exception:
                 pass
+            specs.append((f"{_pn}__{_sn}", _cfg))
+    try:
+        specs += [(f"global__{_sn}", _cfg) for _sn, _cfg in _load_global_mcp_config().items()]
+    except Exception:
+        pass
+
+    seen, uniq, aliases = set(), {}, []
+    for _key, _cfg in specs:
+        if _key in seen:
+            continue
+        seen.add(_key)
+        if _missing := _mcp_missing_vars(_cfg):
+            print(f"[MCP] skip {_key}: 未配置 {', '.join(_missing)}", file=sys.stderr)
+            continue
+        _pk = _mcp_proc_key(_cfg)
+        if _pk in uniq:
+            aliases.append((_key, _pk))
+        else:
+            uniq[_pk] = (_key, _cfg)
+
+    def _boot(item):
+        _pk, (_key, _cfg) = item
+        with _MCP_POOL_LOCK:
+            _hit = _MCP_POOL.get(_pk)
+        if _hit and _hit[0].alive():
+            return _pk, _key, _hit[0], _hit[1]
+        _c = McpClient(_key, _cfg)
+        try:
+            _c.start()
+            _tl = _c.list_tools() or []
+            with _MCP_POOL_LOCK:
+                _MCP_POOL[_pk] = (_c, _tl)
+            return _pk, _key, _c, _tl
+        except Exception as _e:
+            print(f"[MCP] skip server {_key}: {_e}", file=sys.stderr)
+            try: _c.stop()
+            except Exception: pass
+            return _pk, _key, None, []
+
+    booted = {}
+    if uniq:
+        with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(uniq)))) as _ex:
+            for _pk, _key, _c, _tl in _ex.map(_boot, list(uniq.items())):
+                if _c is not None:
+                    booted[_pk] = (_key, _c, _tl)
+
+    tools, tool_map, clients = [], {}, {}
+    for _key, _c, _tl in booted.values():
+        clients[_key] = _c
+        for _t in _tl:
+            _fn = f"mcp__{_key}__{_t.get('name', '')}"
+            tools.append(_mcp_tool_schema(_fn, _t, _key))
+            tool_map[_fn] = (_c, _t.get("name", ""))
+    for _key, _pk in aliases:                     # 去重掉的条目只登记路由，按原名调用仍命中同一进程
+        if _hit := booted.get(_pk):
+            _, _c, _tl = _hit
+            for _t in _tl:
+                tool_map[f"mcp__{_key}__{_t.get('name', '')}"] = (_c, _t.get("name", ""))
     return tools, tool_map, clients
 
 

@@ -983,12 +983,16 @@ pub fn run() {
                         if dev_mode {
                             w.open_devtools();
                         } else {
-                            // Disable F5/F12/Ctrl+R/right-click in production
+                            // Production hardening: devtools off, right-click off (custom menu handles it).
+                            // Cmd+R / Ctrl+R / F5 -> reload the webview so static edits hot-apply.
                             let _ = w.eval(r#"
                                 document.addEventListener('keydown', function(e) {
-                                    if (e.key === 'F12' || e.key === 'F5' ||
-                                        (e.ctrlKey && e.key === 'r') ||
-                                        (e.ctrlKey && e.shiftKey && e.key === 'I')) {
+                                    if ((e.metaKey && e.key === 'r') || (e.ctrlKey && e.key === 'r') || e.key === 'F5') {
+                                        e.preventDefault();
+                                        location.reload();
+                                        return;
+                                    }
+                                    if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I')) {
                                         e.preventDefault();
                                     }
                                 });
