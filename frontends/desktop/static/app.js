@@ -386,12 +386,12 @@ const I18N = {
     'nav.collab': '指挥家', 'nav.token': '用量', 'nav.tasks': '定时任务',
     'foot.settings': '配置', 'foot.ver': 'GenericAgent · 桌面版',
     'chat.startTitle': '开始对话', 'chat.startSub': '直接输入，或点预设功能一键启动',
-    'nav.project': '项目', 'project.startTitle': '项目空间', 'project.startSub': '选择或创建项目，开启专注会话', 'project.placeholder': '在项目中输入…',
+    'nav.project': '项目', 'nav.workspace': '工作区', 'project.startTitle': '项目空间', 'project.startSub': '选择或创建项目，开启专注会话', 'project.placeholder': '在项目中输入…',
     'project.empty': '还没有项目', 'project.hasMemory': '记忆', 'project.noMemory': '无记忆', 'project.loadErr': '加载项目失败', 'project.enterErr': '进入项目失败', 'project.createErr': '创建项目失败', 'project.enterBtn': '进入', 'project.memLines': '行',
     'project.title': '项目', 'project.subtitle': '多人协同打造超级团队', 'project.newBtn': '新建项目', 'project.myProjects': '我的项目', 'project.searchPh': '搜索项目', 'project.fromTemplate': '从模版创建', 'project.menuTitle': '更多操作', 'project.promptName': '请输入项目名称', 'project.addedAgo': '添加于 {0} 前', 'project.justNow': '刚刚', 'project.minAgo': '{0} 分钟前', 'project.hourAgo': '{0} 小时前', 'project.dayAgo': '{0} 天前', 'project.monAgo': '{0} 个月前', 'project.yearAgo': '{0} 年前',
-    'project.create': '新建项目', 'project.name': '项目名称', 'project.template': '选择模板', 'project.tplBlank': '不使用模板', 'project.instruction': '指令', 'project.instructionPh': '输入项目背景、规范或系统提示词…', 'project.instructionHint': '可选。作为项目指令写入 CLAUDE.md，进入项目后自动生效。', 'project.createBtn': '创建', 'project.nameRequired': '请输入项目名称', 'project.tplOverwrite': '切换模板将覆盖当前指令内容，是否继续？', 'project.skills': '技能', 'project.skillsHint': '可选。选择该项目启用的 Skills，未勾选的不会被注入。留空则启用全部。', 'project.skillsLoading': '加载中…', 'project.skillsNone': '未发现可用技能', 'project.editSkills': '编辑技能', 'project.skillsSaved': '技能已保存，新会话生效', 'project.rename': '重命名', 'project.renamePrompt': '输入新的项目名称', 'project.renameErr': '重命名失败', 'project.delete': '删除项目', 'project.deleteConfirm': '确定要删除项目「{0}」吗？此操作不可恢复。', 'project.deleteErr': '删除失败', 'project.nameInvalid': '名称不能包含 / \\ 或以 . 开头', 'project.workspace': '工作区', 'project.wsNone': '无绑定', 'project.wsExisting': '使用已有工作区', 'project.wsNew': '新建工作区', 'project.wsPathPh': '输入新工作区的完整路径…', 'project.wsHint': '新建工作区时会自动注册到工作区列表。', 'project.wsSelectErr': '请选择一个已有工作区', 'project.wsPathErr': '请输入新工作区路径', 'project.wsSaved': '工作区已更新', 'project.wsCurrent': '当前工作区', 'project.addSkill': '添加技能', 'project.skillsSearchPh': '搜索技能…', 'project.skillsActiveHint': '已启用的技能；点击 × 可移除。清空表示启用全部技能。', 'project.expertsLoading': '加载中…', 'project.expertNone': '暂无专家', 'project.expertsNone': '未发现可用专家', 'project.expertsSaved': '专家已保存，新会话生效', 'project.addExpert': '添加专家', 'project.expertsSearchPh': '搜索专家…',
+    'project.create': '新建项目', 'project.name': '项目名称', 'project.template': '选择模板', 'project.tplBlank': '不使用模板', 'project.instruction': '指令', 'project.instructionPh': '输入项目背景、规范或系统提示词…', 'project.instructionHint': '可选。作为项目指令写入 CLAUDE.md，进入项目后自动生效。', 'project.createBtn': '创建', 'project.nameRequired': '请输入项目名称', 'project.tplOverwrite': '切换模板将覆盖当前指令内容，是否继续？', 'project.skills': '技能', 'project.skillsHint': '可选。选择该项目启用的 Skills，未勾选的不会被注入。留空则启用全部。', 'project.skillsLoading': '加载中…', 'project.skillsNone': '未发现可用技能', 'project.editSkills': '编辑技能', 'project.skillsSaved': '技能已保存，新会话生效', 'project.rename': '重命名', 'project.renamePrompt': '输入新的项目名称', 'project.renameErr': '重命名失败', 'project.delete': '删除项目', 'project.deleteConfirm': '确定要删除项目「{0}」吗？此操作不可恢复。', 'project.deleteErr': '删除失败', 'project.nameInvalid': '名称不能包含 / \\ 或以 . 开头', 'project.workspace': '工作区', 'project.wsNone': '无绑定', 'project.wsExisting': '使用已有工作区', 'project.wsHint': '工作区需先在左侧「工作区」页面添加。', 'project.wsSelectErr': '请选择一个已有工作区', 'project.wsSaved': '工作区已更新', 'project.wsCurrent': '当前工作区', 'project.addSkill': '添加技能', 'project.skillsSearchPh': '搜索技能…', 'project.skillsActiveHint': '已启用的技能；点击 × 可移除。清空表示启用全部技能。', 'project.expertsLoading': '加载中…', 'project.expertNone': '暂无专家', 'project.expertsNone': '未发现可用专家', 'project.expertsSaved': '专家已保存，新会话生效', 'project.addExpert': '添加专家', 'project.expertsSearchPh': '搜索专家…',
     'project.tpl.req.t': '产品需求全流程', 'project.tpl.req.d': '从需求采集到评审的完整流程', 'project.tpl.research.t': '市场调研与竞品分析', 'project.tpl.research.d': '行业趋势、用户洞察与竞品对比', 'project.tpl.kb.t': '团队知识库', 'project.tpl.kb.d': '沉淀团队经验与协作规范', 'project.tpl.delivery.t': '项目交付', 'project.tpl.delivery.d': '里程碑、交付物与验收管理', 'project.tpl.bug.t': 'Bug 跟踪测试验收', 'project.tpl.bug.d': '缺陷记录、复现与回归验证',
-    'ph.invite': '邀请', 'ph.tab.feed': '动态', 'ph.tab.plan': '计划', 'ph.tab.task': '任务', 'ph.tab.asset': '资产', 'ph.tab.library': '资料库', 'ph.filter.mine': '与我相关', 'ph.filter.member': '成员动态', 'ph.empty.feed': '暂无与我有关的动态', 'ph.empty.plan': '暂无计划', 'ph.empty.task': '暂无任务', 'ph.empty.asset': '暂无资产', 'ph.empty.library': '暂无资料', 'ph.lib.add': '添加资料', 'ph.lib.addFile': '本地文件引用', 'ph.lib.addWeb': '网页资料', 'ph.lib.name': '名称', 'ph.lib.path': '文件路径', 'ph.lib.url': '网址', 'ph.lib.includeSubpages': '同时加入子页面', 'ph.lib.subpagesHint': '适用于 Confluence / Wiki 等有层级结构的页面', 'ph.lib.subpagesAdded': '已加入 {n} 个页面（含 {m} 个子页面）', 'ph.lib.desc': '描述（可选）', 'ph.lib.empty': '资料库为空，点击"添加资料"开始', 'ph.lib.noChildren': '暂无子页面', 'ph.lib.loadFailed': '加载子页面失败', 'ph.lib.del': '确定要移除资料「', 'ph.lib.delSuffix': '」吗？', 'ph.lib.added': '已加入资料库', 'ph.lib.file': '文件', 'ph.lib.web': '网页', 'ph.lib.generated': '生成文件', 'ph.lib.folder': '文件夹', 'ph.lib.preview': '预览', 'ph.lib.open': '打开', 'ph.lib.reveal': '打开文件位置', 'ph.lib.pin': '置顶', 'ph.lib.unpin': '取消置顶', 'ph.lib.pinned': '已置顶', 'ph.lib.openFailed': '打开失败', 'ph.lib.revealFailed': '定位失败', 'ph.lib.pinFailed': '置顶失败', 'ph.lib.previewFailed': '预览失败', 'ph.lib.binaryFile': '该文件为二进制文件，无法预览', 'ph.lib.truncated': '（内容已截断，仅显示前 200KB）', 'ph.lib.refFromLibrary': '引用资料库', 'ph.lib.refTitle': '引用资料', 'ph.lib.refConfirm': '引用', 'ph.lib.refNone': '请选择要引用的资料', 'ph.lib.addToLibrary': '加入资料库', 'ph.lib.addSubtitle': '把文件、网页或生成产物收进项目资料库', 'ph.lib.browse': '浏览…', 'ph.lib.browseFile': '选择文件…', 'ph.lib.browseFolder': '选择文件夹…', 'ph.lib.filePath': '文件路径', 'ph.lib.filePathPh': '输入文件路径，或点「选择文件」/「选择文件夹」', 'ph.lib.folderAdded': '已添加 {n} 个文件', 'ph.lib.folderTruncated': '超出上限，仅添加前 500 个', 'ph.lib.namePh': '资料名称', 'ph.lib.descPh': '简要描述这份资料（可选）', 'ph.lib.refHint': '选择要在对话中引用的资料（可多选）', 'ph.lib.searchPh': '搜索资料…', 'ph.composer.ph': '输入消息…', 'md.edit': '编辑', 'md.preview': '预览', 'md.hint': '支持 Markdown', 'md.empty': '（无内容）',
+    'ph.invite': '邀请', 'ph.tab.feed': '动态', 'ph.tab.plan': '计划', 'ph.tab.task': '任务', 'ph.tab.asset': '资产', 'ph.tab.library': '资料库', 'ph.filter.mine': '与我相关', 'ph.filter.member': '成员动态', 'ph.empty.feed': '暂无与我有关的动态', 'ph.empty.plan': '暂无计划', 'ph.empty.task': '暂无任务', 'ph.empty.asset': '暂无资产', 'ph.empty.library': '暂无资料', 'ph.lib.add': '添加资料', 'ph.lib.addFile': '本地文件引用', 'ph.lib.addWeb': '网页资料', 'ph.lib.name': '名称', 'ph.lib.path': '文件路径', 'ph.lib.url': '网址', 'ph.lib.includeSubpages': '同时加入子页面', 'ph.lib.subpagesHint': '适用于 Confluence / Wiki 等有层级结构的页面', 'ph.lib.subpagesAdded': '已加入 {n} 个页面（含 {m} 个子页面）', 'ph.lib.desc': '描述（可选）', 'ph.lib.empty': '资料库为空，点击"添加资料"开始', 'ph.lib.noChildren': '暂无子页面', 'ph.lib.loadFailed': '加载子页面失败', 'ph.lib.del': '确定要移除资料「', 'ph.lib.delSuffix': '」吗？', 'ph.lib.added': '已加入资料库', 'ph.lib.file': '文件', 'ph.lib.web': '网页', 'ph.lib.generated': '生成文件', 'ph.lib.folder': '文件夹', 'ph.lib.collection': '资料夹', 'ph.lib.addFolder': '新建资料夹', 'ph.lib.moveToFolder': '移动到资料夹', 'ph.lib.removeFromFolder': '移出资料夹', 'ph.lib.renameItem': '重命名', 'ph.lib.newSubFolder': '新建子资料夹', 'ph.lib.deleteFolder': '删除资料夹', 'ph.lib.deleteFolderConfirm': '确定删除该资料夹吗？其中的资料将移回根目录。', 'ph.lib.copied': '已复制链接', 'ph.lib.fetching': '正在抓取网页…', 'ph.lib.webFetchFail': '网页抓取失败', 'ph.lib.webFetchHint': '在浏览器中打开以查看完整内容', 'ph.lib.mkdirDone': '已新建资料夹', 'ph.lib.mkdirFailed': '新建资料夹失败', 'ph.lib.moveFailed': '移动失败', 'ph.lib.movedToFolder': '已移动到资料夹', 'ph.lib.removedFromFolder': '已移出资料夹', 'ph.lib.renameDone': '已重命名', 'ph.lib.renameFailed': '重命名失败', 'ph.lib.renameItemPrompt': '输入新的名称', 'ph.lib.nameRequired': '名称不能为空', 'ph.lib.newFolderPrompt': '请输入资料夹名称', 'ph.lib.noFolderYet': '还没有资料夹，是否现在新建？', 'ph.lib.needProject': '请先选择项目', 'ph.lib.preview': '预览', 'ph.lib.open': '打开', 'ph.lib.reveal': '打开文件位置', 'ph.lib.pin': '置顶', 'ph.lib.unpin': '取消置顶', 'ph.lib.pinned': '已置顶', 'ph.lib.copyLink': '复制链接', 'ph.lib.openUrl': '在浏览器打开', 'ph.lib.delete': '删除', 'ph.lib.addToSession': '添加到会话', 'ph.lib.addedToSession': '已添加到会话', 'ph.lib.addToSessionFail': '添加到会话失败', 'ph.lib.noUrl': '该资料没有可用链接', 'ph.lib.copyUrl': '复制链接', 'ph.lib.openFailed': '打开失败', 'ph.lib.revealFailed': '定位失败', 'ph.lib.pinFailed': '置顶失败', 'ph.lib.previewFailed': '预览失败', 'ph.lib.binaryFile': '该文件为二进制文件，无法预览', 'ph.lib.truncated': '（内容已截断，仅显示前 200KB）', 'ph.lib.refFromLibrary': '引用资料库', 'ph.lib.refTitle': '引用资料', 'ph.lib.refConfirm': '引用', 'ph.lib.refNone': '请选择要引用的资料', 'ph.lib.addToLibrary': '加入资料库', 'ph.lib.addSubtitle': '把文件、网页或生成产物收进项目资料库', 'ph.lib.browse': '浏览…', 'ph.lib.browseFile': '选择文件…', 'ph.lib.browseFolder': '选择文件夹…', 'ph.lib.filePath': '文件路径', 'ph.lib.filePathPh': '输入文件路径，或点「选择文件」/「选择文件夹」', 'ph.lib.folderAdded': '已添加 {n} 个文件', 'ph.lib.folderTruncated': '超出上限，仅添加前 500 个', 'ph.lib.namePh': '资料名称', 'ph.lib.descPh': '简要描述这份资料（可选）', 'ph.lib.refHint': '选择要在对话中引用的资料（可多选）', 'ph.lib.searchPh': '搜索资料…', 'ph.composer.ph': '输入消息…', 'md.edit': '编辑', 'md.preview': '预览', 'md.hint': '支持 Markdown', 'md.empty': '（无内容）',
     'ph.asset.upload': '上传文件', 'ph.asset.mkdir': '新建文件夹', 'ph.asset.search': '搜索文件或文件夹…', 'ph.asset.items': '项', 'ph.asset.loading': '加载中…', 'ph.asset.empty': '暂无资产',
     'ph.asset.filter.all': '全部来源', 'ph.asset.filter.project': '项目文件', 'ph.asset.filter.upload': '上传文件',
     'ph.asset.folder': '文件夹', 'ph.asset.readonly': '只读',
@@ -401,7 +401,7 @@ const I18N = {
     'ph.member.phone': '电话', 'ph.member.email': '邮箱', 'ph.member.role': '职位',
     'ph.asset.source.project': '项目', 'ph.asset.source.upload': '上传',
     'ph.asset.col.name': '名称', 'ph.asset.col.type': '类型', 'ph.asset.col.source': '来源', 'ph.asset.col.mtime': '修改时间', 'ph.asset.col.size': '大小',
-    'ph.asset.preview': '预览', 'ph.asset.delete': '删除', 'ph.asset.delete.confirm': '确定删除「{0}」吗？此操作不可恢复。', 'ph.asset.delete.failed': '删除失败', 'ph.asset.mkdir.prompt': '请输入文件夹名称：', 'ph.tool.craft': 'Craft', 'ph.tool.auto': '自动', 'ph.tool.skill': '技能', 'ph.tool.connector': '连接器', 'ph.config.title': '项目配置', 'ph.cfg.instruction': '指令', 'ph.cfg.instruction.d': '设定项目背景与规范', 'ph.cfg.connector': '连接器', 'ph.cfg.connector.d': '连接外部服务', 'ph.cfg.expert': '专家', 'ph.cfg.expert.d': '为项目配置专家角色', 'ph.cfg.skill': '技能', 'ph.cfg.skill.d': '配置项目技能', 'ph.cfg.automation': '自动化', 'ph.cfg.automation.d': '让 AI 按计划自动执行', 'ph.cfg.member': '成员', 'ph.cfg.member.d': '管理项目成员，在计划中指定为处理人', 'ph.plan.newTodo': '新建待办', 'ph.plan.addSource': '添加数据源', 'ph.plan.filter.ownership': '全部归属', 'ph.plan.filter.source': '全部来源', 'ph.plan.batch': '批量操作', 'ph.plan.searchPh': '搜索计划', 'ph.plan.col.todo': '待开始', 'ph.plan.col.doing': '进行中', 'ph.plan.col.pause': '暂停', 'ph.plan.col.done': '完成', 'ph.plan.empty': '暂无事项', 'ph.plan.empty.todo': '暂无事项，可从这里开始新建。',
+    'ph.asset.preview': '预览', 'ph.asset.delete': '删除', 'ph.asset.delete.confirm': '确定删除「{0}」吗？此操作不可恢复。', 'ph.asset.delete.failed': '删除失败', 'ph.asset.mkdir.prompt': '请输入文件夹名称：', 'ph.tool.craft': 'Craft', 'ph.tool.auto': '自动', 'ph.tool.skill': '技能', 'ph.tool.connector': '连接器', 'ph.config.title': '项目配置', 'ph.cfg.workspace': '工作区', 'ph.cfg.workspace.d': '关联本机目录，供项目会话读写', 'ph.cfg.wsNone': '未关联工作区', 'ph.cfg.instruction': '指令', 'ph.cfg.instruction.d': '设定项目背景与规范', 'ph.cfg.connector': '连接器', 'ph.cfg.connector.d': '连接外部服务', 'ph.cfg.expert': '专家', 'ph.cfg.expert.d': '为项目配置专家角色', 'ph.cfg.skill': '技能', 'ph.cfg.skill.d': '配置项目技能', 'ph.cfg.automation': '自动化', 'ph.cfg.automation.d': '让 AI 按计划自动执行', 'ph.cfg.member': '成员', 'ph.cfg.member.d': '管理项目成员，在计划中指定为处理人', 'ph.plan.newTodo': '新建待办', 'ph.plan.addSource': '添加数据源', 'ph.plan.filter.ownership': '全部归属', 'ph.plan.filter.source': '全部来源', 'ph.plan.batch': '批量操作', 'ph.plan.searchPh': '搜索计划', 'ph.plan.col.todo': '待开始', 'ph.plan.col.doing': '进行中', 'ph.plan.col.pause': '暂停', 'ph.plan.col.done': '完成', 'ph.plan.empty': '暂无事项', 'ph.plan.empty.todo': '暂无事项，可从这里开始新建。',
     'preset.butler.t': '指挥家', 'preset.butler.d': '复杂任务自动拆解，只需查看进度和简报',
     'preset.plan.t': 'Plan 模式', 'preset.plan.d': '加载 Plan SOP，按探索→规划→执行→验证流程',
     'preset.goal.t': 'Goal 模式', 'preset.goal.d': '设定目标，自主完成',
@@ -411,19 +411,33 @@ const I18N = {
     'preset.findwork.t': '找点事做', 'preset.findwork.d': '分析当前情况,推荐一批让你感兴趣的 TODO',
     'preset.mine.t': '我的·周报', 'preset.mine.d': '自定义：抓本周提交并写周报',
     'preset.add.t': '自定义', 'preset.add.d': '任意一句话存为功能',
-    'composer.placeholder': 'GA 能帮你做些什么？',
+    'composer.placeholder': '今天帮你做些什么？ @ 引用对话文件，/ 调用技能与指令 · ↑↓ 历史 · Ctrl+R 搜索',
     'workspace.selectTitle': '工作区', 'workspace.empty': '未选择',
     'workspace.panelTitle': '工作区', 'workspace.current': '当前',
     'workspace.offTitle': '解除绑定', 'workspace.add': '添加工作区',
-    'workspace.emptyList': '暂无工作区，点击下方添加',
+    'workspace.emptyList': '暂无工作区，请到「工作区」页面添加',
     'workspace.addTitle': '输入项目根目录的绝对路径',
     'workspace.addPlaceholder': '/path/to/your/project',
     'workspace.addConfirm': '添加', 'workspace.addCancel': '取消',
     'workspace.removeTitle': '删除', 'workspace.switchTitle': '切换到该工作区',
     'workspace.dangling': '(已失效)',
     'workspace.switched': '工作区已切换',
+    'workspace.manage': '管理工作区',
+    'wsm.title': '工作区', 'wsm.subtitle': '登记本机目录为工作区，供会话与项目关联使用',
+    'wsm.add': '添加工作区', 'wsm.empty': '还没有工作区，点击右上角「添加工作区」',
+    'wsm.usedBy': '关联项目', 'wsm.usedNone': '未被项目关联',
+    'wsm.memLines': '记忆 {0} 行', 'wsm.open': '在访达中显示',
+    'wsm.delConfirmTitle': '删除工作区',
+    'wsm.delConfirm': '确认删除工作区「{0}」？\n仅解除登记（移除快捷方式与索引），不会删除本地目录或任何文件。',
+    'wsm.delUnbound': '已解除 {0} 个项目的关联',
+    'wsm.deleted': '工作区已删除', 'wsm.added': '工作区已添加',
     'search.placeholder': '搜索会话…', 'conv.new': '新对话',
     'ctx.pin': '置顶', 'ctx.unpin': '取消置顶', 'ctx.rename': '重命名', 'ctx.del': '删除', 'ctx.batchDel': '批量删除', 'common.selectAll': '全选', 'conv.batchSelected': '已选', 'conv.batchDelConfirm': '确定删除选中的 {n} 个会话？',
+    'ctx.copyText': '复制文本', 'ctx.copyCode': '复制代码块', 'ctx.regenerate': '重新生成', 'ctx.editResend': '编辑并重发', 'ctx.delMsg': '删除消息',
+    'ctx.copy': '复制', 'ctx.search': '搜索', 'ctx.quote': '引用',
+    'ctx.undo': '撤销', 'ctx.redo': '重做', 'ctx.cut': '剪切', 'ctx.paste': '粘贴', 'ctx.selectAll': '全选', 'ctx.clear': '清空',
+    'ctx.newSession': '新建会话', 'ctx.restartKernel': '重启内核', 'ctx.restartBridge': '重启桥', 'ctx.about': '关于',
+    'collab.openDetail': '打开详情', 'collab.copyTitle': '复制标题', 'collab.copySummary': '复制摘要', 'collab.restart': '重新启动',
     'common.close': '关闭', 'common.more': '更多', 'common.optional': '选填', 'common.save': '保存',
     'common.expand': '展开', 'common.collapse': '收起', 'common.loading': '加载中…', 'common.new': '新建',
     'modal.preset': '预设功能', 'modal.addModel': '添加模型', 'modal.editModel': '编辑模型', 'modal.settings': '配置',
@@ -439,6 +453,19 @@ const I18N = {
     'shortcut.askConfirm': '是否在桌面创建 GenericAgent 快捷方式？',
     'appearance.light': '浅色', 'appearance.dark': '深色',
     'set.noModels': '暂无模型，点击下方添加',
+    'set.tabGeneral': '通用', 'set.tabModels': '模型', 'set.tabShortcuts': '快捷键',
+    'set.appearanceDesc': '选择应用界面的颜色主题。', 'set.fontSizeDesc': '调整对话正文的显示字号。', 'set.langDesc': '选择应用界面与系统提示的显示语言。',
+    'set.chatFilesDirDesc': '对话中上传文件与生成文件的保存目录。',
+    'set.modelDesc': '管理可用的 LLM 模型配置，支持添加、编辑与渠道组。',
+    'set.mykeyActions': 'mykey.py', 'set.mykeyActionsDesc': '导入或导出 mykey.py 模型配置文件。',
+    'set.serviceManagerOpen': '打开后台服务管理', 'set.serviceManagerDesc': '管理 IM 消息通道与后台进程。',
+    'set.shortcuts': '键盘快捷键', 'set.shortcutsDesc': '当前支持的快捷键列表。',
+    'shortcut.openSettings': '打开设置', 'shortcut.voiceToggle': '语音录制开关', 'shortcut.searchInChat': '对话内搜索',
+    'shortcut.sendMessage': '发送消息', 'shortcut.newLine': '输入时换行', 'shortcut.newChat': '新建对话',
+    'shortcut.stopGeneration': '停止生成', 'shortcut.prevTask': '上一个任务', 'shortcut.nextTask': '下一个任务',
+    'shortcut.toggleSidebar': '切换左侧栏', 'shortcut.toggleArtifacts': '切换右侧产物面板', 'shortcut.toggleFullscreen': '进入/退出全屏',
+    'shortcut.toggleWindow': '唤起/隐藏主窗口', 'shortcut.zoomIn': '放大内容字号', 'shortcut.zoomOut': '缩小内容字号',
+    'shortcut.zoomReset': '重置内容字号', 'shortcut.openMention': '唤起选择器', 'shortcut.openSlash': '唤起斜杠命令',
     'lang.zh': '简体中文', 'lang.en': 'English',
     'model.name': '备注', 'model.namePh': '会显示在模型列表',
     'model.apikey': 'API Key', 'model.apikeyPh': 'sk-...', 'model.apikeyKeep': '留空则保持原 Key 不变',
@@ -505,6 +532,7 @@ const I18N = {
     'page.token.title': '用量', 'page.token.sub': '每会话与累计用量及缓存率',
     'status.connecting': '正在连接…', 'status.ready': '服务在线', 'status.running': '处理中',
     'status.disconnected': '服务离线', 'status.stopped': '已停止', 'status.idle': '待命', 'status.done': '已完成',
+    'msg.interrupted': '⚠️ 服务重启，回答在此中断，以下为当时已生成的内容',
     'conv.emptyList': '暂无会话，点「＋ 新对话」开始', 'conv.defaultTitle': '新对话',
     'conv.folderDefault': '未归类', 'conv.folderArchived': 'Archived', 'conv.folderPrompt': '输入文件夹名称', 'conv.folderExists': '文件夹已存在', 'conv.folderEmpty': '空文件夹', 'conv.folderDeleteConfirm': '删除文件夹“{0}”？其中会话将移回未归类', 'conv.folderLocked': '系统文件夹不可修改', 'conv.moveDone': '已移动到 {0}',
     'ctx.moveToFolder': '移动到文件夹', 'ctx.moveArchived': '归档',
@@ -636,10 +664,10 @@ const I18N = {
     'nav.collab': 'Conductor', 'nav.token': 'Usage', 'nav.tasks': 'Scheduled Tasks',
     'foot.settings': 'Settings', 'foot.ver': 'GenericAgent · Desktop',
     'chat.startTitle': 'Start a conversation', 'chat.startSub': 'Type a message, or pick a preset',
-    'nav.project': 'Project', 'project.startTitle': 'Project Space', 'project.startSub': 'Select or create a project to start a focused session', 'project.placeholder': 'Type in project…',
+    'nav.project': 'Project', 'nav.workspace': 'Workspaces', 'project.startTitle': 'Project Space', 'project.startSub': 'Select or create a project to start a focused session', 'project.placeholder': 'Type in project…',
     'project.empty': 'No projects yet', 'project.hasMemory': 'Memory', 'project.noMemory': 'No memory', 'project.loadErr': 'Failed to load projects', 'project.enterErr': 'Failed to enter project', 'project.createErr': 'Failed to create project', 'project.enterBtn': 'Enter', 'project.memLines': 'lines',
     'project.title': 'Project', 'project.subtitle': 'Collaborate to build a super team', 'project.newBtn': 'New Project', 'project.myProjects': 'My Projects', 'project.searchPh': 'Search projects', 'project.fromTemplate': 'From Template', 'project.menuTitle': 'More', 'project.promptName': 'Enter project name', 'project.addedAgo': 'Added {0} ago', 'project.justNow': 'just now', 'project.minAgo': '{0} min ago', 'project.hourAgo': '{0} hours ago', 'project.dayAgo': '{0} days ago', 'project.monAgo': '{0} months ago', 'project.yearAgo': '{0} years ago',
-    'project.create': 'New Project', 'project.name': 'Project Name', 'project.template': 'Select Template', 'project.tplBlank': 'No template', 'project.instruction': 'Instruction', 'project.instructionPh': 'Enter project context, norms or system prompt…', 'project.instructionHint': 'Optional. Written to CLAUDE.md as the project instruction; takes effect automatically after entering the project.', 'project.createBtn': 'Create', 'project.nameRequired': 'Please enter a project name', 'project.tplOverwrite': 'Switching the template will overwrite the current instruction. Continue?', 'project.skills': 'Skills', 'project.skillsHint': 'Optional. Select which Skills are enabled for this project; unchecked ones won\'t be injected. Leave all unchecked to enable all.', 'project.skillsLoading': 'Loading…', 'project.skillsNone': 'No skills found', 'project.editSkills': 'Edit Skills', 'project.skillsSaved': 'Skills saved, takes effect on new session', 'project.rename': 'Rename', 'project.renamePrompt': 'Enter new project name', 'project.renameErr': 'Rename failed', 'project.delete': 'Delete Project', 'project.deleteConfirm': 'Are you sure you want to delete project "{0}"? This cannot be undone.', 'project.deleteErr': 'Delete failed', 'project.nameInvalid': 'Name cannot contain / \\ or start with .', 'project.workspace': 'Workspace', 'project.wsNone': 'None', 'project.wsExisting': 'Use existing workspace', 'project.wsNew': 'Create new workspace', 'project.wsPathPh': 'Enter full path for new workspace…', 'project.wsHint': 'New workspaces are automatically registered to the workspace list.', 'project.wsSelectErr': 'Please select an existing workspace', 'project.wsPathErr': 'Please enter a workspace path', 'project.wsSaved': 'Workspace updated', 'project.wsCurrent': 'Current workspace', 'project.addSkill': 'Add Skill', 'project.skillsSearchPh': 'Search skills…', 'project.skillsActiveHint': 'Enabled skills; click × to remove. Empty means all skills enabled.', 'project.expertsLoading': 'Loading…', 'project.expertNone': 'No experts', 'project.expertsNone': 'No experts found', 'project.expertsSaved': 'Experts saved, takes effect on new session', 'project.addExpert': 'Add Expert', 'project.expertsSearchPh': 'Search experts…',
+    'project.create': 'New Project', 'project.name': 'Project Name', 'project.template': 'Select Template', 'project.tplBlank': 'No template', 'project.instruction': 'Instruction', 'project.instructionPh': 'Enter project context, norms or system prompt…', 'project.instructionHint': 'Optional. Written to CLAUDE.md as the project instruction; takes effect automatically after entering the project.', 'project.createBtn': 'Create', 'project.nameRequired': 'Please enter a project name', 'project.tplOverwrite': 'Switching the template will overwrite the current instruction. Continue?', 'project.skills': 'Skills', 'project.skillsHint': 'Optional. Select which Skills are enabled for this project; unchecked ones won\'t be injected. Leave all unchecked to enable all.', 'project.skillsLoading': 'Loading…', 'project.skillsNone': 'No skills found', 'project.editSkills': 'Edit Skills', 'project.skillsSaved': 'Skills saved, takes effect on new session', 'project.rename': 'Rename', 'project.renamePrompt': 'Enter new project name', 'project.renameErr': 'Rename failed', 'project.delete': 'Delete Project', 'project.deleteConfirm': 'Are you sure you want to delete project "{0}"? This cannot be undone.', 'project.deleteErr': 'Delete failed', 'project.nameInvalid': 'Name cannot contain / \\ or start with .', 'project.workspace': 'Workspace', 'project.wsNone': 'None', 'project.wsExisting': 'Use existing workspace', 'project.wsHint': 'Add workspaces first on the Workspaces page.', 'project.wsSelectErr': 'Please select an existing workspace', 'project.wsSaved': 'Workspace updated', 'project.wsCurrent': 'Current workspace', 'project.addSkill': 'Add Skill', 'project.skillsSearchPh': 'Search skills…', 'project.skillsActiveHint': 'Enabled skills; click × to remove. Empty means all skills enabled.', 'project.expertsLoading': 'Loading…', 'project.expertNone': 'No experts', 'project.expertsNone': 'No experts found', 'project.expertsSaved': 'Experts saved, takes effect on new session', 'project.addExpert': 'Add Expert', 'project.expertsSearchPh': 'Search experts…',
     'project.tpl.req.t': 'Product Requirements', 'project.tpl.req.d': 'Full flow from gathering to review', 'project.tpl.research.t': 'Market & Competitor Research', 'project.tpl.research.d': 'Trends, insights and competitor analysis', 'project.tpl.kb.t': 'Team Knowledge Base', 'project.tpl.kb.d': 'Team experience and collaboration norms', 'project.tpl.delivery.t': 'Project Delivery', 'project.tpl.delivery.d': 'Milestones, deliverables and acceptance', 'project.tpl.bug.t': 'Bug Tracking & QA', 'project.tpl.bug.d': 'Defect logging, repro and regression',
     'preset.butler.t': 'Conductor', 'preset.butler.d': 'Auto-decompose complex tasks; just check progress and briefings',
     'preset.plan.t': 'Plan mode', 'preset.plan.d': 'Load Plan SOP — explore→plan→execute→verify',
@@ -650,19 +678,33 @@ const I18N = {
     'preset.findwork.t': 'Find me work', 'preset.findwork.d': 'Analyze my context and suggest a batch of interesting TODOs',
     'preset.mine.t': 'My · Weekly', 'preset.mine.d': 'Custom: weekly report from commits',
     'preset.add.t': 'Custom', 'preset.add.d': 'Save any prompt as a function',
-    'composer.placeholder': 'What can GA do for you?',
+    'composer.placeholder': 'What can I help with today? @ reference files, / skills & commands · ↑↓ history · Ctrl+R search',
     'workspace.selectTitle': 'Workspace', 'workspace.empty': 'None',
     'workspace.panelTitle': 'Workspace', 'workspace.current': 'Current',
     'workspace.offTitle': 'Unbind', 'workspace.add': 'Add Workspace',
-    'workspace.emptyList': 'No workspaces yet. Add one below.',
+    'workspace.emptyList': 'No workspaces yet. Add one on the Workspaces page.',
     'workspace.addTitle': 'Enter absolute path to project root',
     'workspace.addPlaceholder': '/path/to/your/project',
     'workspace.addConfirm': 'Add', 'workspace.addCancel': 'Cancel',
     'workspace.removeTitle': 'Remove', 'workspace.switchTitle': 'Switch to this workspace',
     'workspace.dangling': '(unavailable)',
     'workspace.switched': 'Workspace switched',
+    'workspace.manage': 'Manage workspaces',
+    'wsm.title': 'Workspaces', 'wsm.subtitle': 'Register local directories as workspaces for sessions and projects',
+    'wsm.add': 'Add Workspace', 'wsm.empty': 'No workspaces yet — click "Add Workspace"',
+    'wsm.usedBy': 'Projects', 'wsm.usedNone': 'Not used by any project',
+    'wsm.memLines': 'memory {0} lines', 'wsm.open': 'Reveal in Finder',
+    'wsm.delConfirmTitle': 'Delete workspace',
+    'wsm.delConfirm': 'Delete workspace "{0}"?\nThis only removes the registration (shortcut + index). No local directory or file is deleted.',
+    'wsm.delUnbound': 'Unbound from {0} project(s)',
+    'wsm.deleted': 'Workspace deleted', 'wsm.added': 'Workspace added',
     'search.placeholder': 'Search chats…', 'conv.new': 'New chat',
     'ctx.pin': 'Pin', 'ctx.unpin': 'Unpin', 'ctx.rename': 'Rename', 'ctx.del': 'Delete', 'ctx.batchDel': 'Batch Delete', 'common.selectAll': 'Select All', 'conv.batchSelected': 'Selected', 'conv.batchDelConfirm': 'Delete {n} selected sessions?',
+    'ctx.copyText': 'Copy text', 'ctx.copyCode': 'Copy code block', 'ctx.regenerate': 'Regenerate', 'ctx.editResend': 'Edit & resend', 'ctx.delMsg': 'Delete message',
+    'ctx.copy': 'Copy', 'ctx.search': 'Search', 'ctx.quote': 'Quote',
+    'ctx.undo': 'Undo', 'ctx.redo': 'Redo', 'ctx.cut': 'Cut', 'ctx.paste': 'Paste', 'ctx.selectAll': 'Select all', 'ctx.clear': 'Clear',
+    'ctx.newSession': 'New chat', 'ctx.restartKernel': 'Restart kernel', 'ctx.restartBridge': 'Restart bridge', 'ctx.about': 'About',
+    'collab.openDetail': 'Open details', 'collab.copyTitle': 'Copy title', 'collab.copySummary': 'Copy summary', 'collab.restart': 'Restart',
     'common.close': 'Close', 'common.more': 'More', 'common.optional': 'Optional', 'common.save': 'Save',
     'common.expand': 'Expand', 'common.collapse': 'Collapse', 'common.loading': 'Loading…', 'common.new': 'New',
     'modal.preset': 'Presets', 'modal.addModel': 'Add model', 'modal.editModel': 'Edit model', 'modal.settings': 'Settings',
@@ -678,6 +720,19 @@ const I18N = {
     'shortcut.askConfirm': 'Create a desktop shortcut for GenericAgent?',
     'appearance.light': 'Light', 'appearance.dark': 'Dark',
     'set.noModels': 'No models yet — add one below',
+    'set.tabGeneral': 'General', 'set.tabModels': 'Models', 'set.tabShortcuts': 'Shortcuts',
+    'set.appearanceDesc': 'Choose the app color theme.', 'set.fontSizeDesc': 'Adjust the chat text size.', 'set.langDesc': 'Select the language for the app interface and system prompts.',
+    'set.chatFilesDirDesc': 'Directory for uploaded and generated chat files.',
+    'set.modelDesc': 'Manage available LLM model profiles and aggregation groups.',
+    'set.mykeyActions': 'mykey.py', 'set.mykeyActionsDesc': 'Import or export the mykey.py model config file.',
+    'set.serviceManagerOpen': 'Open service manager', 'set.serviceManagerDesc': 'Manage IM channels and background processes.',
+    'set.shortcuts': 'Keyboard shortcuts', 'set.shortcutsDesc': 'Currently supported shortcuts.',
+    'shortcut.openSettings': 'Open settings', 'shortcut.voiceToggle': 'Voice recording toggle', 'shortcut.searchInChat': 'Search in conversation',
+    'shortcut.sendMessage': 'Send message', 'shortcut.newLine': 'Insert new line', 'shortcut.newChat': 'New chat',
+    'shortcut.stopGeneration': 'Stop generation', 'shortcut.prevTask': 'Previous task', 'shortcut.nextTask': 'Next task',
+    'shortcut.toggleSidebar': 'Toggle sidebar', 'shortcut.toggleArtifacts': 'Toggle artifacts panel', 'shortcut.toggleFullscreen': 'Enter/exit fullscreen',
+    'shortcut.toggleWindow': 'Show/hide main window', 'shortcut.zoomIn': 'Increase font size', 'shortcut.zoomOut': 'Decrease font size',
+    'shortcut.zoomReset': 'Reset font size', 'shortcut.openMention': 'Open mention picker', 'shortcut.openSlash': 'Open slash commands',
     'lang.zh': '简体中文', 'lang.en': 'English',
     'model.name': 'Note', 'model.namePh': 'Shown in the model list',
     'model.apikey': 'API Key', 'model.apikeyPh': 'sk-...', 'model.apikeyKeep': 'Leave blank to keep the current key',
@@ -744,6 +799,7 @@ const I18N = {
     'page.token.title': 'Usage', 'page.token.sub': 'Per-session and total usage & cache rate',
     'status.connecting': 'Connecting…', 'status.ready': 'Service online', 'status.running': 'Working…',
     'status.disconnected': 'Service offline', 'status.stopped': 'Stopped', 'status.idle': 'Standby', 'status.done': 'Done',
+    'msg.interrupted': '⚠️ Service restarted — reply interrupted here; below is what had been generated',
     'conv.emptyList': 'No chats yet — click “＋ New chat”', 'conv.defaultTitle': 'New chat',
     'conv.folderDefault': 'Unfiled', 'conv.folderArchived': 'Archived', 'conv.folderPrompt': 'Enter folder name', 'conv.folderExists': 'Folder already exists', 'conv.folderEmpty': 'Empty folder', 'conv.folderDeleteConfirm': 'Delete folder "{0}"? Conversations will be moved to Unfiled', 'conv.folderLocked': 'System folders cannot be changed', 'conv.moveDone': 'Moved to {0}',
     'ctx.moveToFolder': 'Move to folder', 'ctx.moveArchived': 'Archive',
@@ -3089,9 +3145,10 @@ function assistantCopyText(msg) {
   }
   return '';
 }
-function msgNode(msg) {
+function msgNode(msg, idx) {
   const el = document.createElement('div');
   el.className = 'msg ' + (msg.role || 'system');
+  if (idx != null) el.dataset.idx = idx;
   if (msg.role === 'user') {
     const shown = (typeof msg.display === 'string' && msg.display.length) ? msg.display : msg.content;
     const imgsHtml = (msg.images && msg.images.length)
@@ -3114,7 +3171,8 @@ function msgNode(msg) {
   else if (msg.role === 'assistant') {
     const segs = assistantTurnSegs(msg);
     let html = renderAssistantTurnsHtml(segs, msg.curr_turn, false);
-    if (msg.stopped) html += `<p><em>[${escapeHtml(t('status.stopped'))}]</em></p>`;
+    if (msg.interrupted) html += `<p><em>[${escapeHtml(t('msg.interrupted'))}]</em></p>`;
+    else if (msg.stopped) html += `<p><em>[${escapeHtml(t('status.stopped'))}]</em></p>`;
     html += renderProducedFilesHtml(msg.produced_files);
     el.innerHTML = `<div class="bubble md">${html}</div>`;
     postRenderEnhance(el.querySelector('.bubble'));
@@ -3163,14 +3221,14 @@ function renderAllMessages(sess) {
   const msgs = sess.messages || [];
   const total = msgs.length;
   if (total <= RENDER_SYNC_TAIL) {
-    for (const m of msgs) box.appendChild(msgNode(m));
+    for (let i = 0; i < msgs.length; i++) box.appendChild(msgNode(msgs[i], i));
     syncAskUserUi();
     refreshEmptyState(sess); scrollBottom(true);
     return;
   }
   // 先同步渲染最近 RENDER_SYNC_TAIL 条（用户通常只看最新对话）
   const syncStart = total - RENDER_SYNC_TAIL;
-  for (let i = syncStart; i < total; i++) box.appendChild(msgNode(msgs[i]));
+  for (let i = syncStart; i < total; i++) box.appendChild(msgNode(msgs[i], i));
   syncAskUserUi();
   refreshEmptyState(sess); scrollBottom(true);
   // 更早的消息分块 prepend 到顶部
@@ -3179,7 +3237,7 @@ function renderAllMessages(sess) {
     const end = syncStart - box.__pendingTail;
     const start = Math.max(0, end - RENDER_CHUNK);
     const frag = document.createDocumentFragment();
-    for (let i = start; i < end; i++) frag.appendChild(msgNode(msgs[i]));
+    for (let i = start; i < end; i++) frag.appendChild(msgNode(msgs[i], i));
     box.insertBefore(frag, box.firstChild);
     box.__pendingTail = syncStart - start;
     if (start > 0) { requestAnimationFrame(tick); return; }
@@ -3218,7 +3276,7 @@ function restoreElapsedBadges(sess, box) {
 }
 function appendMessage(sess, msg) {
   if (!isActive(sess)) return;
-  const el = msgNode(msg);
+  const el = msgNode(msg, sess.messages.indexOf(msg));
   ensureMsgs().appendChild(el);
   if (msg.role === 'assistant') {
     const r = rt(sess);
@@ -3314,6 +3372,7 @@ function renderDraft(sess) {
   const box = ensureMsgs();
   if (!r.draftEl || r.draftEl.parentNode !== box) {
     r.draftEl = document.createElement('div'); r.draftEl.className = 'msg assistant'; box.appendChild(r.draftEl);
+    r.draftEl.dataset.idx = sess.messages.length; // 助手消息将占据此索引
     bindDraftInteractGuard(r.draftEl, r);
     if (r.taskStartedAt) ensureTaskElapsedBadge(r.draftEl, r.taskStartedAt, null);
   }
@@ -3663,7 +3722,7 @@ function renderSessionList() {
         const pinSvg = sess.pinned ? GA_ICON('pushPinSimple', 'ci-pin') : '';
         const metaParts = [busy ? t('status.running') : (sess.status === 'done' ? t('status.done') : t('status.idle'))];
         if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
-        if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? ':' + sess.branch : ''));
+        if (sess.workspace) metaParts.push(gaWsDisplayName(sess.workspace) + (sess.branch ? ':' + sess.branch : ''));
         const item = document.createElement('div');
         item.className = 'conv-item batch' + (sel ? ' selected' : '') + (busy ? '' : (sess.status === 'done' ? ' done' : ' idle'));
         item.dataset.id = sess.id;
@@ -3776,7 +3835,7 @@ function renderSessionList() {
       const pinSvg = sess.pinned ? GA_ICON('pushPinSimple', 'ci-pin') : '';
       const metaParts = [busy ? t('status.running') : (sess.status === 'done' ? t('status.done') : t('status.idle'))];
       if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
-      if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? `:${sess.branch}` : ''));
+      if (sess.workspace) metaParts.push(gaWsDisplayName(sess.workspace) + (sess.branch ? `:${sess.branch}` : ''));
       item.innerHTML =
         (showToggle ? `<button class="conv-session-toggle" data-session-toggle="1" title="${escapeHtml(t('common.expand'))}" aria-label="${escapeHtml(t('common.expand'))}">${GA_ICON('caretDown')}</button>` : '') +
         `<span class="ci-dot"></span><div class="ci-main">` +
@@ -3869,7 +3928,7 @@ function renderRoundMessages(sess, roundIndex) {
   if (rd) {
     for (let i = rd.startIdx; i <= rd.endIdx; i++) {
       const m = sess.messages[i];
-      if (m) ensureMsgs().appendChild(msgNode(m));
+      if (m) ensureMsgs().appendChild(msgNode(m, i));
     }
   }
   refreshEmptyState(sess);
@@ -3909,7 +3968,7 @@ async function openResumeModal() {
     const busy = !!(r && r.busy);
     const metaParts = [busy ? t('status.running') : (sess.status === 'done' ? t('status.done') : t('status.idle'))];
     if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
-    if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? `:${sess.branch}` : ''));
+    if (sess.workspace) metaParts.push(gaWsDisplayName(sess.workspace) + (sess.branch ? `:${sess.branch}` : ''));
     const div = document.createElement('div');
     div.className = 'conv-item' + (busy ? '' : (sess.status === 'done' ? ' done' : ' idle'));
     div.innerHTML =
@@ -3952,7 +4011,7 @@ function renderResumeList() {
     const busy = !!(r && r.busy);
     const metaParts = [busy ? t('status.running') : (sess.status === 'done' ? t('status.done') : t('status.idle'))];
     if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
-    if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? `:${sess.branch}` : ''));
+    if (sess.workspace) metaParts.push(gaWsDisplayName(sess.workspace) + (sess.branch ? `:${sess.branch}` : ''));
     const div = document.createElement('div');
     div.className = 'conv-item' + (i === _resumeIdx ? ' active' : '') + (busy ? '' : (sess.status === 'done' ? ' done' : ' idle'));
     div.innerHTML = '<span class="ci-dot"></span><div class="ci-main"><div class="ci-title">' + escapeHtml(displayTitle(sess)) + '</div><div class="ci-meta">' + escapeHtml(metaParts.join(' · ')) + '</div></div>';
@@ -4563,17 +4622,17 @@ function renderMemberRows() {
   if (!box) return;
   var list = Array.isArray(phState.members) ? phState.members : [];
   if (!list.length) {
-    box.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-muted,#888);" data-i18n="ph.member.empty"></div>';
+    box.innerHTML = '<div class="mbr-empty" data-i18n="ph.member.empty"></div>';
     return;
   }
   box.innerHTML = list.map(function (m) {
     var fields = ['nick', 'name', 'phone', 'email', 'role'];
     var inputs = fields.map(function (f) {
-      return '<input type="text" class="nt-input mbr-fld" data-fld="' + f + '" data-mid="' + m.id + '" value="' + escapeAttr(m[f] || '') + '" placeholder="' + ({nick: '昵称', name: '姓名', phone: '电话', email: '邮件', role: '职位'}[f] || f) + '" autocomplete="off"' + (f === 'nick' ? ' style="flex:0 0 110px;"' : '') + '>';
+      return '<input type="text" class="nt-input mbr-fld' + (f === 'nick' ? ' mbr-fld--nick' : '') + '" data-fld="' + f + '" data-mid="' + m.id + '" value="' + escapeAttr(m[f] || '') + '" placeholder="' + ({nick: '昵称', name: '姓名', phone: '电话', email: '邮件', role: '职位'}[f] || f) + '" autocomplete="off">';
     }).join('');
-    return '<div class="mbr-row" data-mid="' + m.id + '" style="display:flex;gap:6px;align-items:center;">' +
-      '<span style="display:flex;gap:4px;flex:1;min-width:0;">' + inputs + '</span>' +
-      '<button type="button" class="mbr-del" data-mid="' + m.id + '" data-i18n-title="ph.member.del" title="" style="flex:0 0 auto;background:none;border:none;color:#e25555;cursor:pointer;font-size:16px;">✕</button>' +
+    return '<div class="mbr-row" data-mid="' + m.id + '">' +
+      '<div class="mbr-fields">' + inputs + '</div>' +
+      '<button type="button" class="mbr-del" data-mid="' + m.id + '" data-i18n-title="ph.member.del" title="">✕</button>' +
       '</div>';
   }).join('');
 }
@@ -4781,7 +4840,9 @@ async function initProjectHome(name, sessionId) {
       e.stopPropagation();
       var card = btn.closest('.ph-cfg-card');
       var cfgKey = card?.dataset.phCfg;
-      if (cfgKey === 'automation') {
+      if (cfgKey === 'workspace') {
+        openSetWorkspaceModal(name);
+      } else if (cfgKey === 'automation') {
         openAutomationModal(name);
       } else if (cfgKey === 'member') {
         openMembersModal(name);
@@ -4814,6 +4875,7 @@ async function initProjectHome(name, sessionId) {
   loadProjectDatasources(name).then(function () { if (phState.project === name) renderPhContent(); });
   loadProjectTodos(name);
   loadProjectMembers(name);
+  renderPhWorkspaceCard(name);
   // 渲染专家头像（真实数据，替代占位）
   renderProjectExperts(name);
 }
@@ -4831,7 +4893,7 @@ function renderPhTaskList() {
     var busy = !!(r && r.busy);
     var metaParts = [busy ? t('status.running') : (sess.status === 'done' ? t('status.done') : t('status.idle'))];
     if (sess.updatedAt) metaParts.push(relativeTime(sess.updatedAt));
-    if (sess.workspace) metaParts.push(sess.workspace + (sess.branch ? ':' + sess.branch : ''));
+    if (sess.workspace) metaParts.push(gaWsDisplayName(sess.workspace) + (sess.branch ? ':' + sess.branch : ''));
     return '<div class="conv-item ph-task-item' + (busy ? '' : (sess.status === 'done' ? ' done' : ' idle')) + '" data-ph-task-open="' + escapeHtml(sess.id) + '" data-id="' + escapeHtml(sess.id) + '" role="button" tabindex="0">'
       + '<span class="ci-dot"></span><div class="ci-main">'
       + '<div class="ci-title">' + escapeHtml(displayTitle(sess)) + '</div>'
@@ -4990,14 +5052,30 @@ async function fetchProjectLibrary(projectName) {
 
 function _libTypeMeta(item) {
   var type = item.type || 'file';
-  if (type === 'web') return { icon: 'link', label: t('ph.lib.web'), cls: 'ph-lib-web' };
+  // 虚拟资料夹（资料库内的逻辑分组，区别于文件系统文件夹）：用 outline 文件夹图标 + 专属配色
+  if (type === 'libfolder') return { icon: 'folderSimple', label: t('ph.lib.collection'), cls: 'ph-lib-collection' };
+  if (type === 'web') return { icon: 'arrowUpRight', label: t('ph.lib.web'), cls: 'ph-lib-web' };
   if (type === 'generated') return { icon: 'lightning', label: t('ph.lib.generated'), cls: 'ph-lib-gen' };
-  if (type === 'folder') return { icon: 'folder', label: t('ph.lib.folder'), cls: 'ph-lib-folder' };
+  // 文件系统文件夹引用（指向磁盘真实目录）：用「打开的文件夹」图标，与虚拟资料夹区分
+  if (type === 'folder' || item.is_dir) return { icon: 'folderOpen', label: t('ph.lib.folder'), cls: 'ph-lib-folder-fs' };
   return { icon: 'paperclip', label: t('ph.lib.file'), cls: 'ph-lib-file' };
 }
 
 // ---- 资料库树形节点渲染 (递归) ----
 var phLibItems = []; // 最近一次渲染的资料库条目（供三点菜单查找 is_dir/pinned）
+// 返回某资料夹的所有后代条目（递归），用于「添加到会话」时把文件夹内容一并加入
+function libDescendantsOf(rootId) {
+  var out = [], seen = {}, stack = [rootId];
+  seen[rootId] = true;
+  while (stack.length) {
+    var cur = stack.pop();
+    for (var i = 0; i < phLibItems.length; i++) {
+      var it = phLibItems[i];
+      if ((it.parent_id || '') === cur && !seen[it.id]) { seen[it.id] = true; out.push(it); stack.push(it.id); }
+    }
+  }
+  return out;
+}
 function _libNodeHtml(it, byParent) {
   var meta = _libTypeMeta(it);
   var id = it.id || '';
@@ -5074,7 +5152,42 @@ function resolveLibFavicons(root) {
 // ---- 打开条目对应的网页 ----
 function _libOpenUrl(url) {
   if (!url || !/^https?:\/\//i.test(url)) return;
-  window.open(url, '_blank', 'noopener,noreferrer');
+  // Tauri webview 内 window.open 是 no-op；改走后端 /open-url 用系统默认浏览器打开
+  fetch('/open-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: url }),
+  }).then(function (r) {
+    if (!r.ok) {
+      r.json().then(function (d) { showToast(t('ph.lib.openFailed') + (d && d.error ? ': ' + d.error : '')); }).catch(function () {});
+    }
+  }).catch(function () {
+    // 兜底：后端不可达时尝试 window.ga.openExternal / window.open
+    if (window.ga && window.ga.openExternal) window.ga.openExternal(url);
+    else window.open(url, '_blank');
+  });
+}
+
+// ---- 复制文本到剪贴板（带 execCommand 兜底）----
+function _copyTextToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(function () { _copyTextFallback(text); });
+  } else {
+    _copyTextFallback(text);
+  }
+}
+function _copyTextFallback(text) {
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  } catch (e) { /* ignore */ }
 }
 
 // ---- 展开/折叠 + 懒加载子页 ----
@@ -5124,8 +5237,9 @@ async function renderPhLibrary(box) {
   html += '    <span class="ph-lib-count">' + items.length + ' ' + (items.length === 1 ? '项' : '项') + '</span>';
   html += '  </div>';
   html += '  <div class="ph-lib-bar-right">';
+  html += '    <button class="ph-lib-btn" id="ph-lib-new-folder" type="button">' + gaIcon('folderSimplePlus') + '<span>' + t('ph.lib.addFolder') + '</span></button>';
   html += '    <button class="ph-lib-btn" id="ph-lib-add-file" type="button">' + gaIcon('paperclip') + '<span>' + t('ph.lib.addFile') + '</span></button>';
-  html += '    <button class="ph-lib-btn" id="ph-lib-add-web" type="button">' + gaIcon('link') + '<span>' + t('ph.lib.addWeb') + '</span></button>';
+  html += '    <button class="ph-lib-btn" id="ph-lib-add-web" type="button">' + gaIcon('arrowUpRight') + '<span>' + t('ph.lib.addWeb') + '</span></button>';
   html += '    <button class="ph-lib-btn ph-lib-btn-primary" id="ph-lib-ref" type="button">' + gaIcon('arrowUpRight') + '<span>' + t('ph.lib.refFromLibrary') + '</span></button>';
   html += '  </div>';
   html += '</div>';
@@ -5151,6 +5265,8 @@ async function renderPhLibrary(box) {
   }
   box.innerHTML = html;
 
+  var newFolder = document.getElementById('ph-lib-new-folder');
+  if (newFolder) newFolder.onclick = function () { openLibraryNewFolderModal(''); };
   var addFile = document.getElementById('ph-lib-add-file');
   if (addFile) addFile.onclick = function () { openLibraryAddModal('file'); };
   var addWeb = document.getElementById('ph-lib-add-web');
@@ -5213,13 +5329,48 @@ function _libSyncAddType() {
   var subRow = document.getElementById('lib-add-row-subpages');
   var tabFile = document.getElementById('lib-add-tab-file');
   var tabWeb = document.getElementById('lib-add-tab-web');
-  if (fileRow) fileRow.hidden = (_libAddType !== 'file');
-  if (webRow) webRow.hidden = (_libAddType !== 'web');
+  var tabFolder = document.getElementById('lib-add-tab-folder');
+  var isFolder = (_libAddType === 'folder');
+  if (fileRow) fileRow.hidden = !isFolder ? (_libAddType !== 'file') : true;
+  if (webRow) webRow.hidden = !isFolder ? (_libAddType !== 'web') : true;
   if (subRow) subRow.hidden = (_libAddType !== 'web');
   if (tabFile) tabFile.classList.toggle('active', _libAddType === 'file');
   if (tabWeb) tabWeb.classList.toggle('active', _libAddType === 'web');
+  if (tabFolder) tabFolder.classList.toggle('active', isFolder);
 }
 function setLibraryAddType(type) { _libAddType = type; _libSyncAddType(); }
+
+// 打开「新建资料夹」：复用添加资料弹窗的“资料夹”标签页；parentId 指定则在该资料夹内新建子资料夹
+function openLibraryNewFolderModal(parentId) {
+  _libAddParentId = parentId || '';
+  _libAddType = 'folder';
+  var m = document.getElementById('library-add-modal');
+  if (!m) return;
+  _libSyncAddType();
+  var nameEl = document.getElementById('lib-add-name');
+  var descEl = document.getElementById('lib-add-desc');
+  if (nameEl) nameEl.value = '';
+  if (descEl) descEl.value = '';
+  mdRefreshEditor('lib-add-desc', true);
+  m.hidden = false;
+  if (nameEl) setTimeout(function () { try { nameEl.focus(); } catch (_) {} }, 30);
+}
+
+// 新建资料夹（虚拟资料库文件夹）。parentId 为空=根目录；传入则在该资料夹内新建子资料夹。
+var _libAddParentId = '';
+async function createLibraryFolder(folderName, parentId) {
+  var projectName = phState.project;
+  if (!projectName || !folderName) return null;
+  var payload = { type: 'libfolder', name: folderName, desc: '', parent_id: parentId || '' };
+  try {
+    var res = await fetch('/projects/' + encProject(projectName) + '/library', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    if (!res.ok) { showToast(t('ph.lib.mkdirFailed') || '新建资料夹失败'); return null; }
+    var body = await res.json().catch(function () { return {}; });
+    return body.item || null;
+  } catch (e) { showToast(String(e)); return null; }
+}
 
 async function submitAddLibrary() {
   var projectName = phState.project;
@@ -5228,6 +5379,18 @@ async function submitAddLibrary() {
   var descEl = document.getElementById('lib-add-desc');
   var name = (nameEl && nameEl.value || '').trim();
   var desc = (descEl && descEl.value || '').trim();
+  // 虚拟资料夹：只需名称（可选描述），无 path/url
+  if (_libAddType === 'folder') {
+    if (!name) { showToast(t('ph.lib.nameRequired') || '请输入名称'); return; }
+    var fitem = await createLibraryFolder(name, _libAddParentId);
+    var m0 = document.getElementById('library-add-modal');
+    if (m0) m0.hidden = true;
+    _libAddParentId = '';
+    if (fitem) showToast(t('ph.lib.mkdirDone') || '已新建资料夹');
+    var box0 = document.querySelector('.ph-content');
+    if (box0 && phState.tab === 'library') renderPhLibrary(box0);
+    return;
+  }
   var payload = { type: _libAddType, name: name, desc: desc };
   if (_libAddType === 'web') {
     var urlEl = document.getElementById('lib-add-url');
@@ -5244,6 +5407,7 @@ async function submitAddLibrary() {
     payload.path = path;
     if (!name) payload.name = path.split('/').pop() || path;
   }
+  if (_libAddParentId) payload.parent_id = _libAddParentId;
   var body = {};
   try {
     var res = await fetch('/projects/' + encProject(projectName) + '/library', {
@@ -5256,12 +5420,15 @@ async function submitAddLibrary() {
   } catch (e) { showToast(String(e)); return; }
   var m = document.getElementById('library-add-modal');
   if (m) m.hidden = true;
+  _libAddParentId = '';
   if (body.subpages) {
     showToast(t('ph.lib.subpagesAdded').replace('{n}', String(body.added || 0)).replace('{m}', String(body.subpages || 0)));
   } else if (body.expanded || body.folder || body.hierarchical) {
     var msg = t('ph.lib.folderAdded').replace('{n}', String(body.added || 0));
     if (body.truncated) msg += '（' + t('ph.lib.folderTruncated') + '）';
     showToast(msg);
+  } else if (body.item && body.item.type === 'libfolder') {
+    showToast(t('ph.lib.mkdirDone') || '已新建资料夹');
   } else {
     showToast(t('ph.lib.added'));
   }
@@ -5272,7 +5439,12 @@ async function submitAddLibrary() {
 async function removeLibraryItem(id, name) {
   var projectName = phState.project;
   if (!projectName || !id) return;
-  if (!confirm(t('ph.lib.del') + (name || '') + t('ph.lib.delSuffix'))) return;
+  var it = phLibItems.find(function (x) { return x.id === id; }) || {};
+  var isFolder = it.type === 'libfolder' || !!it.is_dir || it.type === 'folder';
+  var msg = isFolder
+    ? (t('ph.lib.deleteFolderConfirm') || '确定删除资料夹「{0}」吗？其中的资料会移回根目录。').replace('{0}', name || '')
+    : t('ph.lib.del') + (name || '') + t('ph.lib.delSuffix');
+  if (!confirm(msg)) return;
   try {
     await fetch('/projects/' + encProject(projectName) + '/library/' + encodeURIComponent(id), { method: 'DELETE' });
   } catch (e) { showToast(String(e)); return; }
@@ -5284,9 +5456,47 @@ async function removeLibraryItem(id, name) {
 function openLibMenu(anchor, id) {
   libMenuTarget = id;
   var it = phLibItems.find(function (x) { return x.id === id; }) || {};
-  var isDir = !!(it.is_dir) || (it.path && /\/$/.test(it.path)) || (it.type === 'folder');
+  // 区分两类「文件夹」：虚拟资料夹(libfolder) 与 文件系统文件夹引用(is_dir/type=folder)
+  var isLibFolder = it.type === 'libfolder';
+  var isFsDir = !!(it.is_dir) || (it.type === 'folder') || (it.path && /\/$/.test(it.path));
+  var isDir = isLibFolder || isFsDir;
+  var isWeb = it.type === 'web' || (it.url && /^https?:\/\//i.test(it.url) && !it.path && !it.is_dir);
+  var inFolder = !!(it.parent_id); // 是否已被归入某个文件夹
+  var isFileLike = !isDir && it.type !== 'web' && it.type !== 'generated'; // 普通文件类（含 generated）
   var openItem = libMenu.querySelector('[data-act="open"]');
-  if (openItem) openItem.hidden = !!isDir; // 文件夹无「用默认应用打开」选项
+  if (openItem) openItem.hidden = !!isDir; // 文件夹无「用默认应用打开」；网页保留（打开 URL）
+  var openLabel = libMenu.querySelector('[data-act="open"] [data-i18n]');
+  if (openLabel) {
+    openLabel.setAttribute('data-i18n', isWeb ? 'ph.lib.openUrl' : 'ph.lib.open');
+    openLabel.textContent = t(isWeb ? 'ph.lib.openUrl' : 'ph.lib.open') || (isWeb ? '在浏览器打开' : '打开');
+  }
+  var revealItem = libMenu.querySelector('[data-act="reveal"]');
+  if (revealItem) revealItem.hidden = !isFsDir || !!isWeb; // 仅文件系统条目可「打开位置」
+  var copyItem = libMenu.querySelector('[data-act="copy"]');
+  if (copyItem) copyItem.hidden = !isWeb; // 「复制链接」仅网页类型提供
+  var addItem = libMenu.querySelector('[data-act="add"]');
+  if (addItem) addItem.hidden = false; // 所有类型（含资料夹）均提供「添加到会话」
+  var delItem = libMenu.querySelector('[data-act="delete"]');
+  if (delItem) delItem.hidden = false; // 所有类型均可删除（文件夹删除会把成员移回根目录）
+  var delLabel = libMenu.querySelector('[data-act="delete"] [data-i18n]');
+  if (delLabel) {
+    delLabel.setAttribute('data-i18n', isLibFolder ? 'ph.lib.deleteFolder' : 'ph.lib.delete');
+    delLabel.textContent = t(isLibFolder ? 'ph.lib.deleteFolder' : 'ph.lib.delete');
+  }
+  // 预览：文件夹（虚拟资料夹 与 文件系统文件夹）均无单文件内容可预览，隐藏；网页项抓取预览难度高，亦隐藏
+  var prevItem = libMenu.querySelector('[data-act="preview"]');
+  if (prevItem) prevItem.hidden = !!isDir || !!isWeb;
+  // 「移动到资料夹」：所有类型均可移动；已在某个资料夹中的则改为提供「移出资料夹」（二者互斥）
+  var moveItem = libMenu.querySelector('[data-act="move"]');
+  if (moveItem) moveItem.hidden = !!inFolder;
+  var removeFolderItem = libMenu.querySelector('[data-act="remove-folder"]');
+  if (removeFolderItem) removeFolderItem.hidden = !inFolder;
+  // 重命名：普通资料项 + 虚拟资料夹可重命名；文件系统文件夹引用名称派生自路径，不提供
+  var renameItem = libMenu.querySelector('[data-act="rename"]');
+  if (renameItem) renameItem.hidden = isFsDir;
+  // 新建子资料夹：仅虚拟资料夹提供（文件系统目录的子项由磁盘决定）
+  var newSubItem = libMenu.querySelector('[data-act="new-sub-folder"]');
+  if (newSubItem) newSubItem.hidden = !isLibFolder;
   var pinSpan = libMenu.querySelector('[data-act="pin"] [data-i18n]');
   if (pinSpan) {
     var k = it.pinned ? 'ph.lib.unpin' : 'ph.lib.pin';
@@ -5295,6 +5505,69 @@ function openLibMenu(anchor, id) {
   }
   var rect = anchor.getBoundingClientRect();
   placeMenu(libMenu, rect, { side: 'bottom-right' });
+}
+
+// ---- 添加到会话：把资料项插入项目会话 composer（文件=引用 chip，网页=URL 文本）----
+function _addLibToSession(item) {
+  if (!item) return;
+  // 自动跳转到会话视图：若当前仍在资料库（chatView=false），先切到项目会话
+  var prevHtml = null;
+  if (!phState.chatView) {
+    if (phState.sessionId) {
+      prevHtml = inputEl ? inputEl.innerHTML : null; // 保留项目主页输入框草稿
+      openPhChatView(phState.sessionId);             // 该函数会用 session 草稿覆盖 #ph-input
+      if (prevHtml != null && inputEl) inputEl.innerHTML = prevHtml; // 还原，避免草稿丢失
+    } else {
+      // 极端兜底：直接露出 feed 模式 composer
+      var pv = document.getElementById('ph-chat-view');
+      if (pv) { pv.hidden = false; pv.classList.add('ph-feed-mode'); }
+      var tn = document.querySelector('.ph-tabnav'); if (tn) tn.classList.add('is-hidden');
+      var pc = document.querySelector('.ph-content'); if (pc) pc.classList.add('is-hidden');
+      var po = document.querySelector('.ph-composer'); if (po) po.classList.add('is-hidden');
+    }
+  }
+  var cfg = composerCfg(_libRefCtx);
+  var input = cfg && cfg.input;
+  if (!input) { showToast(t('ph.lib.addToSessionFail') || '添加到会话失败'); return; }
+  var isWeb = item.type === 'web' || (item.url && /^https?:\/\//i.test(item.url) && !item.path && !item.is_dir);
+  var isDir = (item.type === 'libfolder') || !!item.is_dir || (item.type === 'folder') || (item.path && /\/$/.test(item.path));
+  if (isWeb) {
+    var url = item.url || '';
+    if (!url) { showToast(t('ph.lib.noUrl') || '该资料没有可用链接'); return; }
+    input.focus();
+    var sel = window.getSelection();
+    var inserted = false;
+    if (sel && sel.rangeCount) {
+      try {
+        var rng = sel.getRangeAt(0);
+        if (input.contains(rng.commonAncestorContainer) || input === rng.commonAncestorContainer) {
+          rng.insertNode(document.createTextNode(url + ' '));
+          rng.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(rng);
+          inserted = true;
+        }
+      } catch (_) {}
+    }
+    if (!inserted) input.appendChild(document.createTextNode(url + ' '));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  } else if (isDir) {
+    // 文件夹：把其下所有「文件 / 网页 / 生成」资料项作为引用 chip 加入会话
+    var kids = libDescendantsOf(item.id).filter(function (k) {
+      return (k.path && !k.is_dir) || (k.url && /^https?:\/\//i.test(k.url) && !k.path && !k.is_dir);
+    });
+    if (!kids.length) { showToast(t('ph.lib.noChildren') || '该资料夹为空'); input.focus(); return; }
+    kids.forEach(function (k) { insertLibraryChip(k, _libRefCtx); });
+    showToast(t('ph.lib.addedToSession') || '已添加到会话');
+    input.focus();
+    if (input.scrollIntoView) input.scrollIntoView({ block: 'center' });
+    return;
+  } else {
+    insertLibraryChip(item, _libRefCtx); // 文件：插入引用 chip（发送时 agent 可读文件内容）
+  }
+  showToast(t('ph.lib.addedToSession') || '已添加到会话');
+  input.focus();
+  if (input.scrollIntoView) input.scrollIntoView({ block: 'center' });
 }
 
 // ---- 文件预览弹窗 ----
@@ -5309,12 +5582,27 @@ async function openLibPreview(id) {
   if (titleEl) titleEl.textContent = '';
   if (metaEl) metaEl.textContent = '';
   m.hidden = false;
+  // 网页类型：直接依据本地资料库数据渲染网页预览卡，不走文件 /preview（避免 "no path" 错误）
+  var _lit = (phLibItems || []).find(function (x) { return x.id === id; }) || null;
+  var _lu = (_lit && _lit.url && /^https?:\/\//i.test(_lit.url) && !_lit.path && !_lit.is_dir) ? _lit.url : '';
+  if (_lu) {
+    _renderLibWebPreview(bodyEl, titleEl, metaEl, { id: id, url: _lu, name: _lit.name, desc: _lit.desc, type: _lit.type });
+    if (typeof gaHydrateIcons === 'function') gaHydrateIcons();
+    if (typeof resolveLibFavicons === 'function') resolveLibFavicons(m);
+    return;
+  }
   var data;
   try {
     var r = await fetch('/projects/' + encProject(projectName) + '/library/' + encodeURIComponent(id) + '/preview');
     if (!r.ok) { var em = ''; try { em = (await r.json()).error || ''; } catch (_) {} if (bodyEl) bodyEl.textContent = t('ph.lib.previewFailed') + (em ? ': ' + em : ''); return; }
     data = await r.json();
   } catch (err) { if (bodyEl) bodyEl.textContent = String(err); return; }
+  if (data && data.is_web) {
+    _renderLibWebPreview(bodyEl, titleEl, metaEl, Object.assign({ id: id }, data));
+    if (typeof gaHydrateIcons === 'function') gaHydrateIcons();
+    if (typeof resolveLibFavicons === 'function') resolveLibFavicons(m);
+    return;
+  }
   if (titleEl) titleEl.textContent = data.name || '';
   if (metaEl) metaEl.textContent = data.path || '';
   if (data.is_dir) {
@@ -5363,6 +5651,103 @@ async function openLibPreview(id) {
     }
   }
   if (typeof gaHydrateIcons === 'function') gaHydrateIcons();
+}
+
+// ---- 网页类型资料项预览（抓取网页内容并展现，区别于文件预览）----
+function _renderLibWebPreview(bodyEl, titleEl, metaEl, data) {
+  if (titleEl) titleEl.textContent = data.name || data.url || '';
+  if (metaEl) metaEl.textContent = data.url || '';
+  var url = data.url || '';
+  var favAttr = (data.type === 'web' && url) ? ' data-lib-favicon="' + escapeHtml(url) + '"' : '';
+  var descHtml = data.desc ? '<div class="lib-preview-web-desc md-compact">' + renderMarkdown(data.desc) + '</div>' : '';
+  if (bodyEl) {
+    bodyEl.innerHTML =
+      '<div class="lib-preview-web">' +
+        '<div class="lib-preview-web-head">' +
+          '<div class="lib-preview-web-icon"' + favAttr + '>' + gaIcon('link') + '</div>' +
+          '<div class="lib-preview-web-meta">' +
+            '<div class="lib-preview-web-name">' + escapeHtml(data.name || url) + '</div>' +
+            '<a class="lib-preview-web-url" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(url) + '</a>' +
+          '</div>' +
+          '<button class="lib-preview-web-open" type="button" id="lib-preview-web-open">' + gaIcon('arrowUpRight') + '<span>' + escapeHtml(t('ph.lib.openUrl') || '在浏览器打开') + '</span></button>' +
+        '</div>' +
+        descHtml +
+        '<div class="lib-preview-web-content" id="lib-preview-web-content">' +
+          '<div class="ph-lib-loading">' + escapeHtml(t('ph.lib.fetching') || '正在抓取网页…') + '</div>' +
+        '</div>' +
+      '</div>';
+    var openBtn = document.getElementById('lib-preview-web-open');
+    if (openBtn) openBtn.onclick = function () { _libOpenUrl(url); };
+  }
+  // 异步抓取网页内容并展现
+  _libFetchWebPreview(data.id, url);
+}
+
+// ---- 抓取网页内容：HTML 用 sandboxed iframe 展现，二进制/纯文本兜底 ----
+async function _libFetchWebPreview(id, url) {
+  var box = document.getElementById('lib-preview-web-content');
+  if (!box || !id) return;
+  var projectName = phState.project;
+  var endpoint = '/projects/' + encProject(projectName) + '/library/' + encodeURIComponent(id) + '/web-fetch';
+  var data;
+  try {
+    var r = await fetch(endpoint);
+    if (!r.ok) { var me = ''; try { me = (await r.json()).error || ''; } catch (_) {} box.innerHTML = _webFetchError(me || ('HTTP ' + r.status)); return; }
+    data = await r.json();
+  } catch (err) { box.innerHTML = _webFetchError(String(err)); return; }
+  if (!data || !data.ok) { box.innerHTML = _webFetchError((data && data.error) || (t('ph.lib.webFetchFail') || '抓取失败')); return; }
+  if (data.html) {
+    _renderWebHtml(box, data.html);
+  } else if (data.data_url) {
+    box.innerHTML = '';
+    if ((data.content_type || '').indexOf('image/') === 0) {
+      var img = document.createElement('img');
+      img.className = 'lib-preview-web-img';
+      img.src = data.data_url;
+      img.alt = url;
+      box.appendChild(img);
+    } else {
+      _appendWebFrame(box, data.data_url);
+    }
+  } else if (data.text) {
+    box.innerHTML = _webTextView(data.text);
+  } else {
+    box.innerHTML = _webFetchError('无内容');
+  }
+}
+
+function _renderWebHtml(box, html) {
+  var blob = new Blob([html], { type: 'text/html' });
+  var blobUrl = URL.createObjectURL(blob);
+  _appendWebFrame(box, blobUrl, blobUrl);
+}
+
+function _appendWebFrame(box, src, revokeAfter) {
+  box.innerHTML = '';
+  var frame = document.createElement('iframe');
+  frame.className = 'lib-preview-web-frame';
+  frame.src = src;
+  // 沙箱隔离：禁用同源访问，但仍允许脚本运行以忠实呈现页面（脚本运行在 opaque origin，无法触及宿主应用）
+  frame.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox');
+  frame.setAttribute('referrerpolicy', 'no-referrer');
+  if (revokeAfter) {
+    frame.addEventListener('load', function () {
+      setTimeout(function () { try { URL.revokeObjectURL(revokeAfter); } catch (_) {} }, 4000);
+    });
+  }
+  box.appendChild(frame);
+}
+
+function _webFetchError(msg) {
+  return '<div class="lib-preview-web-error">' + gaIcon('fileX') + '<p>' + escapeHtml(msg) + '</p>' +
+    '<p class="lib-preview-web-hint">' + escapeHtml(t('ph.lib.webFetchHint') || '可点击右上角「在浏览器打开」查看原文') + '</p></div>';
+}
+
+function _webTextView(text) {
+  var pre = document.createElement('pre');
+  pre.className = 'lib-preview-text';
+  pre.textContent = text;
+  return pre.outerHTML;
 }
 
 // ---- 引用资料 picker (多选) ----
@@ -5468,6 +5853,7 @@ function submitLibraryRef() {
   }
   bind('lib-add-tab-file', function () { setLibraryAddType('file'); });
   bind('lib-add-tab-web', function () { setLibraryAddType('web'); });
+  bind('lib-add-tab-folder', function () { setLibraryAddType('folder'); });
   bind('lib-add-confirm', function () { submitAddLibrary(); });
   bind('lib-add-browse', function () {
     // 选择单个本地文件（优先原生文件选择器，请求失败才回退浏览器 file input）
@@ -6633,12 +7019,28 @@ function openNewProjectModal(prefillName, tplKey) {
   if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
   // 加载已有 workspace 列表到下拉
   loadWorkspaceOptions('pc-ws-existing');
-  // radio 联动：默认无绑定，切换时 enable/disable 对应输入
-  setupWorkspaceRadios('pc-ws-mode', 'pc-ws-existing', 'pc-ws-path');
+  // radio 联动：默认无绑定，选「使用已有工作区」才放开下拉
+  setupWorkspaceRadios('pc-ws-mode', 'pc-ws-existing');
   openModal('project-create-modal');
   if (typeof gaHydrateIcons === 'function') gaHydrateIcons();
   if (nameEl) setTimeout(function () { nameEl.focus(); }, 50);
   renderProjectSkills();
+}
+
+// ── 工作区显示名 ─────────────────────────────────────────────────────────
+// 工作区内部名为 `<basename>-<8位hex哈希>` 以保证唯一性（哈希是内部 id，不暴露给用户）。
+// 显示层统一用本函数只展示 basename：给了 path 时按 basename 严格剥离，否则兜底剥末尾 `-xxxxxxxx`。
+function gaWsDisplayName(name, path) {
+  if (!name) return '';
+  name = String(name);
+  if (path) {
+    const base = String(path).replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '';
+    if (base && name.startsWith(base + '-')) {
+      const suffix = name.slice(base.length + 1);
+      if (/^[0-9a-f]{8}$/i.test(suffix)) return base;
+    }
+  }
+  return name.replace(/-[0-9a-f]{8}$/i, '');
 }
 
 async function loadWorkspaceOptions(selId) {
@@ -6649,20 +7051,18 @@ async function loadWorkspaceOptions(selId) {
     const res = await window.ga.listWorkspaces();
     const items = (res && res.workspaces) || [];
     sel.innerHTML = '<option value="">—</option>' + items.map(function (w) {
-      return '<option value="' + escapeHtml(w.name || '') + '">' + escapeHtml(w.name || '') + (w.path ? ' (' + escapeHtml(w.path) + ')' : '') + '</option>';
+      return '<option value="' + escapeHtml(w.name || '') + '">' + escapeHtml(gaWsDisplayName(w.name, w.path)) + (w.path ? ' (' + escapeHtml(w.path) + ')' : '') + '</option>';
     }).join('');
   } catch (_) {}
 }
 
-function setupWorkspaceRadios(modeName, selId, pathId) {
+// 工作区只能在「工作区」管理页新建，这里仅在 none / existing 之间切换。
+function setupWorkspaceRadios(modeName, selId) {
   const radios = document.querySelectorAll('input[name="' + modeName + '"]');
   const sel = document.getElementById(selId);
-  const pathEl = document.getElementById(pathId);
   function update() {
     const checked = document.querySelector('input[name="' + modeName + '"]:checked');
-    const mode = checked ? checked.value : 'none';
-    if (sel) sel.disabled = (mode !== 'existing');
-    if (pathEl) pathEl.disabled = (mode !== 'new');
+    if (sel) sel.disabled = (!checked || checked.value !== 'existing');
   }
   radios.forEach(function (r) { r.addEventListener('change', update); });
   update();
@@ -6727,17 +7127,11 @@ async function submitNewProject() {
     const params = { name: name };
     if (instruction) params.instruction = instruction;
     if (skillsParam) params.skills = skillsParam;
-    // workspace 选择
+    // workspace 关联：只允许选择已登记的工作区，不在此处新建
     const wsMode = document.querySelector('input[name="pc-ws-mode"]:checked');
-    if (wsMode) {
-      if (wsMode.value === 'existing') {
-        const wsSel = document.getElementById('pc-ws-existing');
-        if (wsSel && wsSel.value) params.workspace = wsSel.value;
-      } else if (wsMode.value === 'new') {
-        const wsPathEl = document.getElementById('pc-ws-path');
-        const wsPath = wsPathEl ? wsPathEl.value.trim() : '';
-        if (wsPath) params.workspacePath = wsPath;
-      }
+    if (wsMode && wsMode.value === 'existing') {
+      const wsSel = document.getElementById('pc-ws-existing');
+      if (wsSel && wsSel.value) params.workspace = wsSel.value;
     }
     const res = await window.ga.rpc('projects/create', params);
     if (res?.error) throw new Error(res.error.message || res.error);
@@ -6803,6 +7197,32 @@ async function submitEditSkills() {
   }
 }
 
+// 项目主页右侧「工作区」配置卡：展示当前绑定，点击可选择/切换
+async function renderPhWorkspaceCard(projectName) {
+  const box = document.getElementById('ph-cfg-ws');
+  if (!box) return;
+  box.onclick = function () { openSetWorkspaceModal(projectName); };
+  let ws = '', path = '';
+  try {
+    const res = await window.ga.rpc('projects/list', {});
+    const items = res?.projects || res?.result?.projects || [];
+    ws = (items.find(function (p) { return p.name === projectName; }) || {}).workspace || '';
+    if (ws) {
+      const wres = await window.ga.listWorkspaces();
+      path = (((wres && wres.workspaces) || []).find(function (w) { return w.name === ws; }) || {}).path || '';
+    }
+  } catch (_) {}
+  if (!ws) {
+    box.className = 'ph-cfg-ws is-empty';
+    box.textContent = t('ph.cfg.wsNone');
+    return;
+  }
+  box.className = 'ph-cfg-ws';
+  box.title = path || gaWsDisplayName(ws);
+  box.innerHTML = '<span class="ph-cfg-ws-name">' + escapeHtml(gaWsDisplayName(ws)) + '</span>'
+    + (path ? '<span class="ph-cfg-ws-path">' + escapeHtml(path) + '</span>' : '');
+}
+
 let _wsProjName = '';
 
 async function openSetWorkspaceModal(projectName) {
@@ -6813,19 +7233,22 @@ async function openSetWorkspaceModal(projectName) {
   const errEl = document.getElementById('pw-error');
   if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
   // 加载已有 workspace 列表
-  loadWorkspaceOptions('pw-ws-existing');
+  await loadWorkspaceOptions('pw-ws-existing');
   // radio 联动
-  setupWorkspaceRadios('pw-ws-mode', 'pw-ws-existing', 'pw-ws-path');
-  // 显示当前 workspace
+  setupWorkspaceRadios('pw-ws-mode', 'pw-ws-existing');
+  // 显示当前 workspace，并把 radio/下拉预置成当前绑定，方便直接切换
   const curEl = document.getElementById('pw-current');
-  if (curEl) {
-    try {
-      const res = await window.ga.rpc('projects/list', {});
-      const items = res?.projects || res?.result?.projects || [];
-      const proj = items.find(function (p) { return p.name === projectName; });
-      curEl.textContent = (proj && proj.workspace) ? proj.workspace : t('project.wsNone');
-    } catch (_) { curEl.textContent = '—'; }
-  }
+  try {
+    const res = await window.ga.rpc('projects/list', {});
+    const items = res?.projects || res?.result?.projects || [];
+    const cur = (items.find(function (p) { return p.name === projectName; }) || {}).workspace || '';
+    if (curEl) curEl.textContent = cur || t('project.wsNone');
+    const sel = document.getElementById('pw-ws-existing');
+    const radio = document.querySelector('input[name="pw-ws-mode"][value="' + (cur ? 'existing' : 'none') + '"]');
+    if (radio) radio.checked = true;
+    if (cur && sel) sel.value = cur;
+    setupWorkspaceRadios('pw-ws-mode', 'pw-ws-existing');
+  } catch (_) { if (curEl) curEl.textContent = '—'; }
   openModal('project-workspace-modal');
   if (typeof gaHydrateIcons === 'function') gaHydrateIcons();
 }
@@ -6844,17 +7267,13 @@ async function submitSetWorkspace() {
       const wsName = sel ? sel.value.trim() : '';
       if (!wsName) throw new Error(t('project.wsSelectErr'));
       params.workspace = wsName;
-    } else if (mode === 'new') {
-      const wsPathEl = document.getElementById('pw-ws-path');
-      const wsPath = wsPathEl ? wsPathEl.value.trim() : '';
-      if (!wsPath) throw new Error(t('project.wsPathErr'));
-      params.workspacePath = wsPath;
     }
-    // mode === 'none' → 清除 workspace（不传 workspace/workspacePath）
-    const res = await window.ga.rpc('projects/workspace_update', { name: _wsProjName, workspace: params.workspace || '', workspacePath: params.workspacePath || '' });
+    // mode === 'none' → 清除 workspace（不传 workspace）
+    const res = await window.ga.rpc('projects/workspace_update', { name: _wsProjName, workspace: params.workspace || '' });
     if (res?.error) throw new Error(res.error.message || res.error);
     closeModals();
     await loadProjects();
+    if (phState.project === _wsProjName) renderPhWorkspaceCard(_wsProjName);
     showToast(t('project.wsSaved'));
   } catch (e) {
     if (errEl) { errEl.textContent = (e.message || e); errEl.hidden = false; }
@@ -7331,8 +7750,8 @@ function setActiveSession(id) {
       var phWsChip = document.getElementById('ph-workspace-chip');
       if (phWsChip) {
         var nm = phWsChip.querySelector('.ws-chip-name');
-        if (nm) nm.textContent = sess.workspace || '—';
-        phWsChip.title = sess._workspacePath || sess.workspace || '';
+        if (nm) nm.textContent = gaWsDisplayName(sess.workspace, sess._workspacePath || '') || '—';
+        phWsChip.title = sess._workspacePath || gaWsDisplayName(sess.workspace) || '';
       }
     }).catch(() => {});
   }
@@ -7392,15 +7811,63 @@ libMenu.addEventListener('click', async function (e) {
   if (act === 'preview') {
     openLibPreview(id);
   } else if (act === 'open') {
-    try {
-      var r = await fetch(base + '/open', { method: 'POST' });
-      if (!r.ok) { var m = ''; try { m = (await r.json()).error || ''; } catch (_) {} showToast(t('ph.lib.openFailed') + (m ? ': ' + m : '')); }
-    } catch (err) { showToast(String(err)); }
+    var itOpen = phLibItems.find(function (x) { return x.id === id; }) || {};
+    if (itOpen.url && /^https?:\/\//i.test(itOpen.url) && !itOpen.path) {
+      _libOpenUrl(itOpen.url); // 网页类型：在浏览器打开，而非当作文件处理
+    } else {
+      try {
+        var r = await fetch(base + '/open', { method: 'POST' });
+        if (!r.ok) { var m = ''; try { m = (await r.json()).error || ''; } catch (_) {} showToast(t('ph.lib.openFailed') + (m ? ': ' + m : '')); }
+      } catch (err) { showToast(String(err)); }
+    }
   } else if (act === 'reveal') {
     try {
       var r2 = await fetch(base + '/reveal', { method: 'POST' });
       if (!r2.ok) { var m2 = ''; try { m2 = (await r2.json()).error || ''; } catch (_) {} showToast(t('ph.lib.revealFailed') + (m2 ? ': ' + m2 : '')); }
     } catch (err) { showToast(String(err)); }
+  } else if (act === 'copy') {
+    var itC = phLibItems.find(function (x) { return x.id === id; }) || {};
+    var urlC = itC.url || '';
+    if (urlC) {
+      _copyTextToClipboard(urlC);
+      showToast(t('ph.lib.copied') || '已复制链接');
+    }
+  } else if (act === 'delete') {
+    var itD = phLibItems.find(function (x) { return x.id === id; }) || {};
+    removeLibraryItem(id, itD.name);
+  } else if (act === 'move') {
+    // 移动到资料夹：弹出资料夹选择菜单（excludeSelf=true 防止把资料夹移入自身或其后代）
+    // 记录点击时光标位置：libMenu 已隐藏，等到 setTimeout 执行时锚点 getBoundingClientRect 会返回 0
+    var anchorMove = actEl;
+    var mvX = e.clientX, mvY = e.clientY;
+    setTimeout(function () { openLibMoveMenu(anchorMove, id, true, mvX, mvY); }, 0);
+  } else if (act === 'remove-folder') {
+    // 移出资料夹：把 parent_id 置空，回到根目录（仅对“已在文件夹中”的资料项提供）
+    await _patchLibraryItem(id, { parent_id: '' }, t('ph.lib.moveFailed') || '移动失败',
+      function () { showToast(t('ph.lib.removedFromFolder') || '已移出资料夹'); });
+  } else if (act === 'rename') {
+    // 重命名资料项（普通资料项 / 虚拟资料夹）
+    var itR = phLibItems.find(function (x) { return x.id === id; }) || {};
+    var curName = itR.name || '';
+    var newName = window.prompt(t('ph.lib.renameItemPrompt') || '输入新的名称', curName);
+    if (newName != null) {
+      newName = newName.trim();
+      if (newName && newName !== curName) {
+        await _patchLibraryItem(id, { name: newName }, t('ph.lib.renameFailed') || '重命名失败',
+          function () { showToast(t('ph.lib.renameDone') || '已重命名'); });
+      }
+    }
+  } else if (act === 'new-sub-folder') {
+    // 在虚拟资料夹内新建子资料夹
+    var newName2 = window.prompt(t('ph.lib.newFolderPrompt') || '请输入资料夹名称', '');
+    if (newName2 != null && newName2.trim()) {
+      var f = await createLibraryFolder(newName2.trim(), id);
+      if (f) {
+        showToast(t('ph.lib.mkdirDone') || '已新建资料夹');
+        var box2 = document.querySelector('.ph-content');
+        if (box2 && phState.tab === 'library') renderPhLibrary(box2);
+      }
+    }
   } else if (act === 'pin') {
     var it = phLibItems.find(function (x) { return x.id === id; }) || {};
     var pinned = !it.pinned;
@@ -7414,8 +7881,93 @@ libMenu.addEventListener('click', async function (e) {
         var m3 = ''; try { m3 = (await r3.json()).error || ''; } catch (_) {} showToast(t('ph.lib.pinFailed') + (m3 ? ': ' + m3 : ''));
       }
     } catch (err) { showToast(String(err)); }
+  } else if (act === 'add') {
+    var itA = phLibItems.find(function (x) { return x.id === id; }) || {};
+    _addLibToSession(itA);
   }
 });
+
+// 资料库条目 PATCH 封装：成功则重渲染并回调，失败弹 toast
+async function _patchLibraryItem(id, patch, failMsg, okCb) {
+  var projectName = phState.project;
+  if (!projectName || !id) return;
+  try {
+    var r = await fetch('/projects/' + encProject(projectName) + '/library/' + encodeURIComponent(id), {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+    });
+    if (!r.ok) { var m = ''; try { m = (await r.json()).error || ''; } catch (_) {} showToast(failMsg + (m ? ': ' + m : '')); return; }
+    var it = phLibItems.find(function (x) { return x.id === id; }) || {};
+    Object.assign(it, patch);
+    if (okCb) okCb();
+    var box = document.querySelector('.ph-content');
+    if (box && phState.tab === 'library') renderPhLibrary(box);
+  } catch (err) { showToast(String(err)); }
+}
+
+// 移动资料项到某个资料夹：弹出资料夹列表菜单（excludeSelf 时排除自身及其后代，避免环）
+function openLibMoveMenu(anchor, id, excludeSelf, mvX, mvY) {
+  if (moveMenu) moveMenu.innerHTML = '';
+  var it = phLibItems.find(function (x) { return x.id === id; }) || {};
+  // 候选资料夹：所有 libfolder，且不能是自身或自身的后代
+  var forbidden = new Set();
+  if (excludeSelf) {
+    forbidden.add(id);
+    // 收集 id 的后代
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (var i = 0; i < phLibItems.length; i++) {
+        var pid = phLibItems[i].parent_id || '';
+        if (pid && forbidden.has(pid) && !forbidden.has(phLibItems[i].id)) { forbidden.add(phLibItems[i].id); changed = true; }
+      }
+    }
+  }
+  var folders = phLibItems.filter(function (x) { return x.type === 'libfolder' && !forbidden.has(x.id); });
+  if (!folders.length) {
+    // 没有任何资料夹：直接提示新建
+    var ok = window.confirm((t('ph.lib.noFolderYet') || '还没有资料夹，是否现在新建？'));
+    if (ok) { openLibraryNewFolderModal(''); }
+    return;
+  }
+  var html = '';
+  folders.forEach(function (f) {
+    html += '<div class="ctx-item" data-move-to="' + escapeHtml(f.id) + '">' + gaIcon('folderSimple') + '<span>' + escapeHtml(f.name || '') + '</span></div>';
+  });
+  html += '<div class="ctx-item ctx-new-folder" data-move-new="1">' + gaIcon('folderSimplePlus') + '<span>' + t('ph.lib.addFolder') + '</span></div>';
+  if (moveMenu) {
+    moveMenu.innerHTML = html;
+    // 优先使用点击时的光标坐标（libMenu 已隐藏，锚点 getBoundingClientRect 会返回 0）
+    var useCursor = (typeof mvX === 'number' && typeof mvY === 'number' && mvX >= 0 && mvY >= 0);
+    var rect = useCursor
+      ? { left: mvX, top: mvY, right: mvX, bottom: mvY, width: 0, height: 0 }
+      : (anchor ? anchor.getBoundingClientRect() : { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
+    convMenu.hidden = true; folderMenu.hidden = true; libMenu.hidden = true; phTaskMenu.hidden = true;
+    placeMenu(moveMenu, rect, { side: useCursor ? 'cursor' : 'bottom-right' });
+    moveMenu.onclick = function (ev) {
+      var row = ev.target.closest('[data-move-to]');
+      var newRow = ev.target.closest('[data-move-new]');
+      moveMenu.hidden = true;
+      if (newRow) {
+        // 先新建资料夹，再把当前项移入
+        var nm = window.prompt(t('ph.lib.newFolderPrompt') || '请输入资料夹名称', '');
+        if (nm != null && nm.trim()) {
+          (async function () {
+            var f = await createLibraryFolder(nm.trim(), '');
+            if (f) {
+              await _patchLibraryItem(id, { parent_id: f.id }, t('ph.lib.moveFailed') || '移动失败',
+                function () { showToast(t('ph.lib.movedToFolder') || '已移动到资料夹'); });
+            }
+          })();
+        }
+        return;
+      }
+      if (!row) return;
+      var tid = row.getAttribute('data-move-to');
+      _patchLibraryItem(id, { parent_id: tid }, t('ph.lib.moveFailed') || '移动失败',
+        function () { showToast(t('ph.lib.movedToFolder') || '已移动到资料夹'); });
+    };
+  }
+}
 
 function placeMenu(menu, rect, opts = {}) {
   if (!menu || !rect) return;
@@ -7428,8 +7980,12 @@ function placeMenu(menu, rect, opts = {}) {
   const mh = menu.offsetHeight || 120;
   const vw = window.innerWidth || document.documentElement.clientWidth || 0;
   const vh = window.innerHeight || document.documentElement.clientHeight || 0;
-  let left = side.includes('left') ? rect.left - mw - gap : rect.right - mw;
-  let top = side.includes('top') ? rect.top - mh - gap : rect.bottom + gap;
+  let left, top;
+  if (side === 'cursor') { left = rect.left; top = rect.top; }
+  else {
+    left = side.includes('left') ? rect.left - mw - gap : rect.right - mw;
+    top = side.includes('top') ? rect.top - mh - gap : rect.bottom + gap;
+  }
   if (!side.includes('top') && top + mh > vh - pad) top = Math.max(pad, rect.top - mh - gap);
   if (side.includes('top') && top < pad) top = Math.min(vh - pad - mh, rect.bottom + gap);
   left = Math.max(pad, Math.min(left, vw - pad - mw));
@@ -7742,6 +8298,216 @@ moveMenu.addEventListener('click', (e) => {
   convMenu.hidden = true;
 });
 document.addEventListener('click', () => { convMenu.hidden = true; folderMenu.hidden = true; moveMenu.hidden = true; phTaskMenu.hidden = true; libMenu.hidden = true; });
+// Cmd+R (mac) / Ctrl+R (win-linux) / F5 -> reload webview so static edits hot-apply.
+// Registered here (page context) instead of Rust-injected eval, which fires before
+// navigation completes and can miss the real document.
+document.addEventListener('keydown', function (e) {
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'r' || e.key === 'R')) {
+    e.preventDefault();
+    try { location.reload(); } catch (_) {}
+  }
+});
+
+/* ═══════════════ 右键菜单（contextmenu）统一派发 ═══════════════ */
+function openCtxMenu(menuEl, x, y) {
+  if (!menuEl) return menuEl;
+  document.querySelectorAll('.ctx-menu:not([hidden])').forEach(function (m) { if (m !== menuEl) m.hidden = true; });
+  menuEl.hidden = false;
+  var mw = menuEl.offsetWidth || 170, mh = menuEl.offsetHeight || 150, pad = 8;
+  var left = x, top = y;
+  if (left + mw > window.innerWidth - pad) left = Math.max(pad, window.innerWidth - mw - pad);
+  if (top + mh > window.innerHeight - pad) top = Math.max(pad, window.innerHeight - mh - pad);
+  menuEl.style.left = left + 'px';
+  menuEl.style.top = top + 'px';
+  function close(ev) { if (!menuEl.contains(ev.target)) { menuEl.hidden = true; cleanup(); } }
+  function onCtx() { menuEl.hidden = true; cleanup(); }
+  function onScroll() { menuEl.hidden = true; cleanup(); }
+  function cleanup() {
+    document.removeEventListener('mousedown', close, true);
+    document.removeEventListener('contextmenu', onCtx, true);
+    window.removeEventListener('scroll', onScroll, true);
+  }
+  setTimeout(function () {
+    document.addEventListener('mousedown', close, true);
+    document.addEventListener('contextmenu', onCtx, true);
+    window.addEventListener('scroll', onScroll, true);
+  }, 0);
+  return menuEl;
+}
+function hideAllCtxMenus() {
+  [convMenu, folderMenu, moveMenu, phTaskMenu, libMenu, msgMenu, selMenu, inputMenu, appMenu].forEach(function (m) { if (m) m.hidden = true; });
+  if (typeof closeMcpMenus === 'function') closeMcpMenus();
+}
+var msgMenu = document.getElementById('msg-menu');
+var selMenu = document.getElementById('sel-menu');
+var inputMenu = document.getElementById('input-menu');
+var appMenu = document.getElementById('app-menu');
+var msgMenuNode = null, msgMenuIdx = -1, selectionMenuText = '';
+function openSelectionMenu(x, y) { var sel = window.getSelection(); selectionMenuText = sel ? sel.toString() : ''; openCtxMenu(selMenu, x, y); }
+
+if (msgMenu) msgMenu.addEventListener('click', function (e) {
+  var item = e.target.closest('.ctx-item'); if (!item) return;
+  var act = item.dataset.act;
+  if (!act || msgMenuNode == null) return;
+  var sess = activeSess(); if (!sess) return;
+  if (act === 'copy-text') {
+    var msg = sess.messages[msgMenuIdx];
+    var text = msg ? ((msg.role === 'user') ? stripAttachPlaceholders((typeof msg.display === 'string' && msg.display.length) ? msg.display : (msg.content || '')) : assistantCopyText(msg)) : '';
+    if (text) navigator.clipboard.writeText(text).then(function () { showToast('已复制'); }).catch(function () {});
+  } else if (act === 'copy-code') {
+    var pre = msgMenuNode.querySelector('.bubble pre');
+    if (pre) navigator.clipboard.writeText(pre.innerText).then(function () { showToast('已复制代码块'); }).catch(function () {});
+    else showToast('该消息没有代码块');
+  } else if (act === 'regenerate') {
+    var msgs = sess.messages;
+    if (msgMenuIdx < 0 || msgMenuIdx >= msgs.length) return;
+    var j = -1;
+    for (var k = msgMenuIdx - 1; k >= 0; k--) { if (msgs[k].role === 'user') { j = k; break; } }
+    if (j < 0) { showToast('前面没有用户消息，无法重新生成'); return; }
+    var userText = (typeof msgs[j].display === 'string' && msgs[j].display.length) ? msgs[j].display : (msgs[j].content || '');
+    sess.messages = msgs.slice(0, j + 1);
+    saveSessions(); renderAllMessages(sess);
+    sendPrompt(userText);
+  } else if (act === 'edit-resend') {
+    var m = sess.messages[msgMenuIdx];
+    var txt = (typeof m.display === 'string' && m.display.length) ? m.display : (m.content || '');
+    if (currentPage !== 'chat') { var nc = nav.querySelector('.nav-item[data-page="chat"]'); if (nc) nc.click(); }
+    inputEl.innerHTML = escapeHtml(txt);
+    inputEl.focus();
+    var rg = document.createRange(); rg.selectNodeContents(inputEl); rg.collapse(false);
+    var sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(rg);
+    showToast('已载入到输入框，可编辑后发送');
+  } else if (act === 'del-msg') {
+    if (msgMenuIdx >= 0 && msgMenuIdx < sess.messages.length) {
+      sess.messages.splice(msgMenuIdx, 1);
+      saveSessions(); renderAllMessages(sess);
+      showToast('消息已删除');
+    }
+  }
+  msgMenu.hidden = true;
+});
+
+if (selMenu) selMenu.addEventListener('click', function (e) {
+  var item = e.target.closest('.ctx-item'); if (!item) return;
+  var act = item.dataset.act; if (!act) return;
+  var text = selectionMenuText || '';
+  if (act === 'copy') { if (text) navigator.clipboard.writeText(text).then(function () { showToast('已复制'); }).catch(function () {}); }
+  else if (act === 'search') { try { _libOpenUrl('https://www.google.com/search?q=' + encodeURIComponent(text)); } catch (_) {} }
+  else if (act === 'quote') {
+    if (currentPage !== 'chat') { var nc = nav.querySelector('.nav-item[data-page="chat"]'); if (nc) nc.click(); }
+    var quoted = '> ' + text.split('\n').join('\n> ') + '\n\n';
+    inputEl.innerHTML = escapeHtml(quoted);
+    inputEl.focus();
+    showToast('已引用到输入框');
+  }
+  selMenu.hidden = true;
+});
+
+if (inputMenu) inputMenu.addEventListener('click', function (e) {
+  var item = e.target.closest('.ctx-item'); if (!item) return;
+  var act = item.dataset.act; if (!act) return;
+  try {
+    if (act === 'undo') document.execCommand('undo');
+    else if (act === 'redo') document.execCommand('redo');
+    else if (act === 'cut') document.execCommand('cut');
+    else if (act === 'copy') document.execCommand('copy');
+    else if (act === 'paste') document.execCommand('paste');
+    else if (act === 'select-all') { var rg = document.createRange(); rg.selectNodeContents(inputEl); var sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(rg); }
+    else if (act === 'clear') { inputEl.innerHTML = ''; inputEl.focus(); }
+  } catch (_) {}
+  inputMenu.hidden = true;
+});
+
+if (appMenu) appMenu.addEventListener('click', function (e) {
+  var item = e.target.closest('.ctx-item'); if (!item) return;
+  var act = item.dataset.act; if (!act) return;
+  if (act === 'new-session') { newSession(); }
+  else if (act === 'restart-kernel') { fetch('/kernel/restart', { method: 'POST' }).then(function () { showToast('已发送：重启内核'); }).catch(function () { showToast('重启内核失败'); }); }
+  else if (act === 'restart-bridge') { fetch('/bridge/restart', { method: 'POST' }).then(function () { showToast('已发送：重启桥'); }).catch(function () { showToast('重启桥失败'); }); }
+  else if (act === 'about') { showToast('GenericAgent · 桌面版'); }
+  appMenu.hidden = true;
+});
+
+document.addEventListener('contextmenu', function (e) {
+  // 输入框右键：始终弹输入框菜单（撤销/重做/剪切/复制/粘贴/全选/清空）
+  var inp = e.target.closest('#chat-input');
+  if (inp && composerEl && composerEl.contains(inp)) {
+    e.preventDefault();
+    openCtxMenu(inputMenu, e.clientX, e.clientY);
+    return;
+  }
+  var convItem = e.target.closest('.conv-item');
+  var convFolder = e.target.closest('.conv-folder-head');
+  if (convItem && !batchMode) {
+    e.preventDefault();
+    menuTargetId = convItem.dataset.id;
+    var tgt = state.sessions.get(menuTargetId);
+    var pinSpan = convMenu.querySelector('[data-act="pin"] [data-i18n]');
+    if (pinSpan) { var k = tgt && tgt.pinned ? 'ctx.unpin' : 'ctx.pin'; pinSpan.setAttribute('data-i18n', k); pinSpan.textContent = t(k); }
+    renderMoveMenu(tgt ? normalizeSessionFolder(tgt) : '');
+    openCtxMenu(convMenu, e.clientX, e.clientY);
+    return;
+  }
+  if (convFolder) {
+    e.preventDefault();
+    folderMenuTargetId = convFolder.dataset.folderId;
+    var isArch = folderMenuTargetId === ARCHIVED_CONV_FOLDER_ID;
+    folderMenu.querySelectorAll('[data-act]').forEach(function (it) { it.hidden = isArch; });
+    openCtxMenu(folderMenu, e.clientX, e.clientY);
+    return;
+  }
+  var phTask = e.target.closest('.ph-task-item');
+  if (phTask) {
+    var tkebab = phTask.querySelector('[data-ph-task-menu]');
+    if (tkebab) { e.preventDefault(); hideAllCtxMenus(); openPhTaskMenu(tkebab); }
+    return;
+  }
+  var libItem = e.target.closest('.ph-lib-item');
+  if (libItem && libItem.dataset.libId != null) {
+    var lmore = libItem.querySelector('[data-lib-more]');
+    if (lmore) { e.preventDefault(); hideAllCtxMenus(); openLibMenu(lmore, libItem.dataset.libId); }
+    return;
+  }
+  var mcpItem = e.target.closest('.sh-pg-dir-item');
+  if (mcpItem) {
+    var mkebab = mcpItem.querySelector('.sh-mcp-kebab');
+    if (mkebab) { e.preventDefault(); hideAllCtxMenus(); toggleMcpMenu(mkebab); }
+    return;
+  }
+  // 文件列表项右键：复用 ⋯ 菜单（预览/打开/打开位置/复制路径/收藏/删除）
+  var filesItem = e.target.closest('.files-item');
+  if (filesItem) {
+    var fbtn = filesItem.querySelector('.files-item-menu');
+    if (fbtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      var _fsel = window.getSelection();
+      if (_fsel) _fsel.removeAllRanges();
+      toggleFilesMenu(fbtn, e.clientX, e.clientY);
+    }
+    return;
+  }
+  if (msgArea && msgArea.contains(e.target)) {
+    var sel = window.getSelection();
+    var hasSel = sel && sel.toString().trim().length > 0 && msgArea.contains(sel.anchorNode) && msgArea.contains(sel.focusNode);
+    if (hasSel) { e.preventDefault(); openSelectionMenu(e.clientX, e.clientY); return; }
+    var node = e.target.closest('.msg');
+    if (node) {
+      e.preventDefault();
+      var idx = node.dataset.idx;
+      if (idx != null) {
+        msgMenuNode = node; msgMenuIdx = Number(idx);
+        msgMenu.querySelector('[data-act="regenerate"]').style.display = node.classList.contains('assistant') ? '' : 'none';
+        msgMenu.querySelector('[data-act="edit-resend"]').style.display = node.classList.contains('user') ? '' : 'none';
+        openCtxMenu(msgMenu, e.clientX, e.clientY);
+      }
+      return;
+    }
+    e.preventDefault();
+    openCtxMenu(appMenu, e.clientX, e.clientY);
+    return;
+  }
+});
 // Close @ and / panels on outside click
 document.addEventListener('click', (e) => {
   if (_atActive && AT_PANEL && !AT_PANEL.contains(e.target) && e.target !== inputEl) {
@@ -7759,6 +8525,7 @@ function normalize(m) {
   if (m.role !== 'assistant') o.content = m.content || '';
   if (typeof m.display === 'string' && m.display.length) o.display = m.display;
   if (m.stopped) o.stopped = true;
+  if (m.interrupted) o.interrupted = true;
   if (m.images) o.images = m.images;
   if (m.files) o.files = m.files;
   if (m.ts) o.ts = m.ts;
@@ -10159,11 +10926,64 @@ function renderSettingsModels() {
 }
 function openSettings() {
   openModal('settings-modal');
+  applyI18n();
+  switchSettingsTab('general');
   renderSettingsModels();
   renderLangList();
+  renderShortcuts();
   applyTheme(theme, { persist: false });
   applyAppearance(appearance, plainUi, { persist: false });
   applyChatFontSize(chatFontSize, { persist: false });
+}
+function switchSettingsTab(tab) {
+  document.querySelectorAll('#settings-nav .settings-nav-item').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.settingsTab === tab);
+  });
+  document.querySelectorAll('#settings-panels .settings-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.id === 'settings-panel-' + tab);
+  });
+}
+(function bindSettingsNav() {
+  const nav = document.getElementById('settings-nav');
+  if (!nav) return;
+  nav.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-settings-tab]');
+    if (!btn) return;
+    switchSettingsTab(btn.dataset.settingsTab);
+  });
+})();
+const SHORTCUTS = [
+  { key: 'shortcut.openSettings', binding: ['⌘', ','] },
+  { key: 'shortcut.voiceToggle', binding: ['⌘', 'D'] },
+  { key: 'shortcut.searchInChat', binding: ['⌘', 'F'] },
+  { key: 'shortcut.sendMessage', binding: ['Enter'] },
+  { key: 'shortcut.newLine', binding: ['⇧', 'Enter'] },
+  { key: 'shortcut.newChat', binding: ['⌘', 'N'] },
+  { key: 'shortcut.stopGeneration', binding: ['Esc'] },
+  { key: 'shortcut.prevTask', binding: ['⌘', '['] },
+  { key: 'shortcut.nextTask', binding: ['⌘', ']'] },
+  { key: 'shortcut.toggleSidebar', binding: ['⌘', 'B'] },
+  { key: 'shortcut.toggleArtifacts', binding: ['⇧', '⌘', 'B'] },
+  { key: 'shortcut.toggleFullscreen', binding: ['⌃', '⌘', 'F'] },
+  { key: 'shortcut.toggleWindow', binding: ['⇧', '⌥', 'W'] },
+  { key: 'shortcut.zoomIn', binding: ['⌘', '+'] },
+  { key: 'shortcut.zoomOut', binding: ['⌘', '-'] },
+  { key: 'shortcut.zoomReset', binding: ['⌘', '0'] },
+  { key: 'shortcut.openMention', binding: ['@'] },
+  { key: 'shortcut.openSlash', binding: ['/'] },
+];
+function renderShortcuts() {
+  const box = document.getElementById('shortcuts-list');
+  if (!box) return;
+  const isMac = navigator.platform.toLowerCase().includes('mac');
+  box.innerHTML = SHORTCUTS.map(s => {
+    const keys = s.binding.map(k => `<kbd class="shortcut-key${/^[⇧⌘⌥⌃]$/.test(k) ? ' is-symbol' : ''}">${escapeHtml(k)}</kbd>`).join('<span class="shortcut-plus"> </span>');
+    const label = isMac ? s.binding.join(' ') : s.binding.map(k => k.replace('⌘', 'Ctrl').replace('⌥', 'Alt').replace('⇧', 'Shift').replace('⌃', 'Ctrl')).join(' + ');
+    return `<div class="shortcut-row" title="${escapeHtml(label)}">`
+      + `<span class="shortcut-name">${escapeHtml(t(s.key))}</span>`
+      + `<span class="shortcut-keys" aria-label="${escapeHtml(label)}">${keys}</span>`
+      + `</div>`;
+  }).join('');
 }
 async function loadModelProfiles() {
   try {
@@ -11369,7 +12189,8 @@ async function openTaskCreateModal(prefillPrompt, editTask) {
       wsList.forEach(w => {
         const opt = document.createElement('option');
         opt.value = w.name || '';
-        opt.textContent = w.name || '';
+        opt.textContent = gaWsDisplayName(w.name || '', w.path || '');
+        opt.title = w.path || '';
         wsSel.appendChild(opt);
       });
     } catch (e) { /* workspace 列表加载失败时忽略 */ }
@@ -13436,17 +14257,38 @@ function bindComposerInRoot(root, opts) {
 
   let cardMenu = null;
   function hideCardMenu() { if (cardMenu) { cardMenu.remove(); cardMenu = null; } }
-  function showCardMenu(x, y, sid) {
+  function showCardMenu(w, x, y) {
     hideCardMenu();
     cardMenu = document.createElement('div');
     cardMenu.className = 'ctx-menu';
     cardMenu.style.left = x + 'px';
     cardMenu.style.top = y + 'px';
-    cardMenu.innerHTML = `<div class="ctx-item danger">${GA_ICON('trash')}${esc(t('ctx.del'))}</div>`;
-    cardMenu.querySelector('.ctx-item').onclick = (e) => {
-      e.stopPropagation();
-      fetch(`${CONDUCTOR_ORIGIN}/subagent/${sid}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'kill' }) });
-      hideCardMenu();
+    const canRestart = w && w.status && w.status !== 'running';
+    cardMenu.innerHTML =
+      `<div class="ctx-item" data-act="detail">${GA_ICON('eye')}${esc(t('collab.openDetail'))}</div>` +
+      `<div class="ctx-item" data-act="copy-title">${GA_ICON('copy')}${esc(t('collab.copyTitle'))}</div>` +
+      `<div class="ctx-item" data-act="copy-sum">${GA_ICON('copy')}${esc(t('collab.copySummary'))}</div>` +
+      (canRestart ? `<div class="ctx-item" data-act="restart">${GA_ICON('arrowClockwise')}${esc(t('collab.restart'))}</div>` : '') +
+      `<div class="ctx-item danger" data-act="kill">${GA_ICON('trash')}${esc(t('ctx.del'))}</div>`;
+    cardMenu.querySelector('[data-act="detail"]').onclick = (e) => { e.stopPropagation(); hideCardMenu(); if (w) openWorkerDrawer(w); };
+    cardMenu.querySelector('[data-act="copy-title"]').onclick = (e) => {
+      e.stopPropagation(); hideCardMenu();
+      if (w && w.title) navigator.clipboard.writeText(w.title).then(() => showToast('已复制标题')).catch(() => {});
+    };
+    cardMenu.querySelector('[data-act="copy-sum"]').onclick = (e) => {
+      e.stopPropagation(); hideCardMenu();
+      if (w && w.summary) navigator.clipboard.writeText(w.summary).then(() => showToast('已复制摘要')).catch(() => {});
+    };
+    const rst = cardMenu.querySelector('[data-act="restart"]');
+    if (rst) rst.onclick = (e) => {
+      e.stopPropagation(); hideCardMenu();
+      if (!w) return;
+      fetch(`${CONDUCTOR_ORIGIN}/subagent/${w.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'restart' }) })
+        .then(() => showToast('已发送：重新启动')).catch(() => showToast('重新启动失败'));
+    };
+    cardMenu.querySelector('[data-act="kill"]').onclick = (e) => {
+      e.stopPropagation(); hideCardMenu();
+      if (w) fetch(`${CONDUCTOR_ORIGIN}/subagent/${w.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'kill' }) });
     };
     document.body.appendChild(cardMenu);
     setTimeout(() => document.addEventListener('mousedown', (e) => { if (!cardMenu?.contains(e.target)) hideCardMenu(); }, { once: true }), 0);
@@ -13488,7 +14330,7 @@ function bindComposerInRoot(root, opts) {
       }
       el.addEventListener('contextmenu', e => {
         e.preventDefault();
-        showCardMenu(e.clientX, e.clientY, el.dataset.sid);
+        showCardMenu(w, e.clientX, e.clientY);
       });
       el.addEventListener('click', () => {
         if (w) openWorkerDrawer(w);
@@ -13911,11 +14753,7 @@ function bindComposerInRoot(root, opts) {
   const currentOff = $('ws-current-off');
   const panelList = $('ws-panel-list');
   const panelEmpty = $('ws-panel-empty');
-  const addBtn = $('ws-add-btn');
-  const addForm = $('ws-add-form');
-  const addInput = $('ws-add-input');
-  const addConfirm = $('ws-add-confirm');
-  const addCancel = $('ws-add-cancel');
+  const manageBtn = $('ws-manage-btn');
   const chipName = chip?.querySelector('.ws-chip-name');
   if (!chip || !panel) return;
 
@@ -13924,7 +14762,7 @@ function bindComposerInRoot(root, opts) {
 
   function refreshChip() {
     if (_currentWs) {
-      chipName.textContent = _currentWs.name;
+      chipName.textContent = gaWsDisplayName(_currentWs.name, _currentWs.path);
       chip.title = _currentWs.path;
     } else {
       chipName.textContent = t('workspace.empty');
@@ -13981,8 +14819,9 @@ function bindComposerInRoot(root, opts) {
       panelCurrent.hidden = false;
       const nameEl = currentRow.querySelector('.ws-row-name');
       const pathEl = currentRow.querySelector('.ws-row-path');
-      if (nameEl) nameEl.textContent = _currentWs.name;
+      if (nameEl) nameEl.textContent = gaWsDisplayName(_currentWs.name, _currentWs.path);
       if (pathEl) pathEl.textContent = _currentWs.path;
+      currentRow.title = _currentWs.path || '';
     } else {
       panelCurrent.hidden = true;
     }
@@ -13996,30 +14835,23 @@ function bindComposerInRoot(root, opts) {
     } else {
       panelEmpty.hidden = true;
       panelList.innerHTML = others.map(w => {
-        const name = esc(w.name);
+        const name = esc(gaWsDisplayName(w.name, w.path));
         const path = esc(w.path || '');
         const dangling = w.dangling ? `<span class="ws-row-dangling">${esc(t('workspace.dangling'))}</span>` : '';
-        return `<div class="ws-panel-row" data-ws-name="${esc(w.name)}" data-ws-path="${esc(w.path || '')}">
+        return `<div class="ws-panel-row" data-ws-name="${esc(w.name)}" data-ws-path="${esc(w.path || '')}" title="${path}">
           <span class="ws-row-name">${name}</span>
           <span class="ws-row-path">${path}${dangling}</span>
-          <button type="button" class="ws-row-del" data-ws-name="${esc(w.name)}" data-i18n-title="workspace.removeTitle" title="${t('workspace.removeTitle')}">×</button>
         </div>`;
       }).join('');
     }
     applyI18n();
-    // Attach click handlers directly (more reliable than event delegation)
+    // 面板只负责「选」：点一行即切换；增删一律去「工作区」管理页
     setTimeout(() => {
       panelList.querySelectorAll('.ws-panel-row').forEach(row => {
         if (row._wsBound) return;
         row._wsBound = true;
-        row.addEventListener('click', function(e) {
-          const delBtn = e.target.closest('.ws-row-del');
-          if (delBtn) {
-            removeWorkspace(delBtn.dataset.wsName);
-            return;
-          }
-          const name = this.dataset.wsName;
-          if (name) switchTo(name);
+        row.addEventListener('click', function () {
+          if (this.dataset.wsName) switchTo(this.dataset.wsName);
         });
       });
     }, 0);
@@ -14063,7 +14895,7 @@ function bindComposerInRoot(root, opts) {
       }
       refreshChip();
       closePanel();
-      showToast(t('workspace.switched') || '已切换到 ' + name);
+      showToast(t('workspace.switched') || '已切换到 ' + gaWsDisplayName(name));
     } catch (e) {
       alert('切换失败: ' + (e.message || String(e)));
     }
@@ -14084,75 +14916,10 @@ function bindComposerInRoot(root, opts) {
     }
   }
 
-  async function removeWorkspace(name) {
-    if (!(await showConfirmDialog({ title: t('common.delete'), message: '确认删除工作区「' + name + '」？\n（仅删除索引和快捷方式，不会删除真实文件）', okText: t('common.delete'), okKind: 'danger' }))) return;
-    try {
-      await window.ga.removeWorkspace(name);
-      if (_currentWs && _currentWs.name === name) {
-        _currentWs = null;
-        refreshChip();
-        const sid = state.activeId;
-        if (sid) {
-          try { await window.ga.offSessionWorkspace(sid); } catch (_) {}
-          const sess = state.sessions.get(sid);
-          if (sess) { sess.workspace = ''; sess._workspacePath = ''; }
-        }
-      }
-      refreshPanel();
-    } catch (e) {
-      alert('Error: ' + (e.message || String(e)));
-    }
-  }
-
-  async function showAddForm() {
-    // Try native folder picker (Tauri) first
-    const invoke = window.__TAURI__?.core?.invoke;
-    if (invoke) {
-      try {
-        const folder = await invoke('pick_folder');
-        if (folder) { doAdd(folder); return; }
-      } catch (e) {
-        console.error('[workspace] pick_folder failed:', e);
-      }
-    }
-    // Always show inline form as fallback
-    if (addBtn) addBtn.hidden = true;
-    if (addForm) addForm.hidden = false;
-    if (addInput) { addInput.value = ''; addInput.focus(); }
-  }
-
-  function hideAddForm() {
-    addBtn.hidden = false;
-    addForm.hidden = true;
-    addInput.value = '';
-  }
-
-  async function doAdd(path) {
-    path = path || addInput.value.trim();
-    if (!path) return;
-    hideAddForm();
-    try {
-      const res = await window.ga.prepareWorkspace(path);
-      if (res && res.ok) {
-        const sid = state.activeId;
-        if (sid && res.name) {
-          try {
-            await window.ga.setSessionWorkspace(sid, res.name);
-            const sess = activeSess();
-            if (sess) {
-              sess.workspace = res.name;  // 同步前端缓存
-              sess._workspacePath = path;
-              state.lastWorkspacePath = path;
-            }
-          } catch (_) {}
-        }
-        refreshPanel();
-      } else if (res && res.error) {
-        alert('Error: ' + res.error);
-      }
-    } catch (e) {
-      alert('Error: ' + (e.message || String(e)));
-    }
+  // 增删工作区已移到左侧「工作区」管理页，面板只做选择
+  function goToManage() {
+    closePanel();
+    gaGoPage('workspace');
   }
 
   // Event handlers
@@ -14176,11 +14943,9 @@ function bindComposerInRoot(root, opts) {
     }
   });
 
-  addBtn?.addEventListener('click', showAddForm);
-  addCancel?.addEventListener('click', hideAddForm);
-  addConfirm?.addEventListener('click', () => doAdd());
-  addInput?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); doAdd(); }
+  manageBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    goToManage();
   });
 
   // Watch for session changes (poll state.activeId)
@@ -14244,6 +15009,146 @@ function bindComposerInRoot(root, opts) {
   });
 
   window.gaRefreshWorkspaceChip = () => { refreshChip(); };
+})();
+
+/* ═══════════════ Workspace 管理页 ═══════════════ */
+(function initWorkspacePage() {
+  'use strict';
+  const page = document.querySelector('.page--wsm');
+  if (!page) return;
+  const listEl = document.getElementById('wsm-list');
+  const emptyEl = document.getElementById('wsm-empty');
+  const errEl = document.getElementById('wsm-error');
+  const addBtn = document.getElementById('wsm-add-btn');
+  const addBar = document.getElementById('wsm-addbar');
+  const addInput = document.getElementById('wsm-input');
+  const confirmBtn = document.getElementById('wsm-confirm');
+  const cancelBtn = document.getElementById('wsm-cancel');
+  let _busy = false;
+
+  function esc(s) { return String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+  function err(msg) { if (errEl) { errEl.textContent = msg || ''; errEl.hidden = !msg; } }
+  function fmtTime(ts) {
+    if (!ts) return '—';
+    try { return new Date(ts * 1000).toLocaleString(); } catch (_) { return '—'; }
+  }
+
+  async function render() {
+    err('');
+    let items = [];
+    try {
+      const res = await window.ga.listWorkspaces();
+      items = (res && res.workspaces) || [];
+    } catch (e) {
+      // 请求失败（如 bridge 未就绪）：不渲染假空态，避免误导
+      err('Error: ' + (e.message || String(e)));
+      listEl.innerHTML = '';
+      emptyEl.hidden = true;
+      return;
+    }
+    if (!items.length) {
+      listEl.innerHTML = '';
+      emptyEl.hidden = false;
+      return;
+    }
+    emptyEl.hidden = true;
+    listEl.innerHTML = items.map(w => {
+      const projs = (w.projects || []).map(p => `<span class="wsm-tag">${esc(p)}</span>`).join('')
+        || `<span class="wsm-none">${esc(t('wsm.usedNone'))}</span>`;
+      const dangling = w.dangling ? `<span class="wsm-dangling">${esc(t('workspace.dangling'))}</span>` : '';
+      return `<div class="wsm-item${w.dangling ? ' is-dangling' : ''}" data-ws-name="${esc(w.name)}">
+        <div class="wsm-item-main">
+          <div class="wsm-item-head">
+            <span class="wsm-item-name">${esc(gaWsDisplayName(w.name, w.path))}</span>${dangling}
+          </div>
+          <div class="wsm-item-path" title="${esc(w.path || '')}">${esc(w.path || '')}</div>
+          <div class="wsm-item-meta">
+            <span class="wsm-meta-time">${fmtTime(w.last_used)}</span>
+            ${w.mem_lines ? `<span class="wsm-meta-mem">${esc(t('wsm.memLines').replace('{0}', String(w.mem_lines)))}</span>` : ''}
+          </div>
+          <div class="wsm-item-projs"><span class="wsm-projs-label">${esc(t('wsm.usedBy'))}</span>${projs}</div>
+        </div>
+        <div class="wsm-item-actions">
+          ${w.path && !w.dangling ? `<button type="button" class="wsm-btn" data-act="reveal" title="${esc(t('wsm.open'))}"><span data-ga-icon="folderOpen"></span></button>` : ''}
+          <button type="button" class="wsm-btn wsm-btn-danger" data-act="del" title="${esc(t('workspace.removeTitle'))}"><span data-ga-icon="trash"></span></button>
+        </div>
+      </div>`;
+    }).join('');
+    applyI18n();
+    gaHydrateIcons();
+  }
+
+  function showAddBar() { addBar.hidden = false; addInput.value = ''; addInput.focus(); }
+  function hideAddBar() { addBar.hidden = true; addInput.value = ''; err(''); }
+
+  async function doAdd(path) {
+    path = path || addInput.value.trim();
+    if (!path || _busy) return;
+    _busy = true;
+    err('');
+    try {
+      const res = await window.ga.prepareWorkspace(path);
+      if (res && res.ok) {
+        hideAddBar();
+        showToast(t('wsm.added'));
+        await render();
+      } else if (res && res.error) {
+        err('Error: ' + res.error);
+      }
+    } catch (e) { err('Error: ' + (e.message || String(e))); }
+    finally { _busy = false; }
+  }
+
+  async function doDelete(name, usedCount) {
+    const msg = t('wsm.delConfirm').replace('{0}', gaWsDisplayName(name))
+      + (usedCount ? '\n' + t('wsm.delUnbound').replace('{0}', String(usedCount)) : '');
+    if (!(await showConfirmDialog({ title: t('wsm.delConfirmTitle'), message: msg, okText: t('common.delete'), okKind: 'danger' }))) return;
+    try {
+      await window.ga.removeWorkspace(name);
+      showToast(t('wsm.deleted'));
+      await render();
+    } catch (e) { alert('Error: ' + (e.message || String(e))); }
+  }
+
+  function reveal(path) {
+    fetch(`${BRIDGE_ORIGIN}/path/open`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, mode: 'reveal' })
+    }).catch(() => {});
+  }
+
+  addBtn?.addEventListener('click', () => addBar.hidden ? showAddBar() : hideAddBar());
+  confirmBtn?.addEventListener('click', () => doAdd());
+  cancelBtn?.addEventListener('click', hideAddBar);
+  addInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doAdd(); }
+    else if (e.key === 'Escape') hideAddBar();
+  });
+
+  listEl.addEventListener('click', (e) => {
+    const item = e.target.closest('.wsm-item');
+    if (!item) return;
+    const name = item.dataset.wsName || '';
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    e.stopPropagation();
+    if (btn.dataset.act === 'del') {
+      doDelete(name, item.querySelectorAll('.wsm-tag').length);
+    } else if (btn.dataset.act === 'reveal') {
+      reveal(item.querySelector('.wsm-item-path')?.textContent.trim() || '');
+    }
+  });
+
+  // 侧边栏导航点击时刷新
+  document.getElementById('nav')?.addEventListener('click', (e) => {
+    if (e.target.closest('[data-page="workspace"]')) render();
+  });
+
+  // 从管理页切走/切回时保持数据新鲜；另暴露给删除项目后联动
+  window.wsmRender = render;
+  // bridge 就绪后刷新一次（页面可能在 bridge ready 前就已进入）
+  window.ga.onBridgeReady(() => { render(); });
+  render();
 })();
 
 /* ═══════════════ 文件管理 ═══════════════ */
@@ -14439,6 +15344,7 @@ function renderFilesList() {
 
   // bind item selection (click on item body, not actions)
   el.querySelectorAll('.files-item').forEach(item => {
+    item.addEventListener('mousedown', (e) => { if (e.button === 2) e.preventDefault(); });
     item.addEventListener('click', (e) => {
       if (e.target.closest('.files-item-actions')) return;
       if (e.target.closest('.files-item-check')) return;
@@ -15019,7 +15925,7 @@ async function handleFileAction(act, path, btn) {
 }
 
 // 打开/关闭菜单下拉
-function toggleFilesMenu(btn) {
+function toggleFilesMenu(btn, x, y) {
   const wasOpen = btn.parentElement.querySelector('.files-menu-dropdown.open');
   closeAllFilesMenus();
   if (wasOpen) return;
@@ -15039,7 +15945,28 @@ function toggleFilesMenu(btn) {
     <div class="files-menu-sep"></div>
     <button type="button" class="files-menu-item danger" data-act="delete"><span data-ga-icon="trash"></span>${t('files.delete')}</button>
   `;
-  btn.parentElement.appendChild(dropdown);
+  // 右键场景：按光标位置弹出（fixed 定位在 body 上）；按钮点击场景：相对按钮定位（原行为）
+  if (x != null && y != null) {
+    dropdown.style.position = 'fixed';
+    dropdown.style.right = 'auto';
+    dropdown.style.top = 'auto';
+    dropdown.style.left = x + 'px';
+    dropdown.style.top = y + 'px';
+    document.body.appendChild(dropdown);
+    const mw = dropdown.offsetWidth || 170, mh = dropdown.offsetHeight || 180, pad = 8;
+    let left = x, top = y;
+    if (left + mw > window.innerWidth - pad) left = Math.max(pad, window.innerWidth - mw - pad);
+    if (top + mh > window.innerHeight - pad) top = Math.max(pad, window.innerHeight - mh - pad);
+    dropdown.style.left = left + 'px';
+    dropdown.style.top = top + 'px';
+    setTimeout(function () {
+      document.addEventListener('mousedown', function onDown(ev) {
+        if (!dropdown.contains(ev.target)) { closeAllFilesMenus(); document.removeEventListener('mousedown', onDown, true); }
+      }, true);
+    }, 0);
+  } else {
+    btn.parentElement.appendChild(dropdown);
+  }
   _filesRenderIcons(dropdown);
   dropdown.querySelectorAll('button').forEach(b => {
     b.addEventListener('click', (e) => {
@@ -15268,7 +16195,6 @@ function showExpertDetail(name) {
   if (!modal) return;
   var titleEl = document.getElementById('expert-detail-title');
   var body = document.getElementById('expert-detail-body');
-  if (titleEl) titleEl.textContent = '专家详情';
   if (body) body.innerHTML = '<div class="sh-loading">加载中…</div>';
   openModal('expert-detail-modal');
   var experts = window._expertsData || [];
@@ -15277,35 +16203,58 @@ function showExpertDetail(name) {
     if (experts[i].name === name) { ex = experts[i]; break; }
   }
   if (!ex) { if (body) body.innerHTML = '<div class="sh-empty">未找到专家: ' + escapeHtml(name) + '</div>'; return; }
-  /* meta: 角色 · 模型 · 激活态 · 知识库 */
-  var info = [];
-  if (ex.role) info.push('🎭 ' + escapeHtml(ex.role));
-  if (ex.model) info.push('🤖 ' + escapeHtml(ex.model));
-  info.push(ex.enabled ? '✅ 已激活' : '⬜ 未激活');
-  if (ex.has_knowledge) info.push('📚 含知识库');
-  var infoHtml = info.length ? '<div class="sh-detail-info" style="font-size:12px;color:var(--txt-sub,#888);margin:8px 0;">' + info.join(' · ') + '</div>' : '';
-  /* 简介: 目标 + 背景 */
-  var introHtml = '';
-  if (ex.goal) introHtml += '<div class="sh-detail-desc" style="margin:8px 0;">' + escapeHtml(ex.goal) + '</div>';
-  if (ex.backstory) introHtml += '<div class="sh-detail-desc" style="color:var(--txt-sub,#888);margin:8px 0;">' + escapeHtml(ex.backstory) + '</div>';
-  /* tools 列表 */
+  if (titleEl) titleEl.textContent = ex.name || '专家详情';
+
+  function exdSection(label, value) {
+    return '<div class="sh-detail-section"><div class="sh-detail-label">' + label + '</div><div class="sh-detail-value">' + value + '</div></div>';
+  }
+
+  var initial = (ex.name || '?').trim().charAt(0).toUpperCase();
+  var statusHtml = ex.enabled
+    ? '<span class="exd-status on">● 已激活</span>'
+    : '<span class="exd-status off">○ 未激活</span>';
+
+  var heroHtml =
+    '<div class="exd-hero">' +
+      '<div class="exd-avatar">' + escapeHtml(initial) + '</div>' +
+      '<div class="exd-hero-main">' +
+        '<div class="exd-name-row">' +
+          '<span class="exd-name">' + escapeHtml(ex.name || '') + '</span>' +
+          statusHtml +
+        '</div>' +
+        (ex.role ? '<div class="exd-role">' + escapeHtml(ex.role) + '</div>' : '') +
+      '</div>' +
+    '</div>';
+
+  var metaParts = [];
+  if (ex.model) metaParts.push('<div class="exd-meta-item"><span class="exd-meta-k">模型</span><span class="exd-meta-v">' + escapeHtml(ex.model) + '</span></div>');
+  metaParts.push('<div class="exd-meta-item"><span class="exd-meta-k">知识库</span><span class="exd-meta-v">' + (ex.has_knowledge ? '已挂载' : '无') + '</span></div>');
+  var metaHtml = metaParts.length ? '<div class="exd-meta">' + metaParts.join('') + '</div>' : '';
+
+  var secHtml = '';
+  if (ex.goal) secHtml += exdSection('目标', escapeHtml(ex.goal));
+  if (ex.backstory) secHtml += exdSection('背景', escapeHtml(ex.backstory));
+
   var toolsArr = typeof ex.tools === 'string' ? ex.tools.split(',') : (ex.tools || []);
-  var tagsHtml = '';
+  toolsArr = toolsArr.map(function (t) { return String(t).trim(); }).filter(Boolean);
   if (toolsArr.length) {
-    tagsHtml = '<div class="sh-detail-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;">' + toolsArr.map(function (t) {
-      var tt = String(t).trim();
-      return tt ? '<span class="sh-card-tag">' + escapeHtml(tt) + '</span>' : '';
-    }).join('') + '</div>';
+    var tags = toolsArr.map(function (t) { return '<span class="sh-detail-badge">' + escapeHtml(t) + '</span>'; }).join('');
+    secHtml += '<div class="sh-detail-section"><div class="sh-detail-label">可用工具</div><div class="sh-detail-badges">' + tags + '</div></div>';
   }
-  /* 正文(含工作流程/版本记录),用 marked 渲染 markdown */
-  var bodyHtml = ex.body || '';
+
   var renderedBody = '';
-  if (typeof marked !== 'undefined' && marked.parse) {
-    try { renderedBody = marked.parse(bodyHtml); } catch (e) { renderedBody = '<pre>' + escapeHtml(bodyHtml) + '</pre>'; }
-  } else {
-    renderedBody = '<pre>' + escapeHtml(bodyHtml) + '</pre>';
+  if (ex.body) {
+    if (typeof marked !== 'undefined' && marked.parse) {
+      try { renderedBody = marked.parse(ex.body); } catch (e) { renderedBody = '<pre>' + escapeHtml(ex.body) + '</pre>'; }
+    } else {
+      renderedBody = '<pre>' + escapeHtml(ex.body) + '</pre>';
+    }
   }
-  body.innerHTML = introHtml + infoHtml + tagsHtml + '<div class="sh-detail-body">' + renderedBody + '</div>';
+  if (renderedBody && renderedBody.trim()) {
+    secHtml += '<div class="sh-detail-section"><div class="sh-detail-label">详细说明</div><div class="sh-detail-body">' + renderedBody + '</div></div>';
+  }
+
+  if (body) body.innerHTML = heroHtml + metaHtml + secHtml;
 }
 function renderShCategories(skills) {
   var box = document.getElementById('sh-categories');
@@ -15543,22 +16492,26 @@ async function showSkillDetail(name) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     var data = await res.json();
     var s = data.skill || data;
-    var info = [];
-    if (s.version) info.push('版本 v' + escapeHtml(s.version));
-    if (s.category) info.push('分类: ' + escapeHtml(s.category));
-    if (s.permission_level) info.push('权限: ' + escapeHtml(s.permission_level));
-    if (s.license) info.push('许可证: ' + escapeHtml(s.license));
-    if (s.argument_hint) info.push('参数: ' + escapeHtml(s.argument_hint));
-    if (s.has_scripts) info.push('⚙ 含脚本'); else info.push('📄 纯指令');
-    if (s.source) info.push(s.source === 'external' ? '📦 外部' : '🔧 内置');
-    if (s.installed) info.push(s.enabled !== false ? '✅ 已安装·启用' : '⏸ 已安装·禁用');
-    else info.push('⬜ 未安装');
+    /* meta chips（版本 / 分类 / 权限 / 许可证 / 参数 / 脚本 / 来源 / 状态） */
+    var metaParts = [];
+    function addMeta(k, v) { if (v) metaParts.push('<div class="exd-meta-item"><span class="exd-meta-k">' + escapeHtml(k) + '</span><span class="exd-meta-v">' + escapeHtml(v) + '</span></div>'); }
+    if (s.version) addMeta('版本', 'v' + s.version);
+    if (s.category) addMeta('分类', s.category);
+    if (s.permission_level) addMeta('权限', s.permission_level);
+    if (s.license) addMeta('许可证', s.license);
+    if (s.argument_hint) addMeta('参数', s.argument_hint);
+    metaParts.push('<div class="exd-meta-item"><span class="exd-meta-v">' + (s.has_scripts ? '⚙ 含脚本' : '📄 纯指令') + '</span></div>');
+    metaParts.push('<div class="exd-meta-item"><span class="exd-meta-v">' + (s.source === 'external' ? '📦 外部' : '🔧 内置') + '</span></div>');
+    metaParts.push('<div class="exd-meta-item"><span class="exd-meta-v">' + (s.installed ? (s.enabled !== false ? '✅ 已安装·启用' : '⏸ 已安装·禁用') : '⬜ 未安装') + '</span></div>');
+    var metaHtml = metaParts.length ? '<div class="exd-meta">' + metaParts.join('') + '</div>' : '';
+    /* 标签区 */
     var tagsHtml = '';
     if (s.tags && s.tags.length) {
-      tagsHtml = '<div class="sh-detail-tags">' + s.tags.map(function (t) {
-        return '<span class="sh-card-tag">' + escapeHtml(t) + '</span>';
-      }).join('') + '</div>';
+      tagsHtml = '<div class="sh-detail-section"><div class="sh-detail-label">标签</div><div class="sh-detail-badges">' + s.tags.map(function (t) {
+        return '<span class="sh-detail-badge">' + escapeHtml(t) + '</span>';
+      }).join('') + '</div></div>';
     }
+    /* 正文 markdown */
     var bodyHtml = s.body || '';
     var renderedBody = '';
     if (typeof marked !== 'undefined' && marked.parse) {
@@ -15566,11 +16519,11 @@ async function showSkillDetail(name) {
     } else {
       renderedBody = '<pre>' + escapeHtml(bodyHtml) + '</pre>';
     }
-    body.innerHTML =
-      '<div class="sh-detail-desc">' + escapeHtml(s.description || '') + '</div>' +
-      '<div class="sh-detail-info">' + info.join(' · ') + '</div>' +
-      tagsHtml +
-      '<div class="sh-detail-body">' + renderedBody + '</div>';
+    var html = metaHtml;
+    if (s.description) html += '<div class="sh-detail-section"><div class="sh-detail-label">简介</div><div class="sh-detail-value">' + escapeHtml(s.description) + '</div></div>';
+    html += tagsHtml;
+    if (renderedBody && renderedBody.trim()) html += '<div class="sh-detail-section"><div class="sh-detail-label">详细说明</div><div class="sh-detail-body">' + renderedBody + '</div></div>';
+    body.innerHTML = html;
   } catch (e) {
     body.innerHTML = '<div class="sh-empty">加载失败: ' + escapeHtml(e.message) + '</div>';
   }
@@ -15774,51 +16727,52 @@ function renderShBuiltinPlugins(items) {
 }
 
 function showShPluginDetail(p) {
-  var existing = document.getElementById('sh-pg-modal-overlay');
-  if (existing) existing.remove();
-  var name = escapeHtml(p.name || p.file || '(unknown)');
+  var modal = document.getElementById('sh-plugin-detail-modal');
+  if (!modal) return;
+  var titleEl = document.getElementById('sh-plugin-detail-title');
+  var body = document.getElementById('sh-plugin-detail-body');
+  if (titleEl) titleEl.textContent = '插件详情';
+  if (body) body.innerHTML = '<div class="sh-loading">加载中…</div>';
+  openModal('sh-plugin-detail-modal');
+  var name = p.name || p.file || '(unknown)';
   var ver = p.version ? 'v' + escapeHtml(p.version) : '';
-  var desc = p.description ? escapeHtml(p.description) : '';
   var dir = p.dir ? escapeHtml(p.dir) : (p.file ? escapeHtml(p.file) : '');
-  function tagList(label, items, key) {
+  var initial = escapeHtml((name.charAt(0) || 'P').toUpperCase());
+  var metaHtml = '';
+  if (dir) metaHtml += '<div class="exd-meta-item"><span class="exd-meta-k">路径</span><span class="exd-meta-v" style="font-family:var(--mono,monospace);font-weight:500;">' + dir + '</span></div>';
+  function nameBadges(label, items, key) {
     if (!items || !items.length) return '';
-    var lis = items.map(function(it) {
+    var bs = items.map(function(it) {
       var v = key ? it[key] : it;
-      return '<li>' + escapeHtml(v || '') + '</li>';
+      return '<span class="sh-detail-badge">' + escapeHtml(v || '') + '</span>';
     }).join('');
-    return '<div class="sh-pg-modal-sec"><div class="sh-pg-modal-sec-title">' + label + ' (' + items.length + ')</div><ul class="sh-pg-modal-list">' + lis + '</ul></div>';
+    return '<div class="sh-detail-section"><div class="sh-detail-label">' + label + ' (' + items.length + ')</div><div class="sh-detail-badges">' + bs + '</div></div>';
   }
-  function skillList(items) {
+  function skillSection(items) {
     if (!items || !items.length) return '';
-    var lis = items.map(function(s) {
-      var n = '<span class="sh-pg-modal-name">' + escapeHtml(s.name || '') + '</span>';
-      var d = s.description ? '<span class="sh-pg-modal-sub">' + escapeHtml(s.description) + '</span>' : '';
-      return '<li><div class="sh-pg-modal-item">' + n + d + '</div></li>';
+    var cards = items.map(function(s) {
+      var n = '<strong>' + escapeHtml(s.name || '') + '</strong>';
+      var d = s.description ? '<div style="color:var(--muted);font-size:12px;margin-top:2px;">' + escapeHtml(s.description) + '</div>' : '';
+      return '<div class="sh-detail-value" style="margin-bottom:6px;">' + n + d + '</div>';
     }).join('');
-    return '<div class="sh-pg-modal-sec"><div class="sh-pg-modal-sec-title">Skills (' + items.length + ')</div><ul class="sh-pg-modal-list">' + lis + '</ul></div>';
+    return '<div class="sh-detail-section"><div class="sh-detail-label">Skills (' + items.length + ')</div>' + cards + '</div>';
   }
-  var detailHtml = (desc ? '<div class="sh-pg-modal-desc">' + desc + '</div>' : '') +
-    (dir ? '<div class="sh-pg-modal-dir">📍 ' + dir + '</div>' : '') +
-    skillList(p.skills) +
-    tagList('Agents', p.agents, 'name') +
-    tagList('Hooks', p.hooks) +
-    tagList('MCP Servers', p.mcp, 'name') +
-    tagList('Monitors', p.monitors, 'name');
-  var overlay = document.createElement('div');
-  overlay.id = 'sh-pg-modal-overlay';
-  overlay.className = 'sh-pg-modal-overlay';
-  overlay.innerHTML =
-    '<div class="sh-pg-modal">' +
-      '<div class="sh-pg-modal-head">' +
-        '<span class="sh-pg-modal-name">' + name + '</span>' +
-        (ver ? '<span class="sh-pg-modal-ver">' + ver + '</span>' : '') +
-        '<button class="sh-pg-modal-close" id="sh-pg-modal-close">✕</button>' +
+  var heroHtml =
+    '<div class="exd-hero">' +
+      '<div class="exd-avatar">' + initial + '</div>' +
+      '<div class="exd-hero-main">' +
+        '<div class="exd-name-row"><span class="exd-name">' + escapeHtml(name) + '</span>' + (ver ? '<span class="exd-status on">' + ver + '</span>' : '') + '</div>' +
+        '<div class="exd-role">Skill Hub 插件</div>' +
       '</div>' +
-      '<div class="sh-pg-modal-body">' + detailHtml + '</div>' +
     '</div>';
-  document.body.appendChild(overlay);
-  document.getElementById('sh-pg-modal-close').addEventListener('click', function() { overlay.remove(); });
-  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+  var metaBlock = metaHtml ? '<div class="exd-meta">' + metaHtml + '</div>' : '';
+  var descHtml = p.description ? '<div class="sh-detail-section"><div class="sh-detail-label">简介</div><div class="sh-detail-value">' + escapeHtml(p.description) + '</div></div>' : '';
+  body.innerHTML = heroHtml + metaBlock + descHtml +
+    skillSection(p.skills) +
+    nameBadges('Agents', p.agents, 'name') +
+    nameBadges('Hooks', p.hooks) +
+    nameBadges('MCP Servers', p.mcp, 'name') +
+    nameBadges('Monitors', p.monitors, 'name');
 }
 
 async function addShPluginDir() {
@@ -15963,42 +16917,46 @@ function closeMcpMenus() {
 document.addEventListener('click', function () { closeMcpMenus(); });
 
 function showMcpDetail(srv) {
-  var old = document.getElementById('sh-mcp-detail-overlay');
-  if (old) old.remove();
+  var modal = document.getElementById('sh-mcp-detail-modal');
+  if (!modal) return;
+  var titleEl = document.getElementById('sh-mcp-detail-title');
+  var body = document.getElementById('sh-mcp-detail-body');
+  if (titleEl) titleEl.textContent = 'MCP Server 详情';
+  if (body) body.innerHTML = '<div class="sh-loading">加载中…</div>';
+  openModal('sh-mcp-detail-modal');
   var transport = srv.transport || (srv.url ? 'http' : 'stdio');
-  var rows = [
-    ['名称', srv.name || '-'],
-    ['Transport', transport],
-    ['来源', srv.source === 'plugin' ? 'plugin' : '全局配置']
-  ];
-  if (srv.command) rows.push(['Command', srv.command]);
-  if (srv.args && srv.args.length) rows.push(['Args', srv.args.join(' ')]);
-  if (srv.url) rows.push(['URL', srv.url]);
-  if (srv.env && Object.keys(srv.env).length) {
-    Object.keys(srv.env).forEach(function (k) { rows.push(['env: ' + k, srv.env[k]]); });
+  var name = srv.name || '-';
+  var initial = escapeHtml((name.charAt(0) || 'M').toUpperCase());
+  var srcLabel = srv.source === 'plugin' ? 'plugin' : '全局配置';
+  var metaHtml =
+    '<div class="exd-meta-item"><span class="exd-meta-k">来源</span><span class="exd-meta-v">' + escapeHtml(srcLabel) + '</span></div>' +
+    '<div class="exd-meta-item"><span class="exd-meta-k">Transport</span><span class="exd-meta-v">' + escapeHtml(transport) + '</span></div>';
+  function kvSection(k, v) {
+    if (v == null || v === '') return '';
+    var val = Array.isArray(v) ? v.join(' ') : v;
+    return '<div class="sh-detail-section"><div class="sh-detail-label">' + escapeHtml(k) + '</div><div class="sh-detail-value" style="font-family:var(--mono,monospace);font-size:12px;word-break:break-all;">' + escapeHtml(val) + '</div></div>';
   }
-  var rowsHtml = rows.map(function (r) {
-    return '<div class="sh-mcp-detail-row"><span class="sh-mcp-detail-k">' + escapeHtml(r[0]) +
-      '</span><span class="sh-mcp-detail-v">' + escapeHtml(r[1]) + '</span></div>';
-  }).join('');
-  var overlay = document.createElement('div');
-  overlay.id = 'sh-mcp-detail-overlay';
-  overlay.className = 'sh-mcp-detail-overlay';
-  overlay.innerHTML = '<div class="sh-mcp-detail-panel">' +
-    '<div class="sh-mcp-detail-head"><strong>MCP Server 详情</strong>' +
-    '<button class="sh-mcp-detail-close" id="sh-mcp-detail-close">✕</button></div>' +
-    '<div class="sh-mcp-detail-body">' + rowsHtml + '</div></div>';
-  document.body.appendChild(overlay);
-  setTimeout(function () { overlay.classList.add('visible'); }, 20);
-  overlay.addEventListener('click', function (e) { if (e.target === overlay) closeMcpDetail(); });
-  document.getElementById('sh-mcp-detail-close').addEventListener('click', closeMcpDetail);
+  var heroHtml =
+    '<div class="exd-hero">' +
+      '<div class="exd-avatar">' + initial + '</div>' +
+      '<div class="exd-hero-main">' +
+        '<div class="exd-name-row"><span class="exd-name">' + escapeHtml(name) + '</span><span class="exd-status on">' + escapeHtml(transport) + '</span></div>' +
+        '<div class="exd-role">MCP Server</div>' +
+      '</div>' +
+    '</div>';
+  var envHtml = '';
+  if (srv.env && Object.keys(srv.env).length) {
+    Object.keys(srv.env).forEach(function (k) { envHtml += kvSection('env: ' + k, srv.env[k]); });
+  }
+  body.innerHTML = heroHtml + '<div class="exd-meta">' + metaHtml + '</div>' +
+    kvSection('Command', srv.command) +
+    kvSection('Args', srv.args) +
+    kvSection('URL', srv.url) +
+    envHtml;
 }
 
 function closeMcpDetail() {
-  var overlay = document.getElementById('sh-mcp-detail-overlay');
-  if (!overlay) return;
-  overlay.classList.remove('visible');
-  setTimeout(function () { overlay.remove(); }, 150);
+  closeModals();
 }
 
 function toggleMcpTransportFields() {

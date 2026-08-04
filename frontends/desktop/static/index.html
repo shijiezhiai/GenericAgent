@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="ga-icon.svg">
 <link rel="apple-touch-icon" href="ga-icon.svg">
 <link rel="stylesheet" href="assets/fonts/fonts.css?v=2">
-<link rel="stylesheet" href="styles.css?v=246">
+<link rel="stylesheet" href="styles.css?v=249">
 <!-- KaTeX: LaTeX 公式渲染 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
 <!-- highlight.js: 代码高亮 -->
@@ -84,6 +84,10 @@
         <a class="nav-item" data-page="project">
           <span class="ic" data-ga-icon="folderSimple"></span>
           <span data-i18n="nav.project"></span>
+        </a>
+        <a class="nav-item" data-page="workspace">
+          <span class="ic" data-ga-icon="folderNotchOpen"></span>
+          <span data-i18n="nav.workspace"></span>
         </a>
         <a class="nav-item" data-page="token">
           <span class="ic" data-ga-icon="coins"></span>
@@ -290,17 +294,10 @@
               <div class="ws-panel-list" id="ws-panel-list"></div>
               <div class="ws-panel-empty" id="ws-panel-empty" hidden data-i18n="workspace.emptyList"></div>
               <div class="ws-panel-foot" id="ws-panel-foot">
-                <button type="button" class="ws-add-btn" id="ws-add-btn">
-                  <span data-ga-icon="plus"></span>
-                  <span data-i18n="workspace.add"></span>
+                <button type="button" class="ws-manage-btn" id="ws-manage-btn">
+                  <span data-ga-icon="gear"></span>
+                  <span data-i18n="workspace.manage"></span>
                 </button>
-                <div class="ws-add-form" id="ws-add-form" hidden>
-                  <input type="text" class="ws-add-input" id="ws-add-input" data-i18n-ph="workspace.addPlaceholder" placeholder="" maxlength="500">
-                  <div class="ws-add-actions">
-                    <button type="button" class="ws-add-cancel" id="ws-add-cancel" data-i18n="workspace.addCancel"></button>
-                    <button type="button" class="ws-add-confirm" id="ws-add-confirm" data-i18n="workspace.addConfirm"></button>
-                  </div>
-                </div>
               </div>
             </div>
             <input type="file" id="chat-file-input" multiple hidden>
@@ -839,6 +836,14 @@
             <!-- 右侧项目配置边栏 -->
             <aside class="ph-sidebar">
               <div class="ph-sidebar-title" data-i18n="ph.config.title"></div>
+              <div class="ph-cfg-card" data-ph-cfg="workspace">
+                <div class="ph-cfg-head">
+                  <span class="ph-cfg-label" data-i18n="ph.cfg.workspace"></span>
+                  <button class="ph-cfg-add" aria-label="workspace"><span data-ga-icon="pencilSimple"></span></button>
+                </div>
+                <div class="ph-cfg-desc" data-i18n="ph.cfg.workspace.d"></div>
+                <div class="ph-cfg-ws" id="ph-cfg-ws"></div>
+              </div>
               <div class="ph-cfg-card" data-ph-cfg="instruction">
                 <div class="ph-cfg-head">
                   <span class="ph-cfg-label" data-i18n="ph.cfg.instruction"></span>
@@ -883,6 +888,42 @@
                 <div class="ph-cfg-desc" data-i18n="ph.cfg.member.d"></div>
               </div>
             </aside>
+          </div>
+        </section>
+
+        <!-- 工作区管理 -->
+        <section class="page page--wsm" data-page="workspace">
+          <div class="page-top">
+            <button type="button" class="pt-icon pt-sb-toggle" aria-label="toggle sidebar">
+              <span data-ga-icon="caretLeft"></span>
+            </button>
+            <span class="pt-spacer"></span>
+            <button type="button" class="pt-icon pt-rp-toggle" aria-label="toggle conversations">
+              <span data-ga-icon="caretRight"></span>
+            </button>
+          </div>
+          <div class="page-pad">
+            <div class="wsm-header">
+              <div class="wsm-titles">
+                <h1 class="wsm-title" data-i18n="wsm.title"></h1>
+                <div class="wsm-sub" data-i18n="wsm.subtitle"></div>
+              </div>
+              <button type="button" class="wsm-add-btn" id="wsm-add-btn">
+                <span data-ga-icon="plus"></span>
+                <span data-i18n="wsm.add"></span>
+              </button>
+            </div>
+            <div class="wsm-addbar" id="wsm-addbar" hidden>
+              <input type="text" class="wsm-input" id="wsm-input" data-i18n-ph="workspace.addPlaceholder" placeholder="" maxlength="500">
+              <button type="button" class="wsm-btn wsm-btn-primary" id="wsm-confirm" data-i18n="workspace.addConfirm"></button>
+              <button type="button" class="wsm-btn" id="wsm-cancel" data-i18n="workspace.addCancel"></button>
+            </div>
+            <div class="wsm-error" id="wsm-error" hidden></div>
+            <div class="wsm-list" id="wsm-list"></div>
+            <div class="wsm-empty" id="wsm-empty" hidden>
+              <div class="wsm-empty-icon" data-ga-icon="folderNotchOpen"></div>
+              <div class="wsm-empty-text" data-i18n="wsm.empty"></div>
+            </div>
           </div>
         </section>
 
@@ -1154,9 +1195,37 @@
           <span data-ga-icon="arrowUpRight"></span>
           <span data-i18n="ph.lib.open"></span>
         </div>
+        <div class="ctx-item" data-act="move">
+          <span data-ga-icon="folderSimple"></span>
+          <span data-i18n="ph.lib.moveToFolder">移动到资料夹</span>
+        </div>
+        <div class="ctx-item" data-act="remove-folder">
+          <span data-ga-icon="arrowUpRight"></span>
+          <span data-i18n="ph.lib.removeFromFolder">移出资料夹</span>
+        </div>
+        <div class="ctx-item" data-act="rename">
+          <span data-ga-icon="pencilSimple"></span>
+          <span data-i18n="ph.lib.renameItem">重命名</span>
+        </div>
+        <div class="ctx-item" data-act="new-sub-folder">
+          <span data-ga-icon="folderSimplePlus"></span>
+          <span data-i18n="ph.lib.newSubFolder">新建子资料夹</span>
+        </div>
         <div class="ctx-item" data-act="reveal">
           <span data-ga-icon="folderOpen"></span>
           <span data-i18n="ph.lib.reveal"></span>
+        </div>
+        <div class="ctx-item" data-act="copy">
+          <span data-ga-icon="arrowUpRight"></span>
+          <span data-i18n="ph.lib.copyLink">复制链接</span>
+        </div>
+        <div class="ctx-item" data-act="add">
+          <span data-ga-icon="chatTeardropText"></span>
+          <span data-i18n="ph.lib.addToSession">添加到会话</span>
+        </div>
+        <div class="ctx-item danger" data-act="delete">
+          <span data-ga-icon="trash"></span>
+          <span data-i18n="ph.lib.delete">删除</span>
         </div>
         <div class="ctx-item" data-act="pin">
           <span data-ga-icon="pushPinSimple"></span>
@@ -1200,6 +1269,97 @@
         </div>
       </div>
       <div class="ctx-menu" id="move-menu" hidden></div>
+
+      <!-- 聊天消息气泡右键菜单 -->
+      <div class="ctx-menu" id="msg-menu" hidden>
+        <div class="ctx-item" data-act="copy-text">
+          <span data-ga-icon="copy"></span>
+          <span data-i18n="ctx.copyText"></span>
+        </div>
+        <div class="ctx-item" data-act="copy-code">
+          <span data-ga-icon="copy"></span>
+          <span data-i18n="ctx.copyCode"></span>
+        </div>
+        <div class="ctx-item" data-act="regenerate">
+          <span data-ga-icon="arrowClockwise"></span>
+          <span data-i18n="ctx.regenerate"></span>
+        </div>
+        <div class="ctx-item" data-act="edit-resend">
+          <span data-ga-icon="pencilSimple"></span>
+          <span data-i18n="ctx.editResend"></span>
+        </div>
+        <div class="ctx-item danger" data-act="del-msg">
+          <span data-ga-icon="trash"></span>
+          <span data-i18n="ctx.delMsg"></span>
+        </div>
+      </div>
+
+      <!-- 会话中选中文字右键菜单 -->
+      <div class="ctx-menu" id="sel-menu" hidden>
+        <div class="ctx-item" data-act="copy">
+          <span data-ga-icon="copy"></span>
+          <span data-i18n="ctx.copy"></span>
+        </div>
+        <div class="ctx-item" data-act="search">
+          <span data-ga-icon="magnifyingGlass"></span>
+          <span data-i18n="ctx.search"></span>
+        </div>
+        <div class="ctx-item" data-act="quote">
+          <span data-ga-icon="pencilSimple"></span>
+          <span data-i18n="ctx.quote"></span>
+        </div>
+      </div>
+
+      <!-- 输入框右键菜单 -->
+      <div class="ctx-menu" id="input-menu" hidden>
+        <div class="ctx-item" data-act="undo">
+          <span data-ga-icon="arrowClockwise"></span>
+          <span data-i18n="ctx.undo"></span>
+        </div>
+        <div class="ctx-item" data-act="redo">
+          <span data-ga-icon="arrowClockwise"></span>
+          <span data-i18n="ctx.redo"></span>
+        </div>
+        <div class="ctx-item" data-act="cut">
+          <span data-i18n="ctx.cut"></span>
+        </div>
+        <div class="ctx-item" data-act="copy">
+          <span data-ga-icon="copy"></span>
+          <span data-i18n="ctx.copy"></span>
+        </div>
+        <div class="ctx-item" data-act="paste">
+          <span data-ga-icon="paperclip"></span>
+          <span data-i18n="ctx.paste"></span>
+        </div>
+        <div class="ctx-item" data-act="select-all">
+          <span data-ga-icon="listChecks"></span>
+          <span data-i18n="ctx.selectAll"></span>
+        </div>
+        <div class="ctx-item danger" data-act="clear">
+          <span data-ga-icon="trash"></span>
+          <span data-i18n="ctx.clear"></span>
+        </div>
+      </div>
+
+      <!-- 聊天背景/窗口级右键菜单 -->
+      <div class="ctx-menu" id="app-menu" hidden>
+        <div class="ctx-item" data-act="new-session">
+          <span data-ga-icon="plus"></span>
+          <span data-i18n="ctx.newSession"></span>
+        </div>
+        <div class="ctx-item" data-act="restart-kernel">
+          <span data-ga-icon="arrowClockwise"></span>
+          <span data-i18n="ctx.restartKernel"></span>
+        </div>
+        <div class="ctx-item" data-act="restart-bridge">
+          <span data-ga-icon="arrowClockwise"></span>
+          <span data-i18n="ctx.restartBridge"></span>
+        </div>
+        <div class="ctx-item" data-act="about">
+          <span data-ga-icon="robot"></span>
+          <span data-i18n="ctx.about"></span>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -1598,82 +1758,146 @@
   <!-- 配置 弹窗 -->
   <div class="modal" id="settings-modal" hidden>
     <div class="modal-backdrop" data-close></div>
-    <div class="modal-card" role="dialog">
+    <div class="modal-card settings-card" role="dialog">
       <div class="modal-head">
         <div class="modal-title" data-i18n="modal.settings"></div>
         <button class="modal-x" data-close data-i18n-title="common.close" title="">
           <span data-ga-icon="x"></span>
         </button>
       </div>
-      <div class="modal-body set-body">
-        <div class="set-block">
-          <div class="set-sec-t" data-i18n="set.appearance"></div>
-          <div class="appear-cards" id="appearance-seg" role="radiogroup">
-            <button class="appear-card sel" type="button" data-appearance="light" role="radio" aria-checked="true">
-              <span class="appear-preview appear-preview-light" aria-hidden="true"></span>
-              <span class="appear-name" data-i18n="appearance.light"></span>
-            </button>
-            <button class="appear-card" type="button" data-appearance="dark" role="radio" aria-checked="false">
-              <span class="appear-preview appear-preview-dark" aria-hidden="true"></span>
-              <span class="appear-name" data-i18n="appearance.dark"></span>
-            </button>
-          </div>
-          <div class="set-toggle-row" id="plain-ui-row" hidden>
-            <span class="set-toggle-label" data-i18n="set.plainUi"></span>
-            <button class="set-switch" type="button" id="plain-ui-switch" role="switch" aria-checked="false">
-              <span class="set-switch-knob" aria-hidden="true"></span>
-            </button>
-          </div>
-        </div>
-        <div class="set-block">
-          <div class="set-sec-t" id="chat-font-label" data-i18n="set.fontSize"></div>
-          <div class="chat-font-panel">
-            <div class="chat-font-stepper" id="chat-font-stepper" role="slider"
-              aria-valuemin="10" aria-valuemax="20" aria-valuenow="14"
-              aria-valuetext="14px" aria-labelledby="chat-font-label" tabindex="0">
-              <div class="chat-font-segments" id="chat-font-segments"></div>
+      <div class="modal-body settings-body">
+        <nav class="settings-nav" id="settings-nav" aria-label="settings tabs">
+          <button class="settings-nav-item active" type="button" data-settings-tab="general" data-i18n="set.tabGeneral">通用</button>
+          <button class="settings-nav-item" type="button" data-settings-tab="models" data-i18n="set.tabModels">模型</button>
+          <button class="settings-nav-item" type="button" data-settings-tab="shortcuts" data-i18n="set.tabShortcuts">快捷键</button>
+        </nav>
+        <div class="settings-panels" id="settings-panels">
+          <section class="settings-panel active" id="settings-panel-general" aria-labelledby="settings-tab-general">
+            <div class="set-block">
+              <div class="set-item">
+                <div class="set-item-text">
+                  <div class="set-item-title" data-i18n="set.appearance"></div>
+                  <div class="set-item-desc" data-i18n="set.appearanceDesc"></div>
+                </div>
+                <div class="appear-cards" id="appearance-seg" role="radiogroup">
+                  <button class="appear-card sel" type="button" data-appearance="light" role="radio" aria-checked="true">
+                    <span class="appear-preview appear-preview-light" aria-hidden="true"></span>
+                    <span class="appear-name" data-i18n="appearance.light"></span>
+                  </button>
+                  <button class="appear-card" type="button" data-appearance="dark" role="radio" aria-checked="false">
+                    <span class="appear-preview appear-preview-dark" aria-hidden="true"></span>
+                    <span class="appear-name" data-i18n="appearance.dark"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="set-toggle-row" id="plain-ui-row" hidden>
+                <span class="set-toggle-label" data-i18n="set.plainUi"></span>
+                <button class="set-switch" type="button" id="plain-ui-switch" role="switch" aria-checked="false">
+                  <span class="set-switch-knob" aria-hidden="true"></span>
+                </button>
+              </div>
             </div>
-            <span class="chat-font-value" id="chat-font-value" aria-hidden="true">14px</span>
-            <div class="chat-font-scale" aria-hidden="true">
-              <span class="chat-font-scale-min">10</span>
-              <span class="chat-font-scale-max">20</span>
+            <div class="set-block">
+              <div class="set-item">
+                <div class="set-item-text">
+                  <div class="set-item-title" id="chat-font-label" data-i18n="set.fontSize"></div>
+                  <div class="set-item-desc" data-i18n="set.fontSizeDesc"></div>
+                </div>
+                <div class="chat-font-panel">
+                  <div class="chat-font-stepper" id="chat-font-stepper" role="slider"
+                    aria-valuemin="10" aria-valuemax="20" aria-valuenow="14"
+                    aria-valuetext="14px" aria-labelledby="chat-font-label" tabindex="0">
+                    <div class="chat-font-segments" id="chat-font-segments"></div>
+                  </div>
+                  <span class="chat-font-value" id="chat-font-value" aria-hidden="true">14px</span>
+                  <div class="chat-font-scale" aria-hidden="true">
+                    <span class="chat-font-scale-min">10</span>
+                    <span class="chat-font-scale-max">20</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-        <div class="set-block">
-          <div class="set-sec-t" data-i18n="set.lang"></div>
-          <div class="model-list lang-list" id="lang-list"></div>
-        </div>
-        <div class="set-block">
-          <div class="set-sec-t" data-i18n="set.model"></div>
-          <div class="model-list" id="model-list"></div>
-          <button class="set-btn" id="add-model-btn" type="button">
-            <span data-ga-icon="plus"></span>
-            <span data-i18n="set.addModel"></span>
-          </button>
-        </div>
-        <div class="set-block">
-          <div class="set-sec-t" data-i18n="set.features"></div>
-          <div style="font-size:12px;color:var(--txt-2);margin-bottom:4px;" data-i18n="set.chatFilesDir"></div>
-          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
-            <input id="chat-files-dir-input" type="text" placeholder="temp" style="flex:1;min-width:0;border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:4px;padding:8px 10px;font-size:13px;font-family:inherit;" />
-            <button class="set-btn" id="save-chat-files-dir-btn" type="button" style="width:auto;padding:8px 12px;flex:0 0 auto;">
-              <span data-i18n="set.save"></span>
-            </button>
-          </div>
-          <button class="set-btn" id="import-mykey-btn" type="button">
-            <span data-ga-icon="fileText"></span>
-            <span data-i18n="set.importMykey"></span>
-          </button>
-          <input type="file" id="import-mykey-input" accept=".py,text/plain" hidden>
-          <button class="set-btn set-btn-follow" id="export-mykey-btn" type="button">
-            <span data-ga-icon="folderSimple"></span>
-            <span data-i18n="set.exportMykey"></span>
-          </button>
-          <button class="set-btn set-btn-follow" id="settings-services-btn" type="button">
-            <span data-ga-icon="broadcast"></span>
-            <span data-i18n="set.serviceManager"></span>
-          </button>
+            <div class="set-block">
+              <div class="set-item">
+                <div class="set-item-text">
+                  <div class="set-item-title" data-i18n="set.lang"></div>
+                  <div class="set-item-desc" data-i18n="set.langDesc"></div>
+                </div>
+              </div>
+              <div class="model-list lang-list" id="lang-list"></div>
+            </div>
+            <div class="set-block">
+              <div class="set-item">
+                <div class="set-item-text">
+                  <div class="set-item-title" data-i18n="set.chatFilesDir"></div>
+                  <div class="set-item-desc" data-i18n="set.chatFilesDirDesc"></div>
+                </div>
+              </div>
+              <div class="set-dir-row">
+                <input id="chat-files-dir-input" class="set-dir-input" type="text" placeholder="temp" />
+                <button class="set-btn" id="save-chat-files-dir-btn" type="button">
+                  <span data-i18n="set.save"></span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-panel" id="settings-panel-models" aria-labelledby="settings-tab-models">
+            <div class="set-block">
+              <div class="set-item">
+                <div class="set-item-text">
+                  <div class="set-item-title" data-i18n="set.model"></div>
+                  <div class="set-item-desc" data-i18n="set.modelDesc"></div>
+                </div>
+              </div>
+              <div class="model-list" id="model-list"></div>
+              <button class="set-btn" id="add-model-btn" type="button">
+                <span data-ga-icon="plus"></span>
+                <span data-i18n="set.addModel"></span>
+              </button>
+            </div>
+            <div class="set-block">
+              <div class="set-item">
+                <div class="set-item-text">
+                  <div class="set-item-title" data-i18n="set.mykeyActions"></div>
+                  <div class="set-item-desc" data-i18n="set.mykeyActionsDesc"></div>
+                </div>
+              </div>
+              <button class="set-btn" id="import-mykey-btn" type="button">
+                <span data-ga-icon="fileText"></span>
+                <span data-i18n="set.importMykey"></span>
+              </button>
+              <input type="file" id="import-mykey-input" accept=".py,text/plain" hidden>
+              <button class="set-btn set-btn-follow" id="export-mykey-btn" type="button">
+                <span data-ga-icon="folderSimple"></span>
+                <span data-i18n="set.exportMykey"></span>
+              </button>
+            </div>
+            <div class="set-block">
+              <div class="set-item">
+                <div class="set-item-text">
+                  <div class="set-item-title" data-i18n="set.serviceManager"></div>
+                  <div class="set-item-desc" data-i18n="set.serviceManagerDesc"></div>
+                </div>
+              </div>
+              <button class="set-btn" id="settings-services-btn" type="button">
+                <span data-ga-icon="broadcast"></span>
+                <span data-i18n="set.serviceManagerOpen"></span>
+              </button>
+            </div>
+          </section>
+
+          <section class="settings-panel" id="settings-panel-shortcuts" aria-labelledby="settings-tab-shortcuts">
+            <div class="set-block">
+              <div class="set-item">
+                <div class="set-item-text">
+                  <div class="set-item-title" data-i18n="set.shortcuts"></div>
+                  <div class="set-item-desc" data-i18n="set.shortcutsDesc"></div>
+                </div>
+              </div>
+              <div class="shortcuts-list" id="shortcuts-list"></div>
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -1722,10 +1946,8 @@
         <div class="cp-ws-modes">
           <label class="cp-ws-mode"><input type="radio" name="pc-ws-mode" value="none" checked> <span data-i18n="project.wsNone"></span></label>
           <label class="cp-ws-mode"><input type="radio" name="pc-ws-mode" value="existing"> <span data-i18n="project.wsExisting"></span></label>
-          <label class="cp-ws-mode"><input type="radio" name="pc-ws-mode" value="new"> <span data-i18n="project.wsNew"></span></label>
         </div>
         <select class="cp-input" id="pc-ws-existing" disabled></select>
-        <input type="text" class="cp-input" id="pc-ws-path" placeholder="" data-i18n-ph="project.wsPathPh" disabled>
         <span class="field-hint" data-i18n="project.wsHint"></span>
       </div>
       <div class="cp-error" id="pc-error" hidden></div>
@@ -1813,6 +2035,9 @@
         </button>
         <button type="button" class="lib-tab" id="lib-add-tab-web">
           <span data-ga-icon="compass"></span><span data-i18n="ph.lib.web"></span>
+        </button>
+        <button type="button" class="lib-tab" id="lib-add-tab-folder">
+          <span data-ga-icon="folderSimple"></span><span data-i18n="ph.lib.addFolder">新建资料夹</span>
         </button>
       </div>
       <div class="lib-row" id="lib-add-row-file">
@@ -2062,40 +2287,40 @@
 
 <div class="modal" id="members-modal" hidden>
   <div class="modal-backdrop" data-close></div>
-  <div class="modal-card" role="dialog" aria-modal="true" style="max-width:720px;">
+  <div class="modal-card" role="dialog" aria-modal="true">
     <div class="modal-head">
       <div class="modal-title" data-i18n="ph.member.title"></div>
       <button class="modal-x" data-close data-i18n-title="common.close" title="">
         <span data-ga-icon="x"></span>
       </button>
     </div>
-    <div class="modal-body" style="padding:16px 20px;">
-      <div class="nt-field" style="margin-bottom:12px;">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;">
-          <div style="flex:1;min-width:140px;">
+    <div class="modal-body">
+      <div class="nt-field">
+        <div class="mbr-form">
+          <div class="mbr-col">
             <span class="nt-label" data-i18n="ph.member.nick"></span>
             <input type="text" class="nt-input" id="mbr-nick" data-i18n-ph="ph.member.nick.ph" autocomplete="off">
           </div>
-          <div style="flex:1;min-width:140px;">
+          <div class="mbr-col">
             <span class="nt-label" data-i18n="ph.member.name"></span>
             <input type="text" class="nt-input" id="mbr-name" data-i18n-ph="ph.member.name.ph" autocomplete="off">
           </div>
-          <div style="flex:1;min-width:140px;">
+          <div class="mbr-col">
             <span class="nt-label" data-i18n="ph.member.phone"></span>
             <input type="text" class="nt-input" id="mbr-phone" autocomplete="off">
           </div>
-          <div style="flex:1;min-width:160px;">
+          <div class="mbr-col">
             <span class="nt-label" data-i18n="ph.member.email"></span>
             <input type="text" class="nt-input" id="mbr-email" autocomplete="off">
           </div>
-          <div style="flex:1;min-width:140px;">
+          <div class="mbr-col">
             <span class="nt-label" data-i18n="ph.member.role"></span>
             <input type="text" class="nt-input" id="mbr-role" autocomplete="off">
           </div>
           <button type="button" class="nt-btn nt-btn-create" id="mbr-save" data-i18n="ph.member.add"></button>
         </div>
       </div>
-      <div id="mbr-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div id="mbr-list" class="mbr-list"></div>
     </div>
   </div>
 </div>
@@ -2117,8 +2342,6 @@
         <label class="cp-radio"><input type="radio" name="pw-ws-mode" value="none" checked><span data-i18n="project.wsNone"></span></label>
         <label class="cp-radio"><input type="radio" name="pw-ws-mode" value="existing"><span data-i18n="project.wsExisting"></span></label>
         <select class="cp-ws-select" id="pw-ws-existing" disabled></select>
-        <label class="cp-radio"><input type="radio" name="pw-ws-mode" value="new"><span data-i18n="project.wsNew"></span></label>
-        <input type="text" class="cp-input" id="pw-ws-path" data-i18n-ph="project.wsPathPh" placeholder="" disabled>
         <span class="field-hint" data-i18n="project.wsHint"></span>
       </div>
       <div class="cp-error" id="pw-error" hidden></div>
@@ -2131,7 +2354,7 @@
 </div>
 
 <!-- Skill Hub 详情 modal -->
-<div class="modal" id="sh-detail-modal" hidden>
+<div class="modal detail-modal" id="sh-detail-modal" hidden>
   <div class="modal-backdrop" data-close></div>
   <div class="modal-card" role="dialog">
     <div class="modal-head">
@@ -2140,12 +2363,12 @@
         <span data-ga-icon="x"></span>
       </button>
     </div>
-    <div class="modal-body" id="sh-detail-body" style="min-width:520px;max-width:680px;max-height:70vh;overflow-y:auto;"></div>
+    <div class="modal-body" id="sh-detail-body" style="max-height:72vh;overflow-y:auto;"></div>
     <div class="cp-actions" id="sh-detail-actions"></div>
   </div>
 </div>
 
-<div class="modal" id="expert-detail-modal" hidden>
+<div class="modal detail-modal" id="expert-detail-modal" hidden>
   <div class="modal-backdrop" data-close></div>
   <div class="modal-card" role="dialog">
     <div class="modal-head">
@@ -2154,7 +2377,35 @@
         <span data-ga-icon="x"></span>
       </button>
     </div>
-    <div class="modal-body" id="expert-detail-body" style="min-width:520px;max-width:680px;max-height:70vh;overflow-y:auto;"></div>
+    <div class="modal-body" id="expert-detail-body" style="max-height:72vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- Skill Hub: 插件详情弹窗 -->
+<div class="modal detail-modal" id="sh-plugin-detail-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div class="modal-title" id="sh-plugin-detail-title">插件详情</div>
+      <button class="modal-x" data-close title="关闭">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body" id="sh-plugin-detail-body" style="max-height:72vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- Skill Hub: MCP Server 详情弹窗 -->
+<div class="modal detail-modal" id="sh-mcp-detail-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div class="modal-title" id="sh-mcp-detail-title">MCP Server 详情</div>
+      <button class="modal-x" data-close title="关闭">
+        <span data-ga-icon="x"></span>
+      </button>
+    </div>
+    <div class="modal-body" id="sh-mcp-detail-body" style="max-height:72vh;overflow-y:auto;"></div>
   </div>
 </div>
 
@@ -2168,6 +2419,6 @@
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js" crossorigin="anonymous"></script>
 <script src="phosphor-icons.js?v=7"></script>
 <script src="ga-ports.js"></script>
-<script src="app.js?v=331"></script>
+<script src="app.js?v=337"></script>
 </body>
 </html>
