@@ -191,7 +191,7 @@ def _parse_claude_json(data):
 
 def _parse_claude_sse(resp_lines, thinking_mode='full', thinking_chars=400):
     """Parse Anthropic SSE stream. Yields text chunks, returns list[content_block]."""
-    content_blocks = []; current_block = None; tool_json_buf = ""; td_shown = 0
+    content_blocks = []; current_block = None; tool_json_buf = ""; td_shown = 0; td_open = False
     stop_reason = None; got_message_stop = False; warn = None
     ms_cache_read = ms_cache_create = 0  # message_start 的 cache 基准, 用于 message_delta 差值补记(部分中转如glm把cache放delta)
     for line in resp_lines:
@@ -213,7 +213,7 @@ def _parse_claude_sse(resp_lines, thinking_mode='full', thinking_chars=400):
         elif evt_type == "content_block_start":
             block = evt.get("content_block", {})
             if block.get("type") == "text": current_block = {"type": "text", "text": ""}
-            elif block.get("type") == "thinking": current_block = {"type": "thinking", "thinking": "", "signature": ""}; td_shown = 0
+            elif block.get("type") == "thinking": current_block = {"type": "thinking", "thinking": "", "signature": ""}; td_shown = 0; td_open = False
             elif block.get("type") == "tool_use":
                 current_block = {"type": "tool_use", "id": block.get("id", ""), "name": block.get("name", ""), "input": {}}
                 tool_json_buf = ""
@@ -228,19 +228,27 @@ def _parse_claude_sse(resp_lines, thinking_mode='full', thinking_chars=400):
                     t = delta.get("thinking", "")
                     current_block["thinking"] += t
                     if t and thinking_mode != 'off':
-                        if thinking_mode == 'brief':
-                            if td_shown < thinking_chars:
-                                yield t[:thinking_chars - td_shown]
-                                td_shown += len(t)
-                                if td_shown >= thinking_chars: yield ' …[thinking已精简]'
+                        if thinking_mode == 'brief' and td_shown >= thinking_chars and not td_open:
+                            pass  # 已截断完毕，不再开新标签
                         else:
-                            yield t
+                            if not td_open:
+                                yield '<thinking>'; td_open = True
+                            if thinking_mode == 'brief':
+                                if td_shown < thinking_chars:
+                                    yield t[:thinking_chars - td_shown]
+                                    td_shown += len(t)
+                                    if td_shown >= thinking_chars:
+                                        yield ' …[thinking已精简]</thinking>'; td_open = False
+                            else:
+                                yield t
             elif delta.get("type") == "signature_delta":
                 if current_block and current_block.get("type") == "thinking":
                     current_block["signature"] = current_block.get("signature", "") + delta.get("signature", "")
             elif delta.get("type") == "input_json_delta": tool_json_buf += delta.get("partial_json", "")
         elif evt_type == "content_block_stop":
             if current_block:
+                if current_block["type"] == "thinking" and td_open:
+                    yield '</thinking>'; td_open = False
                 if current_block["type"] == "tool_use":
                     try: current_block["input"] = json.loads(tool_json_buf) if tool_json_buf else {}
                     except: current_block["input"] = {"_raw": tool_json_buf}
@@ -268,6 +276,8 @@ def _parse_claude_sse(resp_lines, thinking_mode='full', thinking_chars=400):
     if not warn:
         if not got_message_stop and not stop_reason: warn = "\n\n[!!! 流异常中断，未收到完整响应 !!!]"
         elif stop_reason == "max_tokens": warn = "\n\n[!!! Response truncated: max_tokens !!!]"
+    if td_open:
+        yield '</thinking>'; td_open = False
     if current_block:
         if current_block["type"] == "tool_use":
             try: current_block["input"] = json.loads(tool_json_buf) if tool_json_buf else {}
@@ -350,7 +360,7 @@ def _parse_openai_sse(resp_lines, api_mode="chat_completions", thinking_mode='fu
         return blocks
     else:
         tc_buf = {}  # index -> {id, name, args}
-        reasoning_text = ""; td_shown = 0
+        reasoning_text = ""; td_shown = 0; td_open = False
         for line in resp_lines:
             if not line: continue
             line = line.decode('utf-8', errors='replace') if isinstance(line, bytes) else line
@@ -364,13 +374,21 @@ def _parse_openai_sse(resp_lines, api_mode="chat_completions", thinking_mode='fu
             if rc := delta.get("reasoning_content") or delta.get("reasoning", ""):
                 reasoning_text += rc
                 if thinking_mode != 'off':
-                    if thinking_mode == 'brief':
-                        if td_shown < thinking_chars:
-                            yield rc[:thinking_chars - td_shown]
-                            td_shown += len(rc)
-                            if td_shown >= thinking_chars: yield ' …[thinking已精简]'
-                    else: yield rc
+                    if thinking_mode == 'brief' and td_shown >= thinking_chars and not td_open:
+                        pass  # 已截断完毕，不再开新标签
+                    else:
+                        if not td_open:
+                            yield '<thinking>'; td_open = True
+                        if thinking_mode == 'brief':
+                            if td_shown < thinking_chars:
+                                yield rc[:thinking_chars - td_shown]
+                                td_shown += len(rc)
+                                if td_shown >= thinking_chars:
+                                    yield ' …[thinking已精简]</thinking>'; td_open = False
+                        else: yield rc
             if delta.get("content"):
+                if td_open:
+                    yield '</thinking>'; td_open = False
                 text = delta["content"]; content_text += text; yield text
             for tc in (delta.get("tool_calls") or []):
                 idx = tc.get("index", 0)
@@ -383,6 +401,8 @@ def _parse_openai_sse(resp_lines, api_mode="chat_completions", thinking_mode='fu
                 if tc.get("id") and not tc_buf[idx]["id"]: tc_buf[idx]["id"] = tc["id"]
             usage = evt.get("usage")
             if usage: _record_usage(usage, api_mode)
+        if td_open:
+            yield '</thinking>'; td_open = False
         blocks = []
         if reasoning_text: blocks.append({"type": "thinking", "thinking": reasoning_text})
         if content_text: blocks.append({"type": "text", "text": content_text})
