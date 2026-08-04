@@ -19,6 +19,8 @@
 #  Tip: runtime overrides via `/session.<attr>=<val>` in the REPL, e.g.
 #      /session.reasoning_effort=high
 #      /session.thinking_type=adaptive
+#      /session.thinking_display=brief     # full(show all)/brief(truncate)/off(hide) thinking
+#      /session.thinking_display_chars=400 # chars of thinking kept in brief mode
 #      /session.temperature=0.3
 #
 # ══════════════════════════════════════════════════════════════════════════════

@@ -46,11 +46,14 @@
 #      /session.reasoning_effort=high
 #      /session.thinking_type=adaptive
 #      /session.thinking_budget_tokens=32768
+#      /session.thinking_display=brief     # 精简思考过程输出: full(默认全量)/brief(截断)/off(隐藏)
+#      /session.thinking_display_chars=400 # brief 模式下 thinking 保留字符数(默认400)
 #      /session.temperature=0.3
 #      /session.max_tokens=16384
 #  会在当前 session 的 backend 上做 setattr，当场生效，直到换模型或重启。
 #  reasoning_effort 合法值: none / minimal / low / medium / high / xhigh
 #  thinking_type 合法值:     adaptive / enabled / disabled
+#  thinking_display 合法值:  full / brief / off（仅影响展示，历史记录保留完整 thinking）
 #
 # ══════════════════════════════════════════════════════════════════════════════
 #  所有字段速查（按 BaseSession.__init__ 顺序）

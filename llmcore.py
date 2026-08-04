@@ -189,9 +189,9 @@ def _parse_claude_json(data):
         elif b.get("type") == "thinking": yield ""
     return content_blocks
 
-def _parse_claude_sse(resp_lines):
+def _parse_claude_sse(resp_lines, thinking_mode='full', thinking_chars=400):
     """Parse Anthropic SSE stream. Yields text chunks, returns list[content_block]."""
-    content_blocks = []; current_block = None; tool_json_buf = ""
+    content_blocks = []; current_block = None; tool_json_buf = ""; td_shown = 0
     stop_reason = None; got_message_stop = False; warn = None
     ms_cache_read = ms_cache_create = 0  # message_start 的 cache 基准, 用于 message_delta 差值补记(部分中转如glm把cache放delta)
     for line in resp_lines:
@@ -213,7 +213,7 @@ def _parse_claude_sse(resp_lines):
         elif evt_type == "content_block_start":
             block = evt.get("content_block", {})
             if block.get("type") == "text": current_block = {"type": "text", "text": ""}
-            elif block.get("type") == "thinking": current_block = {"type": "thinking", "thinking": "", "signature": ""}
+            elif block.get("type") == "thinking": current_block = {"type": "thinking", "thinking": "", "signature": ""}; td_shown = 0
             elif block.get("type") == "tool_use":
                 current_block = {"type": "tool_use", "id": block.get("id", ""), "name": block.get("name", ""), "input": {}}
                 tool_json_buf = ""
@@ -225,8 +225,16 @@ def _parse_claude_sse(resp_lines):
                 if text: yield text
             elif delta.get("type") == "thinking_delta":
                 if current_block and current_block.get("type") == "thinking":
-                    current_block["thinking"] += delta.get("thinking", "")
-                    if delta.get("thinking", ""): yield delta["thinking"]
+                    t = delta.get("thinking", "")
+                    current_block["thinking"] += t
+                    if t and thinking_mode != 'off':
+                        if thinking_mode == 'brief':
+                            if td_shown < thinking_chars:
+                                yield t[:thinking_chars - td_shown]
+                                td_shown += len(t)
+                                if td_shown >= thinking_chars: yield ' …[thinking已精简]'
+                        else:
+                            yield t
             elif delta.get("type") == "signature_delta":
                 if current_block and current_block.get("type") == "thinking":
                     current_block["signature"] = current_block.get("signature", "") + delta.get("signature", "")
@@ -286,7 +294,7 @@ def _try_parse_tool_args(raw):
         return parsed
     return [{"_raw": raw}]
 
-def _parse_openai_sse(resp_lines, api_mode="chat_completions"):
+def _parse_openai_sse(resp_lines, api_mode="chat_completions", thinking_mode='full', thinking_chars=400):
     """Parse OpenAI SSE stream (chat_completions or responses API).
     Yields text chunks, returns list[content_block].
     content_block: {type:'text', text:str} | {type:'tool_use', id:str, name:str, input:dict}
@@ -342,7 +350,7 @@ def _parse_openai_sse(resp_lines, api_mode="chat_completions"):
         return blocks
     else:
         tc_buf = {}  # index -> {id, name, args}
-        reasoning_text = ""
+        reasoning_text = ""; td_shown = 0
         for line in resp_lines:
             if not line: continue
             line = line.decode('utf-8', errors='replace') if isinstance(line, bytes) else line
@@ -354,7 +362,14 @@ def _parse_openai_sse(resp_lines, api_mode="chat_completions"):
             ch = (evt.get("choices") or [{}])[0]
             delta = ch.get("delta") or {}
             if rc := delta.get("reasoning_content") or delta.get("reasoning", ""):
-                reasoning_text += rc; yield rc
+                reasoning_text += rc
+                if thinking_mode != 'off':
+                    if thinking_mode == 'brief':
+                        if td_shown < thinking_chars:
+                            yield rc[:thinking_chars - td_shown]
+                            td_shown += len(rc)
+                            if td_shown >= thinking_chars: yield ' …[thinking已精简]'
+                    else: yield rc
             if delta.get("content"):
                 text = delta["content"]; content_text += text; yield text
             for tc in (delta.get("tool_calls") or []):
@@ -505,7 +520,7 @@ def _openai_stream(sess, messages):
     tools = getattr(sess, 'tools', None)
     if tools: payload["tools"] = _prepare_oai_tools(tools, api_mode)
     if sess.service_tier: payload["service_tier"] = sess.service_tier
-    parse_fn = (lambda r: _parse_openai_sse(r.iter_lines(), api_mode)) if sess.stream else (lambda r: _parse_openai_json(r.json(), api_mode))
+    parse_fn = (lambda r: _parse_openai_sse(r.iter_lines(), api_mode, getattr(sess, 'thinking_display', 'full'), getattr(sess, 'thinking_display_chars', 400))) if sess.stream else (lambda r: _parse_openai_json(r.json(), api_mode))
     return (yield from _stream_with_retry(sess, url, headers, payload, parse_fn))
         
 def _prepare_oai_tools(tools, api_mode="chat_completions"):
@@ -627,6 +642,10 @@ class BaseSession:
         self.service_tier = _enum('service_tier', {'auto', 'default', 'priority', 'flex'})
         self.thinking_type = _enum('thinking_type', {'adaptive', 'enabled', 'disabled'})
         self.thinking_budget_tokens = cfg.get('thinking_budget_tokens')
+        self.thinking_display = str(cfg.get('thinking_display', 'full')).strip().lower()
+        if self.thinking_display not in ('full', 'brief', 'off'):
+            print(f"[WARN] Invalid thinking_display {self.thinking_display!r}, fallback to 'full'."); self.thinking_display = 'full'
+        self.thinking_display_chars = max(20, int(cfg.get('thinking_display_chars', 400)))
         mode = str(cfg.get('api_mode', 'chat_completions')).strip().lower().replace('-', '_')
         self.api_mode = 'responses' if mode in ('responses', 'response') else 'chat_completions'
         self.temperature = cfg.get('temperature', 1)
@@ -707,7 +726,7 @@ class ClaudeSession(BaseSession):
         self._apply_claude_thinking(payload)
         if self.system: payload["system"] = [{"type": "text", "text": self.system, "cache_control": {"type": "persistent"}}]
         url = auto_make_url(self.api_base, "messages")
-        parse_fn = (lambda r: _parse_claude_sse(r.iter_lines())) if self.stream else (lambda r: _parse_claude_json(r.json()))
+        parse_fn = (lambda r: _parse_claude_sse(r.iter_lines(), self.thinking_display, self.thinking_display_chars)) if self.stream else (lambda r: _parse_claude_json(r.json()))
         return (yield from _stream_with_retry(self, url, headers, payload, parse_fn))
     def make_messages(self, raw_list):
         msgs = _drop_unsigned_thinking([{"role": m['role'], "content": list(m['content'])} for m in raw_list])
@@ -811,7 +830,7 @@ class NativeClaudeSession(BaseSession):
             messages[idx] = {**messages[idx], "content": list(messages[idx]["content"])}
             messages[idx]["content"][-1] = dict(messages[idx]["content"][-1], cache_control={"type": "ephemeral"})
         url = auto_make_url(self.api_base, "messages") + '?beta=true'
-        parse_fn = (lambda r: _parse_claude_sse(r.iter_lines())) if self.stream else (lambda r: _parse_claude_json(r.json()))
+        parse_fn = (lambda r: _parse_claude_sse(r.iter_lines(), self.thinking_display, self.thinking_display_chars)) if self.stream else (lambda r: _parse_claude_json(r.json()))
         return (yield from _stream_with_retry(self, url, headers, payload, parse_fn))
 
     def _maybe_drop_old_thinking(self, messages):
