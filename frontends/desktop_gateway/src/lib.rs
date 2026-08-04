@@ -310,6 +310,13 @@ async fn model_profiles_list(State(s): State<AppState>) -> Response {
     kernel_json(&s, "model_profiles.list", json!({})).await
 }
 
+// Creating a profile must be routed explicitly: axum answers 405 for a matched path with an
+// unregistered method instead of falling through to the legacy-bridge fallback, so POST used
+// to be rejected before the bridge ever saw it (broke "add model" / "duplicate model").
+async fn model_profiles_add(State(s): State<AppState>, Json(body): Json<Value>) -> Response {
+    kernel_json(&s, "model_profiles.add", json!({ "data": body })).await
+}
+
 // ---------------------------------------------------------------------------
 // WebSocket: forward kernel `session.stream` notifications as `session-state` frames
 // ---------------------------------------------------------------------------
@@ -460,7 +467,7 @@ fn build_router(state: AppState) -> Router {
         .route("/session/{sid}/restore", post(session_restore))
         .route("/session/{sid}/suggest", post(session_suggest))
         .route("/session/{sid}/plan", get(session_plan))
-        .route("/model-profiles", get(model_profiles_list))
+        .route("/model-profiles", get(model_profiles_list).post(model_profiles_add))
         .route("/ws", get(ws_handler))
         // Fold external HTTP services onto this single port (strangler consolidation).
         // Path prefix is stripped before forwarding: /conductor/history -> :8900/history
