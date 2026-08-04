@@ -377,6 +377,7 @@ let bridgeUiOffline = false;
     .catch(err => emit('bridge-error', { type: 'http-error', message: err.message || String(err) }));
 })();
 
+// @ga-version v339  (workspace chip: 统一 bridgeSessionId 解析 + gaSetCurrentWorkspace 权威写)
 /* ═══════════════ i18n ═══════════════ */
 const I18N = {
   zh: {
@@ -2309,6 +2310,7 @@ function postRenderEnhance(containerEl) {
 const state = {
   sessions: new Map(), activeId: null, bridgeReady: false,
   llmNo: 0, llmNoUserSet: false, modelProfiles: [], modelName: null,
+  defaultLlmNo: null,      // 全局默认模型（配置页设置，仅影响新建会话）
   gaRoot: '',
   runtime: new Map(),
   pendingFiles: [],
@@ -7747,7 +7749,10 @@ function setActiveSession(id) {
       const ws = (res && res.workspace) || null;
       sess.workspace = ws ? ws.name : '';
       sess._workspacePath = ws ? (ws.path || '') : '';
-      if (window.gaRefreshWorkspaceChip) window.gaRefreshWorkspaceChip();
+      // v339: 直接写 _currentWs 权威值并重绘（旧代码只 refreshChip，_currentWs 仍是
+      // 上一会话的值 → 切会话后 chip 显示旧 workspace 或"未选择"，直到下次轮询）
+      if (window.gaSetCurrentWorkspace) window.gaSetCurrentWorkspace(ws ? { name: ws.name, path: ws.path || '' } : null);
+      else if (window.gaRefreshWorkspaceChip) window.gaRefreshWorkspaceChip();
       /* 同步到 ph-chat-view 的 workspace 显示 chip（不可点击，只读） */
       var phWsChip = document.getElementById('ph-workspace-chip');
       if (phWsChip) {
@@ -14799,6 +14804,14 @@ function bindComposerInRoot(root, opts) {
   let _workspaces = [];
   let _currentWs = null;  // {name, path} or null
 
+  // v339: 统一解析"该用哪个 session id 查 workspace"。
+  // 后端只认 bridgeSessionId；成熟会话 sess.id 已被替换为 bridge id，但 legacy/边界
+  // 情况下本地 id ≠ bridge id —— 用本地 id 查永远返回 null，chip 锁死"未选择"。
+  function _wsSid() {
+    const s = activeSess();
+    return (s && s.bridgeSessionId) || state.activeId || null;
+  }
+
   function refreshChip() {
     if (_currentWs) {
       chipName.textContent = gaWsDisplayName(_currentWs.name, _currentWs.path);
@@ -14845,7 +14858,7 @@ function bindComposerInRoot(root, opts) {
       _workspaces = (res && res.workspaces) || [];
     } catch (_) { _workspaces = []; }
     try {
-      const sid = state.activeId;
+      const sid = _wsSid();   // v339: 与轮询/初始加载一致，用 bridgeSessionId 优先
       if (sid) {
         const res = await window.ga.getSessionWorkspace(sid);
         _currentWs = (res && res.workspace) || null;
@@ -14903,7 +14916,7 @@ function bindComposerInRoot(root, opts) {
   async function switchTo(name) {
     if (!name) return;
     showToast('切换中...');
-    let sid = state.activeId;
+    let sid = _wsSid();   // v339: 统一 id 解析（bridgeSessionId 优先）
     if (!sid) {
       try {
         const res = await window.ga.rpc('session/new', {});
@@ -14941,7 +14954,7 @@ function bindComposerInRoot(root, opts) {
   }
 
   async function turnOff() {
-    const sid = state.activeId;
+    const sid = _wsSid();
     if (!sid) return;
     try {
       await window.ga.offSessionWorkspace(sid);
@@ -14987,21 +15000,22 @@ function bindComposerInRoot(root, opts) {
     goToManage();
   });
 
-  // Watch for session changes (poll state.activeId)
-  let _lastActiveId = state.activeId;
+  // Watch for session changes (poll 当前会话的 workspace 绑定 id)
+  let _lastActiveId = _wsSid();
   let _wsFetching = false;   // 并发防抖: 重试 tick 不叠加多个请求
   setInterval(async () => {
     if (_wsFetching) return;
-    const sidChanged = state.activeId !== _lastActiveId;
+    const sid = _wsSid();   // v339: 统一用 bridgeSessionId(优先) 查询/重试
+    const sidChanged = sid !== _lastActiveId;
     // 修复"未选择"锁死: 上一次拿到 null 且当前会话仍有 id 时, 每 500ms 重试
     // (竞态: newSession 轮询先于 bridge 会话创建/setSessionWorkspace 完成, 拿到 null 后
     //  activeId 不再变化, 若不重试 chip 会永远停在"未选择")
-    if (!sidChanged && !(_currentWs === null && state.activeId)) return;
-    _lastActiveId = state.activeId;
+    if (!sidChanged && !(_currentWs === null && sid)) return;
+    _lastActiveId = sid;
     _wsFetching = true;
     try {
-      if (state.activeId) {
-        const res = await window.ga.getSessionWorkspace(state.activeId);
+      if (sid) {
+        const res = await window.ga.getSessionWorkspace(sid);
         _currentWs = (res && res.workspace) || null;
         const sess = activeSess();
         if (sess && _currentWs?.path) {
@@ -15020,7 +15034,7 @@ function bindComposerInRoot(root, opts) {
     setTimeout(async () => {
       if (!state.bridgeReady) return;
       try {
-        const sid = state.activeId;
+        const sid = _wsSid();
         if (sid) {
           const res = await window.ga.getSessionWorkspace(sid);
           _currentWs = (res && res.workspace) || null;
@@ -15038,7 +15052,7 @@ function bindComposerInRoot(root, opts) {
   // Refresh on bridge-ready
   window.ga.onBridgeReady(() => {
     setTimeout(async () => {
-      const sid = state.activeId;
+      const sid = _wsSid();
       if (sid) {
         try {
           const res = await window.ga.getSessionWorkspace(sid);
@@ -15055,6 +15069,9 @@ function bindComposerInRoot(root, opts) {
   });
 
   window.gaRefreshWorkspaceChip = () => { refreshChip(); };
+  // v339: 外部拿到后端权威 ws 后直接写入并重绘（setActiveSession/newSession 用）。
+  // 旧代码只调 refreshChip 而不更新 _currentWs → chip 一直渲染 stale 值。
+  window.gaSetCurrentWorkspace = (ws) => { _currentWs = ws || null; refreshChip(); };
 })();
 
 /* ═══════════════ Workspace 管理页 ═══════════════ */
