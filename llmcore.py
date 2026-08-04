@@ -1230,6 +1230,20 @@ def resolve_session(cfg_name):
     _gd = mk.get('GLOBAL_DEFAULT')
     if isinstance(_gd, dict):
         cfg = {**{k: v for k, v in _gd.items() if k in ('thinking_display', 'thinking_display_chars')}, **cfg}
+    # 桌面端 settings.json 降级源（用户从设置面板修改）：优先级介于 GLOBAL_DEFAULT 与 backend 间
+    try:
+        _sf = pathlib.Path.home() / '.ga_desktop_settings.json'
+        if _sf.is_file():
+            _ui = json.loads(_sf.read_text(encoding='utf-8')).get('ui', {})
+            if isinstance(_ui, dict):
+                _td = {k: _ui[k] for k in ('thinkingDisplay', 'thinkingDisplayChars') if k in _ui}
+                if _td:
+                    _td_map = {}
+                    if 'thinkingDisplay' in _td: _td_map['thinking_display'] = _td['thinkingDisplay']
+                    if 'thinkingDisplayChars' in _td: _td_map['thinking_display_chars'] = _td['thinkingDisplayChars']
+                    cfg = {**_td_map, **cfg}
+    except Exception:
+        pass
     if 'native' in cfg_name: return (NativeClaudeSession if 'claude' in cfg_name else NativeOAISession)(cfg=cfg)
     if 'claude' in cfg_name: return ClaudeSession(cfg=cfg)
     return LLMSession(cfg=cfg) if 'oai' in cfg_name else None
