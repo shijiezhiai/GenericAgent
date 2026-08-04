@@ -1222,8 +1222,14 @@ class NativeToolClient:
         return resp
 
 def resolve_session(cfg_name):
-    cfg = reload_mykeys()[0].get(cfg_name)
+    mk = reload_mykeys()[0]
+    cfg = mk.get(cfg_name)
     if not cfg: raise ValueError(f"Config '{cfg_name}' not in mykey")
+    # 全局默认配置兜底（mykey.py 顶层 GLOBAL_DEFAULT）：backend 自身字段优先，
+    # /session.<attr>=<val> 会话级 setattr 最高。当前仅合并 thinking 展示相关字段。
+    _gd = mk.get('GLOBAL_DEFAULT')
+    if isinstance(_gd, dict):
+        cfg = {**{k: v for k, v in _gd.items() if k in ('thinking_display', 'thinking_display_chars')}, **cfg}
     if 'native' in cfg_name: return (NativeClaudeSession if 'claude' in cfg_name else NativeOAISession)(cfg=cfg)
     if 'claude' in cfg_name: return ClaudeSession(cfg=cfg)
     return LLMSession(cfg=cfg) if 'oai' in cfg_name else None

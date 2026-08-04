@@ -68,6 +68,19 @@ native_oai_config = {
 # }
 
 
+# ── 3.5 Global defaults (optional, applied to every backend session) ────────
+#  Fields here act as fallback defaults for all sessions. Precedence:
+#    backend's own field > GLOBAL_DEFAULT > built-in default ('full').
+#  Runtime override via /session.<attr>=<val> wins over everything.
+#  Supported fields:
+#    thinking_display        default thinking output mode: full / brief / off
+#    thinking_display_chars  chars kept in 'brief' mode (default 400)
+GLOBAL_DEFAULT = {
+    'thinking_display': 'brief',       # ← global default thinking output mode
+    'thinking_display_chars': 400,
+}
+
+
 # ── 4. Global HTTP proxy (optional) ──────────────────────────────────────────
 #  Applies to every session that doesn't set its own 'proxy' field.
 # proxy = 'http://127.0.0.1:7890'

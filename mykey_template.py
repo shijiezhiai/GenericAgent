@@ -113,6 +113,19 @@
 #  填好下面的 apikey/apibase 后即可使用。
 
 
+# ── 全局默认配置（可选，作用于所有 backend session）────────────────────────
+#  这里配置的字段作为所有模型（backend session）的默认值兜底：
+#    - backend 自身配置里写同名字段 → 覆盖全局默认
+#    - 运行时 /session.<attr>=<val>（如 /session.thinking_display=full）→ 优先级最高
+#  当前支持的字段：
+#    thinking_display        默认 thinking 输出模式: full(全量) / brief(截断) / off(隐藏)
+#    thinking_display_chars  brief 模式下 thinking 保留字符数（默认400）
+GLOBAL_DEFAULT = {
+    'thinking_display': 'brief',       # ← 改这里即可全局切换默认 thinking 输出模式
+    'thinking_display_chars': 400,
+}
+
+
 # ── Mixin 故障转移（最推荐的方式）──────────────────────────────────────────
 #  llm_nos 里的字符串必须和被引用 session 的 'name' 字段匹配（也可以写整数索
 #  引）。NativeClaudeSession 和 NativeOAISession 可以混用。
