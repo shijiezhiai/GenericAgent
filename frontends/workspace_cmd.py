@@ -407,11 +407,18 @@ def prepare(abs_path: str) -> dict:
         if not make_dir_link(target, link):
             return {"ok": False, "error": "创建 junction 失败(见 stderr)"}
 
-    # 确保 project_memory.md 存在(经 junction 落到真实仓库根)
+    # 确保 project_memory.md 存在(经 junction 落到真实仓库根),首次写入结构化模板
     mem_path = os.path.join(link, "project_memory.md")
     if not os.path.isfile(mem_path):
         try:
-            open(mem_path, "a", encoding="utf-8").close()
+            with open(mem_path, "w", encoding="utf-8") as fh:
+                fh.write(
+                    f"# {name} 工作区记忆\n\n"
+                    "本文件由 GA workspace 模式自动创建，经 junction 维护在真实仓库根。\n"
+                    "每轮对话后，agent 会在此沉淀本工作区值得长期复用的关键信息（决策、约束、踩坑、进度）。\n\n"
+                    "## 路由纪律\n"
+                    "- 本文件只存当前工作区/项目的信息；跨项目通用事实/SOP/环境信息一律写 GA 全局记忆(memory/)。\n"
+                )
         except OSError as e:
             warning = f"无法创建 project_memory.md: {e}"
 

@@ -1106,6 +1106,28 @@ class GenericAgentHandler(BaseHandler):
 **禁止**：临时变量、具体推理过程、未验证信息、通用常识、你可以轻松复现的细节、只是做了但没有验证的信息
 **操作**：严格遵循提供的L0的记忆更新SOP。先 `file_read` 看现有 → 判断类型 → 最小化更新 → 无新内容跳过，保证对记忆库最小局部修改。\n
 ''' + get_global_memory(getattr(self, 'cwd', None))
+        # 项目模式激活时路由写侧：项目专属记忆写项目记忆文件（经 junction 落真实项目根），
+        # 全局 memory/ 只收跨项目通用事实。检测两条路径：前端绑定的 agent 属性、pid 键控锚文件。
+        _proj = getattr(self, '_ga_project_mode_name', None) or None
+        if not _proj:
+            try:
+                _temp_dir = os.path.join(script_dir, 'temp')
+                for _f in os.listdir(_temp_dir):
+                    if _f.startswith('.active_project.') and os.path.isfile(os.path.join(_temp_dir, _f)):
+                        with open(os.path.join(_temp_dir, _f), encoding='utf-8', errors='ignore') as _fh:
+                            _proj = _fh.read().strip() or None
+                        if _proj:
+                            break
+            except OSError:
+                pass
+        if _proj:
+            _pmem = os.path.join(script_dir, 'temp', 'projects', _proj, 'project_memory.md')
+            prompt += f'''
+[项目模式激活: {_proj}] 项目记忆文件: {_pmem}
+- 本项目专属的决策/约定/踩坑/进度 → 只写该文件（用 file_patch 增量更新，禁整文件重写）；
+- 与项目无关的全局事实/用户偏好 → 才写全局 memory/；
+- 拿不准归宿的信息默认不写。
+'''
         yield "[Info] Start distilling good memory for long-term storage.\n"
         path = './memory/memory_management_sop.md'
         if os.path.exists(path): result = 'This is L0:\n' + file_read(path, show_linenos=False)

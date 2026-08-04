@@ -1459,6 +1459,12 @@ class AgentManager:
                     pass
             if sess.project:
                 agent._ga_project_mode_name = sess.project
+            elif _ws_name:
+                # workspace 会话对等：workspace 名直接复用为 project_mode 名。
+                # workspace 的 junction 住在 temp/projects/<name> 下（见 _workspace_link_names），
+                # project_memory.md 经 junction 落在真实 workspace 目录 → 每轮 L1 注入与
+                # 写侧路由(ga.py)自动生效，无需另建真实"项目"实体。
+                agent._ga_project_mode_name = _ws_name
             # 方案B：会话级专家优先走 _active_expert() 第一条路径(agent._ga_expert_name)，绕过全局 pid 锚文件
             agent._ga_expert_name = getattr(sess, 'expert', None) or None
             threading.Thread(target=agent.run, daemon=True, name=f"GA-{sess.id}").start()
@@ -3197,7 +3203,12 @@ async def project_create_handler(request):
     mem = os.path.join(pdir, 'project_memory.md')
     if not os.path.exists(mem):
         with open(mem, 'w', encoding='utf-8') as f:
-            f.write(f"# {name} 项目记忆\n\n本文件由 GA 项目模式自动创建。每轮对话后，agent 会在此沉淀本项目值得长期复用的关键信息（决策、约束、踩坑、进度）。\n")
+            f.write(
+                f"# {name} 项目记忆\n\n"
+                "本文件由 GA 项目模式自动创建。每轮对话后，agent 会在此沉淀本项目值得长期复用的关键信息（决策、约束、踩坑、进度）。\n\n"
+                "## 路由纪律\n"
+                "- 本文件只存当前项目的信息；跨项目通用事实/SOP/环境信息一律写 GA 全局记忆(memory/)。\n"
+            )
     instruction = (data.get("instruction") or "").strip()
     if instruction:
         claude_md = os.path.join(pdir, 'CLAUDE.md')
