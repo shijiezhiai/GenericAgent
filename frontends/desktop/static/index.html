@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="ga-icon.svg">
 <link rel="apple-touch-icon" href="ga-icon.svg">
 <link rel="stylesheet" href="assets/fonts/fonts.css?v=2">
-<link rel="stylesheet" href="styles.css?v=256">
+<link rel="stylesheet" href="styles.css?v=262">
 <!-- KaTeX: LaTeX 公式渲染 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
 <!-- highlight.js: 代码高亮 -->
@@ -121,7 +121,7 @@
       <div class="brand">
         <img class="brand-logo" src="ga-icon.svg" alt="GA">
         <div class="brand-text">
-          <div class="brand-name ga-wordmark">Generic Agent</div>
+          <div class="brand-name ga-wordmark">GenericAgent</div>
           <div class="brand-sub" data-i18n="brand.sub"></div>
         </div>
       </div>
@@ -139,10 +139,6 @@
         <a class="nav-item" data-page="services">
           <span class="ic" data-ga-icon="broadcast"></span>
           <span data-i18n="nav.services"></span>
-        </a>
-        <a class="nav-item" data-page="tasks">
-          <span class="ic" data-ga-icon="clock"></span>
-          <span data-i18n="nav.tasks"></span>
         </a>
         <a class="nav-item" data-page="project">
           <span class="ic" data-ga-icon="folderSimple"></span>
@@ -552,43 +548,6 @@
             </div>
           </div>
           </div>
-          </div>
-        </section>
-
-        <!-- 定时任务 -->
-        <section class="page" data-page="tasks">
-          <div class="page-top">
-            <button type="button" class="pt-icon pt-sb-toggle" aria-label="toggle sidebar">
-              <span data-ga-icon="caretLeft"></span>
-            </button>
-            <span class="pt-spacer"></span>
-            <button type="button" class="pt-icon pt-rp-toggle" aria-label="toggle conversations">
-              <span data-ga-icon="caretRight"></span>
-            </button>
-          </div>
-          <div class="page-pad">
-            <div class="page-title" data-i18n="page.tasks.title"></div>
-            <div class="task-tabs" id="task-tabs">
-              <button type="button" class="task-tab active" data-tab="list" data-i18n="page.tasks.list"></button>
-              <button type="button" class="task-tab" data-tab="history" data-i18n="page.tasks.history"></button>
-            </div>
-            <div class="task-panel active" data-task-panel="list">
-              <div class="task-empty" id="task-empty">
-                <div class="task-empty-icon" aria-hidden="true"><span data-ga-icon="clock"></span></div>
-                <div class="task-empty-title" data-i18n="page.tasks.emptyTitle"></div>
-                <div class="task-empty-sub" data-i18n="page.tasks.emptySub"></div>
-              </div>
-              <div class="task-templates" id="task-templates"></div>
-              <div class="task-list" id="task-list"></div>
-              <button type="button" class="task-create-btn" id="task-create-btn">
-                <span data-ga-icon="plus"></span>
-                <span data-i18n="page.tasks.create"></span>
-              </button>
-            </div>
-            <div class="task-panel" data-task-panel="history">
-              <div class="task-history-list" id="task-history-list"></div>
-              <div class="task-history-empty" id="task-history-empty" hidden data-i18n="page.tasks.historyEmpty"></div>
-            </div>
           </div>
         </section>
 
@@ -1837,6 +1796,7 @@
           <button class="settings-nav-item active" type="button" data-settings-tab="general" data-i18n="set.tabGeneral">通用</button>
           <button class="settings-nav-item" type="button" data-settings-tab="models" data-i18n="set.tabModels">模型</button>
           <button class="settings-nav-item" type="button" data-settings-tab="shortcuts" data-i18n="set.tabShortcuts">快捷键</button>
+          <button class="settings-nav-item" type="button" data-settings-tab="tasks" data-i18n="set.tabTasks">定时任务</button>
         </nav>
         <div class="settings-panels" id="settings-panels">
           <section class="settings-panel active" id="settings-panel-general" aria-labelledby="settings-tab-general">
@@ -1959,18 +1919,6 @@
                 <span data-i18n="set.exportMykey"></span>
               </button>
             </div>
-            <div class="set-block">
-              <div class="set-item">
-                <div class="set-item-text">
-                  <div class="set-item-title" data-i18n="set.serviceManager"></div>
-                  <div class="set-item-desc" data-i18n="set.serviceManagerDesc"></div>
-                </div>
-              </div>
-              <button class="set-btn" id="settings-services-btn" type="button">
-                <span data-ga-icon="broadcast"></span>
-                <span data-i18n="set.serviceManagerOpen"></span>
-              </button>
-            </div>
           </section>
 
           <section class="settings-panel" id="settings-panel-shortcuts" aria-labelledby="settings-tab-shortcuts">
@@ -1982,6 +1930,30 @@
                 </div>
               </div>
               <div class="shortcuts-list" id="shortcuts-list"></div>
+            </div>
+          </section>
+
+          <section class="settings-panel settings-panel-tasks" id="settings-panel-tasks" aria-labelledby="settings-tab-tasks">
+            <div class="task-tabs" id="task-tabs">
+              <button type="button" class="task-tab active" data-tab="list" data-i18n="page.tasks.list"></button>
+              <button type="button" class="task-tab" data-tab="history" data-i18n="page.tasks.history"></button>
+            </div>
+            <div class="task-panel active" data-task-panel="list">
+              <div class="task-empty" id="task-empty">
+                <div class="task-empty-icon" aria-hidden="true"><span data-ga-icon="clock"></span></div>
+                <div class="task-empty-title" data-i18n="page.tasks.emptyTitle"></div>
+                <div class="task-empty-sub" data-i18n="page.tasks.emptySub"></div>
+              </div>
+              <div class="task-templates" id="task-templates"></div>
+              <div class="task-list" id="task-list"></div>
+              <button type="button" class="task-create-btn" id="task-create-btn">
+                <span data-ga-icon="plus"></span>
+                <span data-i18n="page.tasks.create"></span>
+              </button>
+            </div>
+            <div class="task-panel" data-task-panel="history">
+              <div class="task-history-list" id="task-history-list"></div>
+              <div class="task-history-empty" id="task-history-empty" hidden data-i18n="page.tasks.historyEmpty"></div>
             </div>
           </section>
         </div>
@@ -2505,6 +2477,6 @@
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js" crossorigin="anonymous"></script>
 <script src="phosphor-icons.js?v=7"></script>
 <script src="ga-ports.js"></script>
-<script src="app.js?v=341"></script>
+<script src="app.js?v=342"></script>
 </body>
 </html>
