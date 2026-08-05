@@ -145,12 +145,33 @@ class GenericAgent:
     def _handle_slash_cmd(self, raw_query, display_queue):
         if not raw_query.startswith('/'): return raw_query
         if _sm := re.match(r'/session\.(\w+)=(.*)', raw_query.strip()):
-            k, v = _sm.group(1), _sm.group(2)
-            vfile = os.path.join(script_dir, 'temp', v)
-            if os.path.isfile(vfile): v = open(vfile, encoding='utf-8').read().strip()
+            k, v = _sm.group(1), _sm.group(2).strip()
+            # 值只取第一个 token：行尾的说明文字（空格分隔）不会被吞进属性值。
+            # temp 文件机制保留：值指向存在的文件时读文件内容（可含空格/多行）。
+            _vp = v.split(None, 1)
+            v0 = _vp[0] if _vp else ''
+            rest = _vp[1].strip() if len(_vp) > 1 else ''
+            vfile = os.path.join(script_dir, 'temp', v0)
+            if v0 and os.path.isfile(vfile): v = open(vfile, encoding='utf-8').read().strip()
+            else: v = v0
             try: v = json.loads(v)  # cover number parsing
             except (json.JSONDecodeError, ValueError): pass
+            # 会话级属性合法性校验：非法值不再 setattr，避免污染运行时状态
+            if k == 'thinking_display':
+                if v not in ('full', 'brief', 'off'):
+                    display_queue.put({'done': f"⚠️ 无效 thinking_display={v!r}（可选 full/brief/off）", 'source': 'system'})
+                    return None
+            elif k == 'thinking_display_chars':
+                try: v = max(20, int(v))
+                except (TypeError, ValueError):
+                    display_queue.put({'done': f"⚠️ 无效 thinking_display_chars={v!r}（应为数字）", 'source': 'system'})
+                    return None
             setattr(self.llmclient.backend, k, v)
+            if rest:
+                # 混合输入（/session.k=v 问题）：✅ 用 next（不触发 done/break），
+                # rest 透传给 agent 继续对话，避免问题被吞导致会话 1s 结束。
+                display_queue.put({'next': f"✅ session.{k} = {repr(v)}（已设置，继续处理你的问题）", 'source': 'system'})
+                return rest
             display_queue.put({'done': smart_format(f"✅ session.{k} = {repr(v)}", max_str_len=500), 'source': 'system'})
             return None
         if raw_query.strip() == '/resume':

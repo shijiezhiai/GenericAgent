@@ -204,6 +204,7 @@ class Session:
     project: str = ""
     folder_id: str = ""        # 对话所属文件夹（服务端共享，替代 per-origin localStorage）
     llm_history: Optional[List[dict]] = None
+    llm_no: Optional[int] = None  # 会话级模型选择（id 下标）；None=未显式设置，跟随全局默认
 
 
 _LAZY_MESSAGES = object()  # sentinel: this session's messages are not materialized yet
@@ -396,7 +397,8 @@ class AgentManager:
                                 "workspace": s.workspace or "",
                                 "project": s.project or "",
                                 "folder_id": s.folder_id or "",
-                                "llm_history": llm_hist})
+                                "llm_history": llm_hist,
+                                "llm_no": s.llm_no})
             f = self._sessions_file
             # 防呆：内存里一个会话都没有时，不允许把已有的非空会话文件覆盖成空
             # （如加载失败/启动早期误触发 persist，避免全量会话被抹掉）。
@@ -439,7 +441,18 @@ class AgentManager:
                        project=item.get("project", ""),
                        folder_id=item.get("folder_id", ""),
                        status="idle", agent=None,
-                       llm_history=item.get("llm_history"))
+                       llm_history=item.get("llm_history"),
+                       llm_no=item.get("llm_no"))
+
+    def _default_llm_no(self) -> int:
+        """全局默认模型 id：config 优先，其次 UI 设置文件（启动早期 config 为空）。"""
+        no = self.config.get("llmNo")
+        if no is None:
+            try:
+                no = _desktop_ui().get("llmNo")
+            except Exception:
+                no = None
+        return int(no) if no is not None else 0
 
     def _load_sessions(self):
         if self._storage_mode == "replica":
@@ -458,6 +471,14 @@ class AgentManager:
                 self.sessions[item["id"]] = self._build_session(item, msgs)
             if self.sessions:
                 self.active_session_id = max(self.sessions.values(), key=lambda s: s.updated_at).id
+            # 迁移：旧会话没有 llm_no → 固化为加载时刻的全局默认，避免之后配置页改默认
+            # 影响已有会话（旧版本模型是全局单值，加载时固化即"保持现状"）。
+            default_no = self._default_llm_no()
+            migrated = [s for s in self.sessions.values() if s.llm_no is None]
+            if migrated:
+                for s in migrated:
+                    s.llm_no = default_no
+                    self._save_session(s)
         except Exception as e:
             print(f"[bridge] load sessions failed: {e}", file=sys.stderr)
 
@@ -1405,7 +1426,42 @@ class AgentManager:
         self._mykey_file().write_text(text, encoding="utf-8")
         self._invalidate_mykey_cache()
         self._reload_live_agents()
+        self._sync_mykey_to_source(text)
         return self.list_model_profiles()
+
+    def _sync_mykey_to_source(self, text: str) -> None:
+        """模型增删改后，把最新 mykey.py 写回「源码仓/部署源」同名文件。
+
+        根因：运行态模型写在 app-support/mykey.py，但 rebuild/deploy 通常以仓库
+        mykey.py 为源覆盖 app-support；若仓库副本不含运行期新增的模型（如通过
+        复制新建的），就会被冲掉——表现为「复制的模型重启/重建后即丢」。回写仓库后，
+        后续 deploy 三处同步天然一致，新增模型不再丢失。
+
+        仅当能定位到与运行态不同的源 mykey.py 时才写入；写失败静默忽略
+        （如签名后的 bundle 不可写、源不存在、与运行态同一文件）。"""
+        root = self.ga_root.rstrip("/")
+        if not root.endswith("/app"):
+            return  # dev/source 模式：ga_root 即仓库根，无需额外回写
+        src = None
+        marker = os.path.join(os.path.dirname(root), ".ga_source_root")
+        if os.path.isfile(marker):
+            try:
+                src = Path(marker).read_text(encoding="utf-8").strip()
+            except Exception:
+                src = None
+        if not src:
+            src = os.environ.get("GA_SOURCE_ROOT")
+        if not src:
+            return
+        cand = os.path.join(src, "mykey.py")
+        if not os.path.isfile(cand):
+            return
+        if os.path.realpath(cand) == os.path.realpath(str(self._mykey_file())):
+            return
+        try:
+            Path(cand).write_text(text, encoding="utf-8")
+        except Exception as e:
+            print(f"[bridge] sync mykey to source skipped: {e}", file=sys.stderr)
 
     def _reload_live_agents(self) -> None:
         """mykey.py 改动后，强制所有活着的会话 agent 重建 LLM session，让新 key/模型
@@ -1489,12 +1545,26 @@ class AgentManager:
             # 桌面端 workspace 绑定在 sess.workspace(名字)，需把真实 path 同步到 agent，
             # 供 agentmain 每轮创建 handler 时设 handler.cwd（code_run/bash 执行目录）
             _ws_name = getattr(sess, 'workspace', '') or ''
+            _ws_path = ''
             if _ws_name:
                 try:
                     _ws_ent = workspace_cmd.registry_load().get(_ws_name) or {}
                     _ws_path = _ws_ent.get('path', '')
                     if _ws_path and os.path.isdir(_ws_path):
                         agent._ga_project_mode_workspace_path = _ws_path
+                except Exception:
+                    pass
+            # 资产引用（本地目录）：把可写 ref 暴露给 agent 与项目上下文注入。
+            # 无 workspace 时，用首个 edit 模式 ref 顶替 cwd，使 code_run/code_search 默认落在第一个 repo。
+            if sess.project:
+                try:
+                    _refs = _read_asset_refs(manager._project_dir(sess.project))
+                    _edit_ref_paths = [r.get('path') for r in _refs
+                                       if r.get('mode') != 'read' and os.path.isdir(r.get('path') or '')]
+                    if _edit_ref_paths:
+                        agent._ga_project_mode_ref_paths = _edit_ref_paths
+                        if not _ws_path:
+                            agent._ga_project_mode_workspace_path = _edit_ref_paths[0]
                 except Exception:
                     pass
             if sess.project:
@@ -1546,7 +1616,14 @@ class AgentManager:
         except Exception as e:
             print(f"get model profiles failed: {e}", file=sys.stderr)
             return []
-        active = self.config.get("llmNo", 0)
+        active = self.config.get("llmNo")
+        if active is None:
+            # config 在启动早期是空的：真值在 ~/.ga_desktop_settings.json 的 ui.llmNo
+            try:
+                active = _desktop_ui().get("llmNo")
+            except Exception:
+                active = None
+        active = int(active) if active is not None else 0
         # collect all mixin members for inMixin check
         all_mixin_members: set = set()
         for k in keys:
@@ -1760,6 +1837,7 @@ class AgentManager:
             "pinned": sess.pinned,
             "untitled": sess.untitled,
             "model": self._live_model(sess),
+            "llmNo": sess.llm_no if sess.llm_no is not None else self._default_llm_no(),
             "workspace": sess.workspace or "",
             "project": sess.project or "",
             "folderId": sess.folder_id or "",
@@ -1837,6 +1915,14 @@ class AgentManager:
         with self.lock:
             self.sessions[sid] = sess
             self.active_session_id = sid
+        # 会话级模型：创建时固化当时的全局默认（此后配置页改默认不再影响本会话）
+        try:
+            default_no = self.config.get("llmNo")
+            if default_no is None:
+                default_no = _desktop_ui().get("llmNo")
+            sess.llm_no = int(default_no) if default_no is not None else 0
+        except Exception:
+            sess.llm_no = 0
         emit_session_state(sess, "created")
         self._save_session(sess)
         return sess
@@ -1894,14 +1980,15 @@ class AgentManager:
 
     def submit_prompt(self, sid: str, prompt: Any, images: Optional[list] = None, llm_no: Optional[int] = None, display: Optional[str] = None, files_meta: Optional[list] = None, image_metas: Optional[list] = None, expert: Optional[str] = None) -> dict:
         prompt, image_ids = normalize_prompt(prompt, images)
-        if llm_no is not None:
-            self.config["llmNo"] = int(llm_no)
         with self.lock:
             sess = self.sessions.get(sid)
             if not sess:
                 raise web.HTTPNotFound(text=json.dumps({"error": f"session not found: {sid}"}, ensure_ascii=False), content_type="application/json")
             if sess.status == "running":
                 raise web.HTTPConflict(text=json.dumps({"error": "session is already running"}, ensure_ascii=False), content_type="application/json")
+            # 会话级模型：本次发消息用的模型固化到该会话（不再写回全局默认 config.llmNo）
+            if llm_no is not None:
+                sess.llm_no = int(llm_no)
             # 方案B：会话级专家。前端每次发消息带 expert(null=普通模式)；同步到 sess 与已创建的 agent 实例
             sess.expert = expert or None
             if sess.agent is not None:
@@ -1939,7 +2026,10 @@ class AgentManager:
             self._ensure_agent(sess)
             self._record_log_mapping(sess)
             agent = sess.agent
-            no = self.config.get("llmNo") if llm_no is None else llm_no
+            # 会话级模型优先；未显式设置则回退全局默认
+            no = sess.llm_no if sess.llm_no is not None else self.config.get("llmNo")
+            if no is None:
+                no = self._default_llm_no()
             if no is not None and hasattr(agent, "next_llm"):
                 try: agent.next_llm(int(no))
                 except Exception as e: print(f"[Turn] next_llm({no}) failed, keep current llm: {e}", file=sys.stderr)
@@ -2932,7 +3022,7 @@ async def status_handler(request):
 
 
 _SETTINGS = Path.home() / ".ga_desktop_settings.json"
-_UI_KEYS = ("lang", "theme", "appearance", "plain", "llmNo", "fontSize", "chatFilesDir")
+_UI_KEYS = ("lang", "theme", "appearance", "plain", "llmNo", "fontSize", "chatFilesDir", "thinkingDisplay", "thinkingDisplayChars")
 
 
 def _desktop_ui() -> dict:
@@ -3078,6 +3168,8 @@ async def patch_session_handler(request):
     if "folder_id" in data:
         fid = str(data["folder_id"] or "")
         sess.folder_id = fid[:64]
+    if "llmNo" in data and data["llmNo"] is not None:
+        sess.llm_no = int(data["llmNo"])
     sess.updated_at = time.time()
     manager._persist()
     return json_ok({"ok": True, "session": manager.snapshot(sess, include_messages=False)})
@@ -3438,6 +3530,27 @@ def _read_library(pdir):
 def _write_library(pdir, items):
     manager.project_meta_save(os.path.basename(pdir), "library", items,
                               os.path.join(pdir, '.library.json'))
+    return True
+
+
+# ── 项目资产引用（本地目录）──
+def _read_asset_refs(pdir):
+    """读取项目资产引用（本地目录）；duckdb 时经 manager.project_meta_load（DB 优先+惰性迁移）。"""
+    def _norm(raw):
+        if not isinstance(raw, list):
+            return []
+        for _it in raw:
+            if isinstance(_it, dict):
+                _it.setdefault("mode", "edit")
+                _it.setdefault("readonly", _it.get("mode") == "read")
+        return raw
+    return manager.project_meta_load(os.path.basename(pdir), "asset_refs",
+                                     os.path.join(pdir, '.asset_refs.json'), [], parse=_norm)
+
+
+def _write_asset_refs(pdir, items):
+    manager.project_meta_save(os.path.basename(pdir), "asset_refs", items,
+                              os.path.join(pdir, '.asset_refs.json'))
     return True
 
 
@@ -4828,6 +4941,7 @@ async def project_assets_handler(request):
         "workspace": ws_info,
         "files": files,
         "uploads": uploads,
+        "refs": _read_asset_refs(pdir),
     })
 
 
@@ -4849,6 +4963,120 @@ async def project_asset_mkdir_handler(request):
         return json_ok({"ok": True, "path": str(target)})
     except Exception as e:
         return json_ok({"ok": False, "error": str(e)})
+
+
+# ── 项目资产引用：本地目录 ──────────────────────────────────────────
+def _asset_ref_reject_reason(resolved, pdir):
+    """引用本地目录的安全校验：返回拒绝原因；合法返回 None。"""
+    ga_root = os.path.abspath(str(manager.ga_root))
+    # 不能引用 GA 自身根目录或其下任何路径（避免自引用/递归/改写运行时）
+    if resolved == ga_root or resolved.startswith(ga_root + os.sep):
+        return "不能引用 GenericAgent 自身目录"
+    # 不能引用项目目录自身（其下文件本就以 assets 展示，引用会重复）
+    ppdir = os.path.abspath(str(pdir))
+    if resolved == ppdir or resolved.startswith(ppdir + os.sep):
+        return "该目录已是项目目录的一部分"
+    # 系统敏感目录
+    for _bad in ("/System", "/usr", "/bin", "/sbin", "/private/var/db"):
+        if resolved == _bad or resolved.startswith(_bad + os.sep):
+            return "系统敏感目录，不允许引用"
+    return None
+
+
+async def project_asset_ref_add_handler(request):
+    """POST /projects/{name}/assets/ref — 为项目引用一个本地目录（作为可编辑资产）。
+
+    body: {path, name?, mode?}  mode=edit(默认,可写) | read(只读参考)
+    """
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return json_ok({"error": "invalid project name"}, status=400)
+    pdir = manager._project_dir(name)
+    if not pdir.is_dir():
+        return json_ok({"error": "project not found", "name": name}, status=404)
+    data = await read_json(request)
+    raw_path = str(data.get("path") or "").strip()
+    if not raw_path:
+        return json_ok({"error": "path is required"}, status=400)
+    folder = os.path.abspath(os.path.expanduser(raw_path))
+    # 解析符号链接，防止通过软链逃逸到敏感目录
+    try:
+        resolved = os.path.realpath(folder)
+    except Exception:
+        resolved = folder
+    if not os.path.isdir(resolved):
+        return json_ok({"error": "path is not an existing directory"}, status=400)
+    reject = _asset_ref_reject_reason(resolved, pdir)
+    if reject:
+        return json_ok({"error": reject}, status=400)
+    mode = str(data.get("mode") or "edit").strip()
+    if mode not in ("edit", "read"):
+        mode = "edit"
+    item_name = str(data.get("name") or "").strip() or (os.path.basename(resolved.rstrip("/")) or resolved)
+    items = _read_asset_refs(pdir)
+    # 去重：同一解析后路径只引用一次
+    for it in items:
+        if os.path.realpath(it.get("path") or "") == resolved:
+            return json_ok({"ok": True, "item": it, "duplicate": True})
+    item = {
+        "id": "ref_" + uuid.uuid4().hex[:12],
+        "name": item_name,
+        "path": resolved,
+        "mode": mode,
+        "readonly": mode == "read",
+        "added_at": int(time.time()),
+    }
+    items.append(item)
+    if not _write_asset_refs(pdir, items):
+        return json_ok({"error": "write failed"}, status=500)
+    return json_ok({"ok": True, "item": item})
+
+
+async def project_asset_ref_delete_handler(request):
+    """DELETE /projects/{name}/assets/ref/{id} — 移除本地目录引用（不删除磁盘上的真实目录）。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return json_ok({"error": "invalid project name"}, status=400)
+    pdir = manager._project_dir(name)
+    if not pdir.is_dir():
+        return json_ok({"error": "project not found", "name": name}, status=404)
+    item_id = request.match_info.get("id", "")
+    items = _read_asset_refs(pdir)
+    target = next((it for it in items if it.get("id") == item_id), None)
+    if target is None:
+        return json_ok({"error": "item not found"}, status=404)
+    new_items = [it for it in items if it.get("id") != item_id]
+    if len(new_items) != len(items) and not _write_asset_refs(pdir, new_items):
+        return json_ok({"error": "write failed"}, status=500)
+    return json_ok({"ok": True, "deleted": len(items) - len(new_items)})
+
+
+async def project_asset_ref_patch_handler(request):
+    """PATCH /projects/{name}/assets/ref/{id} — 重命名 / 切换 edit|read 模式。"""
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return json_ok({"error": "invalid project name"}, status=400)
+    pdir = manager._project_dir(name)
+    if not pdir.is_dir():
+        return json_ok({"error": "project not found", "name": name}, status=404)
+    item_id = request.match_info.get("id", "")
+    data = await read_json(request)
+    items = _read_asset_refs(pdir)
+    target = next((it for it in items if it.get("id") == item_id), None)
+    if target is None:
+        return json_ok({"error": "item not found"}, status=404)
+    if "name" in data:
+        new_name = str(data.get("name") or "").strip()
+        if new_name:
+            target["name"] = new_name
+    if "mode" in data:
+        m = str(data.get("mode") or "").strip()
+        if m in ("edit", "read"):
+            target["mode"] = m
+            target["readonly"] = (m == "read")
+    if not _write_asset_refs(pdir, items):
+        return json_ok({"error": "write failed"}, status=500)
+    return json_ok({"ok": True, "item": target})
 
 
 async def skills_list_handler(request):
@@ -6232,14 +6460,18 @@ async def slash_handler(request):
         injected = slash_cmds.prompt_for(cmd, args)
     except Exception as e:
         return json_ok({"error": str(e)}, status=500)
-    if injected is None:
-        return json_ok({"error": f"unknown command: {cmd}"}, status=400)
     display = cmd + (" " + args if args else "")
     files_meta = (data or {}).get("files") or []
     image_metas = (data or {}).get("imageMetas") or []
     llm_no = (data or {}).get("llmNo")
     if llm_no is not None:
         llm_no = int(llm_no)
+    if injected is None:
+        # 非本层 skill 命令（如 /session.thinking_display=brief 会话级选项、/resume 等）
+        # → 原文交给 agent，由 agentmain._handle_slash_cmd 统一处理（与 TUI 行为一致）。
+        return json_ok(manager.submit_prompt(sid, display, [], llm_no=llm_no,
+                                              display=display, files_meta=files_meta,
+                                              image_metas=image_metas))
     return json_ok(manager.submit_prompt(sid, injected, [], llm_no=llm_no,
                                           display=display, files_meta=files_meta,
                                           image_metas=image_metas))
@@ -6889,6 +7121,10 @@ def create_app():
     app.router.add_delete("/projects/{name}", project_delete_handler)
     app.router.add_get("/projects/{name}/assets", project_assets_handler)
     app.router.add_post("/projects/{name}/assets/mkdir", project_asset_mkdir_handler)
+    # 项目资产引用（本地目录）
+    app.router.add_post("/projects/{name}/assets/ref", project_asset_ref_add_handler)
+    app.router.add_delete("/projects/{name}/assets/ref/{id}", project_asset_ref_delete_handler)
+    app.router.add_patch("/projects/{name}/assets/ref/{id}", project_asset_ref_patch_handler)
     # Data sources (webhook-based, e.g. GitLab)
     app.router.add_get("/datasources", datasources_handler)
     app.router.add_post("/datasources", datasources_handler)

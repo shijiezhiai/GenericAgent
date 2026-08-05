@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="ga-icon.svg">
 <link rel="apple-touch-icon" href="ga-icon.svg">
 <link rel="stylesheet" href="assets/fonts/fonts.css?v=2">
-<link rel="stylesheet" href="styles.css?v=249">
+<link rel="stylesheet" href="styles.css?v=256">
 <!-- KaTeX: LaTeX 公式渲染 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
 <!-- highlight.js: 代码高亮 -->
@@ -44,6 +44,69 @@
   var hljs=document.getElementById('hljs-theme');
   if(hljs&&app==='dark') hljs.href='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css';
   try{ var sraw=localStorage.getItem('ga_sessions'); if(sraw && JSON.parse(sraw).length) document.documentElement.dataset.bootHasSessions='1'; }catch(_){}
+})();
+</script>
+<script>
+// macOS Overlay 无边框标题栏标记 + 双击最大化桥接。
+// 本 webview 经网桥(http://127.0.0.1:14168)加载,Tauri JS API 未注入。
+// 通过 Tauri webview 专属 User-Agent(含 GenericAgentDesktop)判断是否为桌面端;
+// 浏览器访问同一地址不会匹配,因此不会应用 Overlay 样式,也不会误发窗口控制请求。
+(function(){
+  function isDesktop(){ return (navigator.userAgent || '').indexOf('GenericAgentDesktop') !== -1; }
+  function mark(){
+    if(isDesktop() || window.__TAURI_INTERNALS__ || window.__TAURI__){
+      document.documentElement.classList.add('tauri-desktop');
+    }
+  }
+  mark();
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mark);
+
+  if(!isDesktop()) return; // 非桌面端不接管双击最大化
+
+  function isInteractive(el){
+    if(!el) return false;
+    var tag = (el.tagName || '').toLowerCase();
+    if(['button','a','input','select','textarea'].indexOf(tag) !== -1) return true;
+    return !!(el.classList && (el.classList.contains('run-state') || el.classList.contains('brand-logo')));
+  }
+  // 顶部区域(整个上方空白处):拖拽移动窗口 + 双击最大化/还原。
+  // 几何判定(clientY ≤ TOP_ZONE 且非交互控件)覆盖整条顶带任意空白处。
+  // 拖拽:按下后移动超过阈值(4px)才发 start_drag,由 Rust 调用系统拖动接管,避免误触双击;
+  // 双击:两次按下间隔 < 350ms 且无移动 → 触发最大化/还原。
+  var TOP_ZONE = 56;
+  var lastClickTime = 0;
+  var dragStart = null, dragging = false;
+  document.addEventListener('mousedown', function(e){
+    if(e.button !== 0) return;
+    if(isInteractive(e.target) || e.target.closest('button, a, input, select, textarea, .run-state, .brand-logo')) return;
+    if(e.clientY > TOP_ZONE) return;
+    e.preventDefault(); // 顶带空白处不选中文本/抢焦点
+    dragStart = { x: e.clientX, y: e.clientY };
+    dragging = false;
+    function onMove(ev){
+      if(!dragStart) return;
+      var dx = ev.clientX - dragStart.x, dy = ev.clientY - dragStart.y;
+      if(!dragging && (dx*dx + dy*dy) > 16){
+        dragging = true;
+        fetch('/__win/start_drag', {method:'POST', cache:'no-store'});
+      }
+    }
+    function onUp(){
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if(dragging){ dragStart = null; return; } // 是拖动,不触发最大化
+      var now = Date.now();
+      if((now - lastClickTime) < 350){
+        lastClickTime = 0;
+        fetch('/__win/toggle_maximize', {method:'POST', cache:'no-store'});
+      } else {
+        lastClickTime = now;
+      }
+      dragStart = null;
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
 })();
 </script>
 </head>
@@ -915,6 +978,10 @@
             </div>
             <div class="wsm-addbar" id="wsm-addbar" hidden>
               <input type="text" class="wsm-input" id="wsm-input" data-i18n-ph="workspace.addPlaceholder" placeholder="" maxlength="500">
+              <button type="button" class="wsm-btn" id="wsm-browse" title="浏览本地目录">
+                <span data-ga-icon="folderNotchOpen"></span>
+                <span data-i18n="wsm.browse"></span>
+              </button>
               <button type="button" class="wsm-btn wsm-btn-primary" id="wsm-confirm" data-i18n="workspace.addConfirm"></button>
               <button type="button" class="wsm-btn" id="wsm-cancel" data-i18n="workspace.addCancel"></button>
             </div>
@@ -1840,6 +1907,25 @@
                 </button>
               </div>
             </div>
+            <div class="set-block">
+              <div class="set-item">
+                <div class="set-item-text">
+                  <div class="set-item-title" data-i18n="set.thinkingDisplay"></div>
+                  <div class="set-item-desc" data-i18n="set.thinkingDisplayDesc"></div>
+                </div>
+              </div>
+              <div class="set-dir-row">
+                <select id="thinking-display-select" class="set-select">
+                  <option value="full" data-i18n="set.thinkingDisplay.full">完整</option>
+                  <option value="brief" data-i18n="set.thinkingDisplay.brief">精简</option>
+                  <option value="off" data-i18n="set.thinkingDisplay.off">关闭</option>
+                </select>
+                <span class="thinking-chars-wrap" id="thinking-chars-wrap" hidden>
+                  <label class="thinking-chars-label" data-i18n="set.thinkingDisplayChars"></label>
+                  <input id="thinking-display-chars" class="set-chars-input" type="number" min="20" max="2000" value="400" />
+                </span>
+              </div>
+            </div>
           </section>
 
           <section class="settings-panel" id="settings-panel-models" aria-labelledby="settings-tab-models">
@@ -2419,6 +2505,6 @@
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js" crossorigin="anonymous"></script>
 <script src="phosphor-icons.js?v=7"></script>
 <script src="ga-ports.js"></script>
-<script src="app.js?v=340"></script>
+<script src="app.js?v=341"></script>
 </body>
 </html>

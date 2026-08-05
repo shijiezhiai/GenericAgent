@@ -338,6 +338,8 @@ def rpc_session_patch(params):
     if "folder_id" in data:
         fid = str(data["folder_id"] or "")
         sess.folder_id = fid[:64]
+    if "llmNo" in data and data["llmNo"] is not None:
+        sess.llm_no = int(data["llmNo"])
     sess.updated_at = time.time()
     manager._persist()
     return {"ok": True, "session": manager.snapshot(sess, include_messages=False)}

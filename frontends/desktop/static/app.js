@@ -394,8 +394,8 @@ const I18N = {
     'project.tpl.req.t': '产品需求全流程', 'project.tpl.req.d': '从需求采集到评审的完整流程', 'project.tpl.research.t': '市场调研与竞品分析', 'project.tpl.research.d': '行业趋势、用户洞察与竞品对比', 'project.tpl.kb.t': '团队知识库', 'project.tpl.kb.d': '沉淀团队经验与协作规范', 'project.tpl.delivery.t': '项目交付', 'project.tpl.delivery.d': '里程碑、交付物与验收管理', 'project.tpl.bug.t': 'Bug 跟踪测试验收', 'project.tpl.bug.d': '缺陷记录、复现与回归验证',
     'ph.invite': '邀请', 'ph.tab.feed': '动态', 'ph.tab.plan': '计划', 'ph.tab.task': '任务', 'ph.tab.asset': '资产', 'ph.tab.library': '资料库', 'ph.filter.mine': '与我相关', 'ph.filter.member': '成员动态', 'ph.empty.feed': '暂无与我有关的动态', 'ph.empty.plan': '暂无计划', 'ph.empty.task': '暂无任务', 'ph.empty.asset': '暂无资产', 'ph.empty.library': '暂无资料', 'ph.lib.add': '添加资料', 'ph.lib.addFile': '本地文件引用', 'ph.lib.addWeb': '网页资料', 'ph.lib.name': '名称', 'ph.lib.path': '文件路径', 'ph.lib.url': '网址', 'ph.lib.includeSubpages': '同时加入子页面', 'ph.lib.subpagesHint': '适用于 Confluence / Wiki 等有层级结构的页面', 'ph.lib.subpagesAdded': '已加入 {n} 个页面（含 {m} 个子页面）', 'ph.lib.desc': '描述（可选）', 'ph.lib.empty': '资料库为空，点击"添加资料"开始', 'ph.lib.noChildren': '暂无子页面', 'ph.lib.loadFailed': '加载子页面失败', 'ph.lib.del': '确定要移除资料「', 'ph.lib.delSuffix': '」吗？', 'ph.lib.added': '已加入资料库', 'ph.lib.file': '文件', 'ph.lib.web': '网页', 'ph.lib.generated': '生成文件', 'ph.lib.folder': '文件夹', 'ph.lib.collection': '资料夹', 'ph.lib.addFolder': '新建资料夹', 'ph.lib.moveToFolder': '移动到资料夹', 'ph.lib.removeFromFolder': '移出资料夹', 'ph.lib.renameItem': '重命名', 'ph.lib.newSubFolder': '新建子资料夹', 'ph.lib.deleteFolder': '删除资料夹', 'ph.lib.deleteFolderConfirm': '确定删除该资料夹吗？其中的资料将移回根目录。', 'ph.lib.copied': '已复制链接', 'ph.lib.fetching': '正在抓取网页…', 'ph.lib.webFetchFail': '网页抓取失败', 'ph.lib.webFetchHint': '在浏览器中打开以查看完整内容', 'ph.lib.mkdirDone': '已新建资料夹', 'ph.lib.mkdirFailed': '新建资料夹失败', 'ph.lib.moveFailed': '移动失败', 'ph.lib.movedToFolder': '已移动到资料夹', 'ph.lib.removedFromFolder': '已移出资料夹', 'ph.lib.renameDone': '已重命名', 'ph.lib.renameFailed': '重命名失败', 'ph.lib.renameItemPrompt': '输入新的名称', 'ph.lib.nameRequired': '名称不能为空', 'ph.lib.newFolderPrompt': '请输入资料夹名称', 'ph.lib.noFolderYet': '还没有资料夹，是否现在新建？', 'ph.lib.needProject': '请先选择项目', 'ph.lib.preview': '预览', 'ph.lib.open': '打开', 'ph.lib.reveal': '打开文件位置', 'ph.lib.pin': '置顶', 'ph.lib.unpin': '取消置顶', 'ph.lib.pinned': '已置顶', 'ph.lib.copyLink': '复制链接', 'ph.lib.openUrl': '在浏览器打开', 'ph.lib.delete': '删除', 'ph.lib.addToSession': '添加到会话', 'ph.lib.addedToSession': '已添加到会话', 'ph.lib.addToSessionFail': '添加到会话失败', 'ph.lib.noUrl': '该资料没有可用链接', 'ph.lib.copyUrl': '复制链接', 'ph.lib.openFailed': '打开失败', 'ph.lib.revealFailed': '定位失败', 'ph.lib.pinFailed': '置顶失败', 'ph.lib.previewFailed': '预览失败', 'ph.lib.binaryFile': '该文件为二进制文件，无法预览', 'ph.lib.truncated': '（内容已截断，仅显示前 200KB）', 'ph.lib.refFromLibrary': '引用资料库', 'ph.lib.refTitle': '引用资料', 'ph.lib.refConfirm': '引用', 'ph.lib.refNone': '请选择要引用的资料', 'ph.lib.addToLibrary': '加入资料库', 'ph.lib.addSubtitle': '把文件、网页或生成产物收进项目资料库', 'ph.lib.browse': '浏览…', 'ph.lib.browseFile': '选择文件…', 'ph.lib.browseFolder': '选择文件夹…', 'ph.lib.filePath': '文件路径', 'ph.lib.filePathPh': '输入文件路径，或点「选择文件」/「选择文件夹」', 'ph.lib.folderAdded': '已添加 {n} 个文件', 'ph.lib.folderTruncated': '超出上限，仅添加前 500 个', 'ph.lib.namePh': '资料名称', 'ph.lib.descPh': '简要描述这份资料（可选）', 'ph.lib.refHint': '选择要在对话中引用的资料（可多选）', 'ph.lib.searchPh': '搜索资料…', 'ph.composer.ph': '输入消息…', 'md.edit': '编辑', 'md.preview': '预览', 'md.hint': '支持 Markdown', 'md.empty': '（无内容）',
     'ph.asset.upload': '上传文件', 'ph.asset.mkdir': '新建文件夹', 'ph.asset.search': '搜索文件或文件夹…', 'ph.asset.items': '项', 'ph.asset.loading': '加载中…', 'ph.asset.empty': '暂无资产',
-    'ph.asset.filter.all': '全部来源', 'ph.asset.filter.project': '项目文件', 'ph.asset.filter.upload': '上传文件',
-    'ph.asset.folder': '文件夹', 'ph.asset.readonly': '只读',
+    'ph.asset.filter.all': '全部来源', 'ph.asset.filter.project': '项目文件', 'ph.asset.filter.upload': '上传文件', 'ph.asset.filter.ref': '本地引用',
+    'ph.asset.folder': '文件夹', 'ph.asset.readonly': '只读', 'ph.asset.addref': '添加本地目录', 'ph.asset.ref': '引用', 'ph.asset.ref.readonly': '引用(只读)', 'ph.asset.source.ref': '引用', 'ph.asset.rename': '重命名', 'ph.asset.rename.prompt': '请输入新的引用名称：', 'ph.asset.reveal': '在访达中显示',
     'ph.member.title': '成员管理', 'ph.member.add': '添加成员', 'ph.member.del': '删除', 'ph.member.empty': '暂无成员',
     'ph.member.nick': '昵称', 'ph.member.nick.ph': '全局唯一昵称',
     'ph.member.name': '姓名', 'ph.member.name.ph': '真实姓名（可同名）',
@@ -432,6 +432,7 @@ const I18N = {
     'wsm.delConfirm': '确认删除工作区「{0}」？\n仅解除登记（移除快捷方式与索引），不会删除本地目录或任何文件。',
     'wsm.delUnbound': '已解除 {0} 个项目的关联',
     'wsm.deleted': '工作区已删除', 'wsm.added': '工作区已添加',
+    'wsm.browse': '浏览…',
     'search.placeholder': '搜索会话…', 'conv.new': '新对话',
     'ctx.pin': '置顶', 'ctx.unpin': '取消置顶', 'ctx.rename': '重命名', 'ctx.del': '删除', 'ctx.batchDel': '批量删除', 'common.selectAll': '全选', 'conv.batchSelected': '已选', 'conv.batchDelConfirm': '确定删除选中的 {n} 个会话？',
     'ctx.copyText': '复制文本', 'ctx.copyCode': '复制代码块', 'ctx.regenerate': '重新生成', 'ctx.editResend': '编辑并重发', 'ctx.delMsg': '删除消息',
@@ -457,7 +458,10 @@ const I18N = {
     'set.tabGeneral': '通用', 'set.tabModels': '模型', 'set.tabShortcuts': '快捷键',
     'set.appearanceDesc': '选择应用界面的颜色主题。', 'set.fontSizeDesc': '调整对话正文的显示字号。', 'set.langDesc': '选择应用界面与系统提示的显示语言。',
     'set.chatFilesDirDesc': '对话中上传文件与生成文件的保存目录。',
-    'set.modelDesc': '管理可用的 LLM 模型配置，支持添加、编辑与渠道组。',
+    'set.thinkingDisplay': '思考过程展示', 'set.thinkingDisplayDesc': '控制 AI 思考过程的显示模式。',
+    'set.thinkingDisplay.full': '完整', 'set.thinkingDisplay.brief': '精简', 'set.thinkingDisplay.off': '关闭',
+    'set.thinkingDisplayChars': '精简保留字数',
+    'set.modelDesc': '管理可用的 LLM 模型配置。选中项为新会话默认模型，不影响已有会话。',
     'set.mykeyActions': 'mykey.py', 'set.mykeyActionsDesc': '导入或导出 mykey.py 模型配置文件。',
     'set.serviceManagerOpen': '打开后台服务管理', 'set.serviceManagerDesc': '管理 IM 消息通道与后台进程。',
     'set.shortcuts': '键盘快捷键', 'set.shortcutsDesc': '当前支持的快捷键列表。',
@@ -699,6 +703,7 @@ const I18N = {
     'wsm.delConfirm': 'Delete workspace "{0}"?\nThis only removes the registration (shortcut + index). No local directory or file is deleted.',
     'wsm.delUnbound': 'Unbound from {0} project(s)',
     'wsm.deleted': 'Workspace deleted', 'wsm.added': 'Workspace added',
+    'wsm.browse': 'Browse…',
     'search.placeholder': 'Search chats…', 'conv.new': 'New chat',
     'ctx.pin': 'Pin', 'ctx.unpin': 'Unpin', 'ctx.rename': 'Rename', 'ctx.del': 'Delete', 'ctx.batchDel': 'Batch Delete', 'common.selectAll': 'Select All', 'conv.batchSelected': 'Selected', 'conv.batchDelConfirm': 'Delete {n} selected sessions?',
     'ctx.copyText': 'Copy text', 'ctx.copyCode': 'Copy code block', 'ctx.regenerate': 'Regenerate', 'ctx.editResend': 'Edit & resend', 'ctx.delMsg': 'Delete message',
@@ -724,7 +729,7 @@ const I18N = {
     'set.tabGeneral': 'General', 'set.tabModels': 'Models', 'set.tabShortcuts': 'Shortcuts',
     'set.appearanceDesc': 'Choose the app color theme.', 'set.fontSizeDesc': 'Adjust the chat text size.', 'set.langDesc': 'Select the language for the app interface and system prompts.',
     'set.chatFilesDirDesc': 'Directory for uploaded and generated chat files.',
-    'set.modelDesc': 'Manage available LLM model profiles and aggregation groups.',
+    'set.modelDesc': 'Manage available LLM model profiles. The selected one is the default for new chats; existing chats keep theirs.',
     'set.mykeyActions': 'mykey.py', 'set.mykeyActionsDesc': 'Import or export the mykey.py model config file.',
     'set.serviceManagerOpen': 'Open service manager', 'set.serviceManagerDesc': 'Manage IM channels and background processes.',
     'set.shortcuts': 'Keyboard shortcuts', 'set.shortcutsDesc': 'Currently supported shortcuts.',
@@ -975,9 +980,14 @@ function syncBootCache() {
 async function persistUiPrefs() {
   try {
     const _cfd = document.getElementById('chat-files-dir-input');
-    await window.ga.saveConfig({
-      config: { lang, theme, appearance, plain: plainUi, llmNo: state.llmNo, fontSize: chatFontSize, chatFilesDir: _cfd ? (_cfd.value.trim() || 'temp') : 'temp' },
-    });
+    const _td = document.getElementById('thinking-display-select');
+    const _tdc = document.getElementById('thinking-display-chars');
+    const cfg = { lang, theme, appearance, plain: plainUi, fontSize: chatFontSize, chatFilesDir: _cfd ? (_cfd.value.trim() || 'temp') : 'temp', thinkingDisplay: _td ? _td.value : 'brief', thinkingDisplayChars: _tdc ? Number(_tdc.value) || 400 : 400 };
+    // config.llmNo 是"全局默认模型"（配置页设置，只影响新建会话）；会话自己的模型由
+    // sess.llmNo 单独存（PATCH /session）。默认模型尚未加载（defaultLlmNo==null）时
+    // 绝不回写 llmNo——否则会把 0 覆盖进 ~/.ga_desktop_settings.json 的真值。
+    if (state.defaultLlmNo != null) cfg.llmNo = state.defaultLlmNo;
+    await window.ga.saveConfig({ config: cfg });
     syncBootCache();
   } catch (_) {}
 }
@@ -2548,6 +2558,8 @@ async function loadSessions(opts = {}) {
       // rounds 由服务端算好下发（列表不再携带消息正文）；已 hydrate 的会话以本地 messages 为准
       merged.rounds = s.rounds || merged.rounds || [];
       merged.msgSeq = s.msgSeq ?? merged.msgSeq ?? 0;
+      // 会话级模型：服务端快照带出 llmNo（后端已 resolve：会话无显式选择时=全局默认）
+      if (s.llmNo != null) merged.llmNo = s.llmNo;
       remoteSessions.push(merged);
     }
     // stale 清理：删除远程存在但无内容的空会话（刷新/初始化时清理垃圾）。
@@ -4057,6 +4069,8 @@ async function ensureBridgeSession(sess) {
   const res = await window.ga.rpc('session/new', { cwd: state.gaRoot || '', mcp_servers: [] });
   if (res?.error) throw new Error(res.error.message || res.error);
   sess.bridgeSessionId = res.sessionId || res.result?.sessionId;
+  // 后端 create_session 固化当时的全局默认到会话 llm_no；前端本地会话没记过时同步
+  if (sess.llmNo == null && state.defaultLlmNo != null) sess.llmNo = state.defaultLlmNo;
   return sess.bridgeSessionId;
 }
 // 仿 TUI(continue_cmd.py 的 _preview_text 思路):sess.title 只在用户手动 rename 时被填,
@@ -4097,7 +4111,7 @@ async function newSession(folderId = null) {
   // 继承前一活跃会话的 workspace 绑定，使新建会话不丢失工作区上下文
   const prevId = state.activeId;
   const active = activeSess();
-  const sess = { id: 'local-' + Date.now() + '-' + Math.random().toString(16).slice(2), bridgeSessionId: null, title: '', messages: [], untitled: true, lastActiveTs: Date.now(), expert: null, folderId: folderId == null ? normalizeSessionFolder(active) : (state.convFolders.some(f => f.id === folderId) ? folderId : DEFAULT_CONV_FOLDER_ID) };
+  const sess = { id: 'local-' + Date.now() + '-' + Math.random().toString(16).slice(2), bridgeSessionId: null, title: '', messages: [], untitled: true, lastActiveTs: Date.now(), expert: null, folderId: folderId == null ? normalizeSessionFolder(active) : (state.convFolders.some(f => f.id === folderId) ? folderId : DEFAULT_CONV_FOLDER_ID), llmNo: state.defaultLlmNo ?? state.llmNo };
   // 乐观 UI: 先把空会话加入列表并立即切换, 让用户即时看到新会话(输入框可用)
   state.sessions.set(sess.id, sess);
   setActiveSession(sess.id);
@@ -5948,6 +5962,20 @@ function _filteredAssets() {
       readonly: true,
     });
   }
+  // 本地目录引用（可编辑资产）
+  (data.refs || []).forEach(function (r) {
+    items.push({
+      name: r.name,
+      type: 'ref',
+      path: r.path || '',
+      size: 0,
+      mtime: r.added_at || 0,
+      source: 'ref',
+      mode: r.mode || 'edit',
+      readonly: r.mode === 'read',
+      refId: r.id,
+    });
+  });
   (data.files || []).forEach(function (f) { items.push(f); });
   (data.uploads || []).forEach(function (f) { items.push(f); });
 
@@ -6000,11 +6028,12 @@ function renderPhAssets(box) {
   html += '<div class="ph-asset-bar-left">';
   html += '<button class="ph-asset-btn ph-asset-upload" data-act="upload">⬆ ' + escapeHtml(t('ph.asset.upload') || 'Upload') + '</button>';
   html += '<button class="ph-asset-btn ph-asset-mkdir" data-act="mkdir">📁 ' + escapeHtml(t('ph.asset.mkdir') || 'New Folder') + '</button>';
+  html += '<button class="ph-asset-btn ph-asset-addref" data-act="addref">📂 ' + escapeHtml(t('ph.asset.addref') || 'Add Local Dir') + '</button>';
   html += '</div>';
   html += '<div class="ph-asset-bar-right">';
   // 筛选下拉
   html += '<select class="ph-asset-filter" data-act="filter">';
-  var filters = [['all', 'ph.asset.filter.all'], ['project', 'ph.asset.filter.project'], ['upload', 'ph.asset.filter.upload']];
+  var filters = [['all', 'ph.asset.filter.all'], ['project', 'ph.asset.filter.project'], ['upload', 'ph.asset.filter.upload'], ['ref', 'ph.asset.filter.ref']];
   filters.forEach(function (f) {
     html += '<option value="' + f[0] + '"' + (phState.assetFilter === f[0] ? ' selected' : '') + '>' + escapeHtml(t(f[1]) || f[0]) + '</option>';
   });
@@ -6012,7 +6041,7 @@ function renderPhAssets(box) {
   // 搜索框
   html += '<input type="text" class="ph-asset-search" placeholder="' + escapeHtml(t('ph.asset.search') || 'Search') + '" value="' + escapeHtml(phState.assetQuery || '') + '" data-act="search">';
   // 统计
-  var totalCount = (data.files ? data.files.length : 0) + (data.uploads ? data.uploads.length : 0) + (data.workspace ? 1 : 0);
+  var totalCount = (data.files ? data.files.length : 0) + (data.uploads ? data.uploads.length : 0) + (data.workspace ? 1 : 0) + (data.refs ? data.refs.length : 0);
   html += '<span class="ph-asset-count">' + totalCount + ' ' + escapeHtml(t('ph.asset.items') || 'items') + '</span>';
   html += '</div>';
   html += '</div>';
@@ -6033,11 +6062,15 @@ function renderPhAssets(box) {
     html += '</tr></thead><tbody>';
     items.forEach(function (f) {
       var isWs = f.type === 'workspace';
-      var ext = isWs ? '' : _assetFileExt(f.name || '');
-      var icon = isWs ? '🗂️' : (f.type === 'dir' ? '📁' : fileIcon(ext));
-      var typeLabel = isWs ? 'Workspace' : (f.type === 'dir' ? (t('ph.asset.folder') || 'Folder') : (ext || 'file').toUpperCase());
-      var sourceLabel = isWs ? 'Workspace' : (f.source === 'upload' ? (t('ph.asset.source.upload') || 'Upload') : (t('ph.asset.source.project') || 'Project'));
-      html += '<tr class="pa-row' + (isWs ? ' pa-row-ws' : '') + '" data-path="' + escapeHtml(f.path || '') + '" data-name="' + escapeHtml(f.name || '') + '" data-source="' + escapeHtml(f.source || '') + '" data-type="' + escapeHtml(f.type || '') + '">';
+      var isRef = f.type === 'ref';
+      var ext = (isWs || isRef) ? '' : _assetFileExt(f.name || '');
+      var icon = isWs ? '🗂️' : (isRef ? '📂' : (f.type === 'dir' ? '📁' : fileIcon(ext)));
+      var typeLabel = isWs ? 'Workspace'
+        : (isRef ? (f.mode === 'read' ? (t('ph.asset.ref.readonly') || 'Ref (RO)') : (t('ph.asset.ref') || 'Ref'))
+        : (f.type === 'dir' ? (t('ph.asset.folder') || 'Folder') : (ext || 'file').toUpperCase()));
+      var sourceLabel = isWs ? 'Workspace' : (isRef ? (t('ph.asset.source.ref') || 'Ref')
+        : (f.source === 'upload' ? (t('ph.asset.source.upload') || 'Upload') : (t('ph.asset.source.project') || 'Project')));
+      html += '<tr class="pa-row' + (isWs ? ' pa-row-ws' : '') + (isRef ? ' pa-row-ref' : '') + '" data-path="' + escapeHtml(f.path || '') + '" data-name="' + escapeHtml(f.name || '') + '" data-source="' + escapeHtml(f.source || '') + '" data-type="' + escapeHtml(f.type || '') + '"' + (isRef ? ' data-ref-id="' + escapeHtml(f.refId || '') + '"' : '') + '">';
       html += '<td class="pa-col-check">';
       if (!isWs) html += '<input type="checkbox" class="pa-check">';
       html += '</td>';
@@ -6048,8 +6081,14 @@ function renderPhAssets(box) {
       html += '<td class="pa-col-size">' + (isWs ? '—' : formatFileSize(f.size)) + '</td>';
       html += '<td class="pa-col-actions">';
       if (!isWs) {
-        html += '<button class="pa-act-btn" data-act="preview" title="' + escapeHtml(t('ph.asset.preview') || 'Preview') + '">👁</button>';
-        html += '<button class="pa-act-btn" data-act="delete" title="' + escapeHtml(t('ph.asset.delete') || 'Delete') + '">🗑</button>';
+        if (isRef) {
+          html += '<button class="pa-act-btn" data-act="rename" title="' + escapeHtml(t('ph.asset.rename') || 'Rename') + '">✎</button>';
+          html += '<button class="pa-act-btn" data-act="reveal" title="' + escapeHtml(t('ph.asset.reveal') || 'Reveal in Finder') + '">📂</button>';
+          html += '<button class="pa-act-btn" data-act="delete" title="' + escapeHtml(t('ph.asset.delete') || 'Delete') + '">🗑</button>';
+        } else {
+          html += '<button class="pa-act-btn" data-act="preview" title="' + escapeHtml(t('ph.asset.preview') || 'Preview') + '">👁</button>';
+          html += '<button class="pa-act-btn" data-act="delete" title="' + escapeHtml(t('ph.asset.delete') || 'Delete') + '">🗑</button>';
+        }
       } else {
         html += '<span class="pa-readonly-badge">' + escapeHtml(t('ph.asset.readonly') || 'Read-only') + '</span>';
       }
@@ -6081,10 +6120,17 @@ function _bindAssetEvents(box) {
   // 新建文件夹
   var mkdirBtn = box.querySelector('.ph-asset-mkdir');
   if (mkdirBtn) mkdirBtn.onclick = _assetMkdirClick;
+  // 添加本地目录引用
+  var addRefBtn = box.querySelector('.ph-asset-addref');
+  if (addRefBtn) addRefBtn.onclick = _assetAddRefClick;
   // 行操作
   box.querySelectorAll('.pa-row').forEach(function (row) {
     var previewBtn = row.querySelector('[data-act="preview"]');
     if (previewBtn) previewBtn.onclick = function (e) { e.stopPropagation(); _assetPreview(row); };
+    var renameBtn = row.querySelector('[data-act="rename"]');
+    if (renameBtn) renameBtn.onclick = function (e) { e.stopPropagation(); _assetRenameRef(row); };
+    var revealBtn = row.querySelector('[data-act="reveal"]');
+    if (revealBtn) revealBtn.onclick = function (e) { e.stopPropagation(); _assetReveal(row); };
     var deleteBtn = row.querySelector('[data-act="delete"]');
     if (deleteBtn) deleteBtn.onclick = function (e) { e.stopPropagation(); _assetDelete(row); };
   });
@@ -6133,6 +6179,53 @@ async function _assetMkdirClickAsync() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: name })
   }).then(function (res) { return res.json(); }).then(function () {
+    fetchProjectAssets(phState.project, true);
+  }).catch(function (e) { showToast('Error: ' + e); });
+}
+
+async function _assetAddRefClick() {
+  var d = await fetch('/api/pick-folder', { method: 'POST' })
+    .then(function (r) { return r.json(); }).catch(function () { return {}; });
+  if (!d || !d.path || d.cancelled) return;
+  fetch('/projects/' + encProject(phState.project) + '/assets/ref', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: d.path })
+  }).then(function (r) { return r.json(); }).then(function (j) {
+    if (j && j.error) showToast('Error: ' + j.error);
+    fetchProjectAssets(phState.project, true);
+  }).catch(function (e) { showToast('Error: ' + e); });
+}
+
+function _assetReveal(row) {
+  var path = row.dataset.path;
+  if (!path) return;
+  fetch('/path/open', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: path, mode: 'reveal' })
+  }).catch(function () {});
+}
+
+async function _assetRenameRef(row) {
+  var id = row.getAttribute('data-ref-id') || '';
+  if (!id) { showToast('invalid ref id'); return; }
+  var oldName = row.getAttribute('data-name') || '';
+  var name = await showPromptDialog({
+    title: t('ph.asset.rename') || '重命名引用',
+    message: t('ph.asset.rename.prompt') || '请输入新的引用名称：',
+    value: oldName,
+    okText: t('common.confirm') || '确定'
+  });
+  if (!name) return;
+  name = String(name).trim();
+  if (!name) return;
+  fetch('/projects/' + encProject(phState.project) + '/assets/ref/' + encodeURIComponent(id), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name })
+  }).then(function (r) { return r.json(); }).then(function (j) {
+    if (j && j.error) showToast('Error: ' + j.error);
     fetchProjectAssets(phState.project, true);
   }).catch(function (e) { showToast('Error: ' + e); });
 }
@@ -7743,6 +7836,16 @@ function setActiveSession(id) {
   }
   // 方案B：切换会话时同步专家 chip 显示（专家已绑定到会话）
   if (typeof syncExpertChip === 'function') syncExpertChip(sess);
+  // 会话级模型恢复：切换到该会话时使用它自己记的模型；会话没记过则用全局默认。
+  // （配置页改默认模型只影响新建会话，不影响已有会话——这就是会话 llmNo 的意义。）
+  const sessNo = (sess.llmNo != null) ? sess.llmNo : (state.defaultLlmNo ?? 0);
+  if (state.llmNo !== sessNo) {
+    state.llmNo = sessNo;
+    const mp = (state.modelProfiles || []).find(p => (p.id ?? 0) === sessNo);
+    state.modelName = mp ? modelDisplayName(mp) : (state.modelName || null);
+    updateModelChip();
+    renderSettingsModels();
+  }
   // 选中会话 → 从后端读取该会话绑定的 workspace 并同步到前端显示（只读不写，避免用前端缓存值覆盖后端）
   if (sess.bridgeSessionId) {
     window.ga.getSessionWorkspace(sess.bridgeSessionId).then(res => {
@@ -9072,6 +9175,8 @@ document.addEventListener('keydown', (e) => {
       // If the typed text exactly matches a command name, submit it directly
       // instead of selecting the highlighted panel item (which may differ).
       const typed = composerText('chat').trim();
+      // /session.* 会话级命令：技能面板不拦截，直接提交（避免用户手动取消面板）
+      if (typed.startsWith('/session.')) { e.preventDefault(); e.stopPropagation(); hideSlashPanel(); submitInput(); return; }
       const exactMatch = _slashCmds.find(c => c.name === typed);
       if (exactMatch) { e.preventDefault(); e.stopPropagation(); hideSlashPanel(); submitInput(); return; }
       e.preventDefault(); e.stopPropagation(); selectSlashItem(); return;
@@ -9348,6 +9453,8 @@ inputEl.addEventListener('input', () => {
   }
   if (_slashActive) {
     const raw = composerText('chat').trim();
+    // /session.* 会话级选项：不需要技能面板，直接隐藏放行
+    if (raw.startsWith('/session')) { hideSlashPanel(); return; }
     const filter = raw.startsWith('/') ? raw.slice(1).trim() : raw;
     // Only re-filter and reset selection when the filter text actually changes;
     // this preserves arrow-key navigation when a stray input event fires.
@@ -10581,11 +10688,15 @@ document.querySelectorAll('.feature-grid').forEach(grid => {
 
 /* ═══════════════ 模型 / 设置 ═══════════════ */
 function updateModelChip() {
+  // chat / 项目视图 chip：显示当前会话的模型；指挥家 chip：显示全局默认模型（conductor 用）
   const name = state.modelName || '';
   if (modelNameEl) modelNameEl.textContent = name;
-  if (collabModelNameEl) collabModelNameEl.textContent = name;
   var phModelNameEl = document.querySelector('#ph-model-chip .model-name');
   if (phModelNameEl) phModelNameEl.textContent = name;
+  if (collabModelNameEl) {
+    const dp = (state.modelProfiles || []).find(p => (p.id ?? 0) === state.defaultLlmNo);
+    collabModelNameEl.textContent = dp ? modelDisplayName(dp) : name;
+  }
 }
 function modelDisplayName(p, fallbackName) {
   if (p && p.kind === 'mixin') {
@@ -10597,13 +10708,29 @@ function modelDisplayName(p, fallbackName) {
   }
   return profileLabel(fallbackName ?? (p && p.name)) || (fallbackName ?? (p && p.name)) || null;
 }
+// 会话级模型选择：改当前活跃会话的模型（chip 菜单用），持久化到该会话（PATCH /session），
+// 不影响全局默认模型（config.llmNo 只在配置页由 setDefaultModel 写）。
 async function selectModel(id, name) {
   state.llmNo = id;
-  state.llmNoUserSet = true;
   state.liveModel = null;
   const p = (state.modelProfiles || []).find(x => (x.id ?? 0) === id);
   state.modelName = modelDisplayName(p, name);
   updateModelChip();
+  const sess = activeSess();
+  if (sess) {
+    sess.llmNo = id;
+    if (sess.bridgeSessionId) {
+      try { await bridgeFetch(`/session/${encodeURIComponent(sess.bridgeSessionId)}`, { method: 'PATCH', body: { llmNo: id } }); } catch (_) {}
+    }
+  }
+  renderSettingsModels();
+}
+// 配置页：设置全局默认模型（只影响新建会话，不改任何已有会话）
+async function setDefaultModel(id, name) {
+  state.defaultLlmNo = id;
+  // 指挥家 chip 显示默认模型（conductor 读 ui.llmNo，与 chat 会话模型无关）
+  const p = (state.modelProfiles || []).find(x => (x.id ?? 0) === id);
+  if (collabModelNameEl) collabModelNameEl.textContent = modelDisplayName(p, name) || '';
   renderSettingsModels();
   await persistUiPrefs();
 }
@@ -10871,13 +10998,25 @@ async function deleteModel(id, name) {
   try {
     const res = await bridgeFetch(`/model-profiles/${id}`, { method: 'DELETE', body: {} });
     if (res?.ok === false || res?.error) throw new Error(res.error || t('err.modelDelete'));
+    const wasDefault = state.defaultLlmNo === id;
     const wasActive = state.llmNo === id;
     const oldNo = state.llmNo;
+    const oldDefault = state.defaultLlmNo;
     state.modelProfiles = normalizeProfiles(res.profiles || []);
-    if (wasActive) {
+    // 默认模型被删：回退到第一个
+    if (wasDefault) {
+      const p = state.modelProfiles[0];
+      state.defaultLlmNo = p ? (p.id ?? 0) : 0;
+      if (p && state.llmNo === id) await selectModel(p.id ?? 0, p.name);
+    } else if (oldDefault > id) {
+      // 删除的模型排在默认模型前面 → 下标左移一位
+      state.defaultLlmNo = oldDefault - 1;
+    }
+    // 当前会话用的模型被删：回退
+    if (wasActive && state.llmNo === id) {
       const p = state.modelProfiles[0];
       if (p) await selectModel(p.id ?? 0, p.name);
-      else { state.llmNo = 0; state.modelName = null; updateModelChip(); }
+      else { state.llmNo = state.defaultLlmNo ?? 0; state.modelName = null; updateModelChip(); }
     } else if (oldNo > id) {
       const p = state.modelProfiles[oldNo - 1];
       if (p) await selectModel(p.id ?? (oldNo - 1), p.name);
@@ -10905,10 +11044,10 @@ function renderSettingsModels() {
     const group = document.createElement('div');
     group.className = 'model-group';
     const head = document.createElement('label');
-    head.className = 'model-row model-row--mixin' + (state.llmNo === gid ? ' sel' : '');
-    head.innerHTML = `<input type="radio" name="model-pick"${state.llmNo === gid ? ' checked' : ''}><span class="model-mixin-caret" data-act="toggle">${GA_ICON(expanded ? 'caretDown' : 'caretRight')}</span><span class="model-row-name">${escapeHtml(t('model.aggregation'))}</span>`;
+    head.className = 'model-row model-row--mixin' + (state.defaultLlmNo === gid ? ' sel' : '');
+    head.innerHTML = `<input type="radio" name="model-pick"${state.defaultLlmNo === gid ? ' checked' : ''}><span class="model-mixin-caret" data-act="toggle">${GA_ICON(expanded ? 'caretDown' : 'caretRight')}</span><span class="model-row-name">${escapeHtml(t('model.aggregation'))}</span>`;
     head.querySelector('[data-act="toggle"]').addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); state.mixinExpanded = !expanded; renderSettingsModels(); });
-    head.addEventListener('click', (e) => { if (e.target.closest('[data-act="toggle"]')) return; e.preventDefault(); selectModel(gid, mixin.name); });
+    head.addEventListener('click', (e) => { if (e.target.closest('[data-act="toggle"]')) return; e.preventDefault(); setDefaultModel(gid, mixin.name); });
     group.appendChild(head);
     if (expanded) {
       const body = document.createElement('div');
@@ -10944,11 +11083,11 @@ function renderSettingsModels() {
       const id = p.id ?? 0;
       const label = profileLabel(p.name) || p.name || ('#' + id);
       const row = document.createElement('label');
-      row.className = 'model-row' + (state.llmNo === id ? ' sel' : '');
+      row.className = 'model-row' + (state.defaultLlmNo === id ? ' sel' : '');
       // 独立列表按钮统一为「加入渠道组」（➕）；移除只在渠道组展开区做。
       // 已在渠道组的，按钮仍是「加入」，但点击只提示「已在渠道组中」，并用 is-in 给个淡淡的视觉区分。
       const mixToggle = !mixin ? '' : `<button type="button" class="model-act model-act-addmix${p.inMixin ? ' is-in' : ''}" data-act="addmix" title="${escapeHtml(p.inMixin ? t('model.alreadyInMixin') : t('model.addToMixin'))}">${GA_ICON('plus')}</button>`;
-      row.innerHTML = `<input type="radio" name="model-pick"${state.llmNo === id ? ' checked' : ''}><span class="model-row-name">${escapeHtml(label)}</span><span class="model-row-actions">${mixToggle}<button type="button" class="model-act" data-act="edit" title="${escapeHtml(t('common.edit'))}">${MODEL_ACT_EDIT}</button><button type="button" class="model-act" data-act="copy" title="${escapeHtml(t('common.duplicate'))}">${MODEL_ACT_COPY}</button><button type="button" class="model-act model-act-del" data-act="delete" title="${escapeHtml(t('common.delete'))}">${MODEL_ACT_DEL}</button></span>`;
+      row.innerHTML = `<input type="radio" name="model-pick"${state.defaultLlmNo === id ? ' checked' : ''}><span class="model-row-name">${escapeHtml(label)}</span><span class="model-row-actions">${mixToggle}<button type="button" class="model-act" data-act="edit" title="${escapeHtml(t('common.edit'))}">${MODEL_ACT_EDIT}</button><button type="button" class="model-act" data-act="copy" title="${escapeHtml(t('common.duplicate'))}">${MODEL_ACT_COPY}</button><button type="button" class="model-act model-act-del" data-act="delete" title="${escapeHtml(t('common.delete'))}">${MODEL_ACT_DEL}</button></span>`;
       row.querySelector('[data-act="edit"]').addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); openEditModelForm(id); });
       row.querySelector('[data-act="copy"]').addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); openCopyModelForm(id); });
       row.querySelector('[data-act="delete"]').addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); deleteModel(id, p.name); });
@@ -10961,7 +11100,7 @@ function renderSettingsModels() {
       row.addEventListener('click', (e) => {
         if (e.target.closest('.model-row-actions')) return;
         e.preventDefault();
-        selectModel(id, p.name);
+        setDefaultModel(id, p.name);
       });
       box.appendChild(row);
     }
@@ -11034,22 +11173,19 @@ async function loadModelProfiles() {
     const res = await window.ga.getModelProfiles();
     const list = res?.profiles || res?.result?.profiles || [];
     state.modelProfiles = normalizeProfiles(list);
-    // 仅在首次初始化（用户未主动选择过模型）时采用服务端 active；用户已选则保留
-    if (!state.llmNoUserSet) {
+    // 全局默认模型（配置页设置，只影响新建会话）：仅首次未初始化时用服务端 active
+    if (state.defaultLlmNo == null) {
       const active = state.modelProfiles.find(p => p.active) || state.modelProfiles[0];
-      if (active) {
-        state.llmNo = active.id ?? 0;
-        state.modelName = modelDisplayName(active);
-      }
-    } else {
-      // 确保当前选中的模型显示名与 profiles 同步（不改变 llmNo）
-      const cur = state.modelProfiles.find(p => (p.id ?? 0) === state.llmNo);
-      if (cur) { state.modelName = modelDisplayName(cur); }
-      else {
-        // 当前选中模型已不存在（被删除等），回退到 active 或第一个
-        const active = state.modelProfiles.find(p => p.active) || state.modelProfiles[0];
-        if (active) { state.llmNo = active.id ?? 0; state.modelName = modelDisplayName(active); }
-      }
+      if (active) state.defaultLlmNo = active.id ?? 0;
+    }
+    // 当前会话模型：会话自己的 llmNo 优先；会话没记过则跟随默认。
+    // 不再无条件用服务端 active 覆盖 state.llmNo（那会改掉其它会话的模型）。
+    const sess = state.sessions.get(state.activeId);
+    const want = (sess && sess.llmNo != null) ? sess.llmNo : state.defaultLlmNo;
+    const cur = state.modelProfiles.find(p => (p.id ?? 0) === want) || state.modelProfiles[0];
+    if (cur) {
+      state.llmNo = cur.id ?? 0;
+      state.modelName = modelDisplayName(cur);
     }
     updateModelChip();
     renderSettingsModels();
@@ -11061,9 +11197,12 @@ const collabModelMenu = document.getElementById('cdb-model-menu');
 function renderModelMenu(menuEl) {
   if (!menuEl) return;
   const list = state.modelProfiles || [];
+  // collab（指挥家）菜单：无会话概念，高亮全局默认模型；chat/ph 菜单高亮当前会话模型
+  const isCollab = menuEl === collabModelMenu;
+  const activeNo = isCollab ? state.defaultLlmNo : state.llmNo;
   const rows = list.map((p, i) => {
     const no = (p.id ?? i);
-    const isActive = (state.llmNo === no) ? ' active' : '';
+    const isActive = (activeNo === no) ? ' active' : '';
     const label = (isActive && p.kind === 'mixin' && state.modelName) ? state.modelName : modelDisplayName(p);
     return `<div class="ga-menu-item${isActive}" data-llmno="${no}">${escapeHtml(label || '')}</div>`;
   });
@@ -11096,7 +11235,7 @@ function closeAllModelMenus() {
   if (phModelMenu) phModelMenu.hidden = true;
   if (phModelChip) phModelChip.classList.remove('open');
 }
-function bindModelMenuItemClick(menuEl) {
+function bindModelMenuItemClick(menuEl, mode) {
   if (!menuEl) return;
   menuEl.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -11105,12 +11244,15 @@ function bindModelMenuItemClick(menuEl) {
     const no = parseInt(item.dataset.llmno, 10);
     if (Number.isNaN(no)) return;
     const p = (state.modelProfiles || []).find(x => (x.id ?? 0) === no);
-    selectModel(no, (p && p.name) || '');
+    // mode='default'：改全局默认（指挥家/无会话上下文场景，conductor 读 ui.llmNo）；
+    // 默认（'session'）：改当前会话模型。
+    if (mode === 'default') setDefaultModel(no, (p && p.name) || '');
+    else selectModel(no, (p && p.name) || '');
     closeAllModelMenus();
   });
 }
-bindModelMenuItemClick(modelMenu);
-bindModelMenuItemClick(collabModelMenu);
+bindModelMenuItemClick(modelMenu, 'session');
+bindModelMenuItemClick(collabModelMenu, 'default');
 if (modelChip) modelChip.addEventListener('click', (e) => {
   e.preventDefault(); e.stopPropagation();
   if (modelMenu && !modelMenu.hidden) { closeAllModelMenus(); return; }
@@ -11124,7 +11266,7 @@ if (collabModelChip) collabModelChip.addEventListener('click', (e) => {
 /* ph-model-chip (project chat view) */
 var phModelChip = document.getElementById('ph-model-chip');
 var phModelMenu = document.getElementById('ph-model-menu');
-if (phModelMenu) bindModelMenuItemClick(phModelMenu);
+if (phModelMenu) bindModelMenuItemClick(phModelMenu, 'session');
 if (phModelChip) phModelChip.addEventListener('click', (e) => {
   e.preventDefault(); e.stopPropagation();
   if (phModelMenu && !phModelMenu.hidden) { closeAllModelMenus(); return; }
@@ -11187,19 +11329,34 @@ async function loadBridgeConfig() {
     if (cfg.theme != null) applyTheme(cfg.theme, { persist: false });
     if (cfg.appearance) applyAppearance(cfg.appearance, !!cfg.plain, { persist: false });
     if (cfg.fontSize != null) applyChatFontSize(cfg.fontSize, { persist: false });
-    // 仅在用户未主动选择过模型时用服务端 config 覆盖；用户已选则保留
-    if (cfg.llmNo != null && !state.llmNoUserSet && state.modelProfiles.length) {
+    // config.llmNo 是"全局默认模型"（配置页设置，只影响新建会话）。
+    // 只在默认尚未初始化时采用；已有会话的模型由各自 llmNo 决定，不被这里覆盖。
+    if (cfg.llmNo != null && state.defaultLlmNo == null && state.modelProfiles.length) {
       const p = state.modelProfiles.find(x => (x.id ?? 0) === cfg.llmNo);
       if (p) {
-        state.llmNo = cfg.llmNo;
-        state.modelName = modelDisplayName(p);
-        updateModelChip();
+        state.defaultLlmNo = cfg.llmNo;
+        // 当前会话若尚未记模型（本地刚启动），跟随默认
+        const sess = state.sessions.get(state.activeId);
+        if (sess && sess.llmNo == null) {
+          state.llmNo = cfg.llmNo;
+          state.modelName = modelDisplayName(p);
+          updateModelChip();
+        }
         renderSettingsModels();
       }
     }
     if (cfg.chatFilesDir != null) {
       const _el = document.getElementById('chat-files-dir-input');
       if (_el) _el.value = cfg.chatFilesDir || 'temp';
+    }
+    // thinking 显示模式回填
+    if (cfg.thinkingDisplay != null) {
+      const _td = document.getElementById('thinking-display-select');
+      if (_td) { _td.value = cfg.thinkingDisplay; _td.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+    if (cfg.thinkingDisplayChars != null) {
+      const _tdc = document.getElementById('thinking-display-chars');
+      if (_tdc) _tdc.value = cfg.thinkingDisplayChars;
     }
     // 补写 chatFilesDir 默认值到 settings.json（用户从未触发 change 时也持久化）
     persistUiPrefs();
@@ -11240,7 +11397,12 @@ if (addModelForm) addModelForm.addEventListener('submit', async (e) => {
     state.modelProfiles = normalizeProfiles(res.profiles || []);
     const pid = isEdit ? editingModelId : (res.profileId ?? state.modelProfiles.at(-1)?.id ?? 0);
     const p = state.modelProfiles.find(x => (x.id ?? 0) === pid) || state.modelProfiles.at(-1);
-    if (p) await selectModel(p.id ?? pid, p.name);
+    if (p) {
+      // 新建/复制模型后：设为全局默认（新会话用），同时当前会话立即使用它；
+      // 编辑已有模型则不改默认（只是改配置）。
+      if (!isEdit) state.defaultLlmNo = p.id ?? pid;
+      await selectModel(p.id ?? pid, p.name);
+    }
     document.getElementById('add-model-modal').hidden = true;
     addModelForm.reset();
     editingModelId = null;
@@ -14814,9 +14976,16 @@ function bindComposerInRoot(root, opts) {
 
   function refreshChip() {
     if (_currentWs) {
+      // v340: 有工作区时摘掉 data-i18n/data-i18n-title —— 否则 refreshPanel 末尾的
+      // applyI18n() 会把 .ws-chip-name 文本重置回 t('workspace.empty')="未选择"(clobber),
+      // 且 _currentWs 仍非空 → 轮询跳过 → chip 永久锁死"未选择"。
+      chip.removeAttribute('data-i18n-title');
+      chipName.removeAttribute('data-i18n');
       chipName.textContent = gaWsDisplayName(_currentWs.name, _currentWs.path);
       chip.title = _currentWs.path;
     } else {
+      chip.setAttribute('data-i18n-title', 'workspace.selectTitle');
+      chipName.setAttribute('data-i18n', 'workspace.empty');
       chipName.textContent = t('workspace.empty');
       chip.title = t('workspace.selectTitle');
     }
@@ -15087,6 +15256,7 @@ function bindComposerInRoot(root, opts) {
   const addInput = document.getElementById('wsm-input');
   const confirmBtn = document.getElementById('wsm-confirm');
   const cancelBtn = document.getElementById('wsm-cancel');
+  const browseBtn = document.getElementById('wsm-browse');
   let _busy = false;
 
   function esc(s) { return String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -15186,6 +15356,22 @@ function bindComposerInRoot(root, opts) {
   addInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); doAdd(); }
     else if (e.key === 'Escape') hideAddBar();
+  });
+
+  // Open the native OS folder picker (system dialog) and drop the chosen path into the input.
+  // Reaches the gateway's /dialog/pick_folder route, which runs rfd::FileDialog on the main
+  // thread — the webview loaded from the gateway can't use window.__TAURI__ for this.
+  browseBtn?.addEventListener('click', async () => {
+    if (_busy) return;
+    try {
+      const res = await fetch(`${BRIDGE_ORIGIN}/dialog/pick_folder`);
+      if (!res.ok) return;
+      const data = await res.json().catch(() => null);
+      if (data && data.path) {
+        addInput.value = data.path;
+        addInput.focus();
+      }
+    } catch (_) { /* dialog unavailable — user can still type the path */ }
   });
 
   listEl.addEventListener('click', (e) => {

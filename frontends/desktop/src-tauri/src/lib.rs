@@ -1,6 +1,7 @@
 use std::process::{Command, Stdio};
 use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::thread;
 use std::path::{Path, PathBuf};
@@ -916,6 +917,57 @@ pub fn run() {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.show();
             }
+
+            let handle = app.handle().clone();
+            // Bridge frontend double-click/maximize requests to the Tauri window, because the
+            // webview loaded from http://127.0.0.1:14168 does not get window.__TAURI__ injected.
+            ga_desktop_gateway::set_window_control(Arc::new(move |action: &str| {
+                if let Some(w) = handle.get_webview_window("main") {
+                    match action {
+                        "maximize" => { let _ = w.maximize(); }
+                        "unmaximize" => { let _ = w.unmaximize(); }
+                        "minimize" => { let _ = w.minimize(); }
+                        "close" => { let _ = w.close(); }
+                        "toggle_maximize" => {
+                            if let Ok(true) = w.is_maximized() {
+                                let _ = w.unmaximize();
+                            } else {
+                                let _ = w.maximize();
+                            }
+                        }
+                        "start_drag" => {
+                            // 在原生 UI 线程发起窗口拖动:macOS 的 start_dragging 必须由主线程
+                            // (事件循环)调用,且需左键处于按下状态。前端在 mousedown+move 超过
+                            // 阈值后才发此请求,此时按键仍按住,调用即进入系统拖动。
+                            let app2 = handle.clone();
+                            let _ = handle.run_on_main_thread(move || {
+                                if let Some(w) = app2.get_webview_window("main") {
+                                    let _ = w.start_dragging();
+                                }
+                            });
+                        }
+                        _ => {}
+                    }
+                }
+            }));
+
+            // Expose the OS folder chooser to the frontend over HTTP (mirrors set_window_control):
+            // the webview loaded from the gateway can't use window.__TAURI__, so it calls
+            // GET /dialog/pick_folder, which runs rfd::FileDialog on the main thread and returns
+            // the chosen absolute path as JSON. run_on_main_thread keeps NSOpenPanel off the
+            // gateway's async worker thread (where a blocking modal would deadlock).
+            let picker_app = app.handle().clone();
+            ga_desktop_gateway::set_folder_picker(Arc::new(move || {
+                let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
+                let res = picker_app.run_on_main_thread(move || {
+                    let picked = rfd::FileDialog::new().pick_folder();
+                    let _ = tx.send(picked.map(|p| p.to_string_lossy().into_owned()));
+                });
+                if res.is_err() {
+                    return None;
+                }
+                rx.recv().ok().flatten()
+            }));
 
             let handle = app.handle().clone();
             let project_dir = project_dir.clone();

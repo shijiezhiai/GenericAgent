@@ -17,7 +17,7 @@ pub mod proxy;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::body::Body;
@@ -44,6 +44,34 @@ pub struct AppState {
     pub grok_upstream: String,
     pub ga_root: String,
     pub client: reqwest::Client,
+}
+
+// Window control hook used by the Tauri shell to expose maximize/minimize/close
+// to the frontend without relying on the Tauri JS API (which is not injected for
+// webviews loaded from the local gateway http://127.0.0.1:14168).
+static WIN_CTRL: OnceLock<Arc<dyn Fn(&str) + Send + Sync>> = OnceLock::new();
+
+/// Install a window control callback. Called once from the Tauri `.setup()` hook.
+pub fn set_window_control(ctrl: Arc<dyn Fn(&str) + Send + Sync>) {
+    let _ = WIN_CTRL.set(ctrl);
+}
+
+// Native folder picker hook: exposes the OS folder chooser dialog to the frontend over HTTP,
+// because webviews loaded from the local gateway (http://127.0.0.1:14168) do NOT get
+// `window.__TAURI__` injected, so the Tauri `pick_folder` command (window.__TAURI__.core.invoke)
+// is unreachable from the workspace page. The Tauri shell registers the closure (which calls
+// `rfd::FileDialog::pick_folder()` on the main thread); the gateway serves it as a plain route.
+static FOLDER_PICKER: OnceLock<Arc<dyn Fn() -> Option<String> + Send + Sync>> = OnceLock::new();
+
+/// Install a folder-picker callback. Called once from the Tauri `.setup()` hook.
+pub fn set_folder_picker(picker: Arc<dyn Fn() -> Option<String> + Send + Sync>) {
+    let _ = FOLDER_PICKER.set(picker);
+}
+
+/// Invoke the installed folder picker. Returns the chosen absolute path, or `None` when no
+/// picker was registered or the user cancelled the dialog.
+pub fn call_folder_picker() -> Option<String> {
+    FOLDER_PICKER.get().and_then(|p| p())
 }
 
 fn now_secs() -> u64 {
@@ -114,6 +142,28 @@ async fn static_file_handler(State(s): State<AppState>, uri: axum::http::Uri) ->
             .body(Body::from(b))
             .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response()),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn win_control_handler(Path(action): Path<String>) -> Response {
+    match WIN_CTRL.get() {
+        Some(ctrl) => {
+            ctrl(&action);
+            StatusCode::OK.into_response()
+        }
+        None => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "window control not available in this mode",
+        )
+            .into_response(),
+    }
+}
+
+async fn pick_folder_handler() -> Response {
+    match call_folder_picker() {
+        Some(path) => Json(json!({ "path": path })).into_response(),
+        // user cancelled (or no picker registered): null so the frontend can no-op
+        None => Json(json!({ "path": Value::Null })).into_response(),
     }
 }
 
@@ -484,6 +534,12 @@ fn build_router(state: AppState) -> Router {
         .route("/proxy", any(proxy::proxy_grok))
         .route("/proxy/", any(proxy::proxy_grok))
         .route("/proxy/{*rest}", any(proxy::proxy_grok))
+        // Window control bridge: the Tauri shell provides the closure; frontend calls this
+        // via plain fetch since the Tauri JS API is not injected into gateway-loaded webviews.
+        .route("/__win/{action}", any(win_control_handler))
+        // Native folder picker: the Tauri shell provides the closure (rfd on the main thread);
+        // the frontend calls this to let the user choose a local directory via a system dialog.
+        .route("/dialog/pick_folder", get(pick_folder_handler))
         // everything else -> try static_dir first, then legacy bridge (strangler fallback)
         .fallback(any(fallback_static_or_proxy))
         .layer(CorsLayer::permissive())

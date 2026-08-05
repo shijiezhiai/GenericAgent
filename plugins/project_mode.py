@@ -17,6 +17,7 @@
   temp/projects/<项目名>/                     项目私域文件（todo 等），解决多项目覆盖
 """
 import os
+import json
 import plugins.hooks as hooks
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -82,6 +83,42 @@ def _memory_stat(name):
     return False, 0, 0
 
 
+def _asset_refs_block(name):
+    """读取项目 .asset_refs.json，生成「资产引用（本地目录）」清单，供 agent 检索/编辑代码时定位 repo。"""
+    pdir = _project_dir(name)
+    refs_path = os.path.join(pdir, '.asset_refs.json')
+    if not os.path.isfile(refs_path):
+        return ""
+    try:
+        with open(refs_path, encoding='utf-8') as _f:
+            refs = json.load(_f) or []
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(refs, list) or not refs:
+        return ""
+    lines = []
+    for r in refs:
+        if not isinstance(r, dict):
+            continue
+        _p = r.get('path') or ''
+        if not _p or not os.path.isdir(_p):
+            continue
+        _name = r.get('name') or os.path.basename(_p.rstrip('/')) or _p
+        if (r.get('mode') or 'edit') == 'read':
+            lines.append(f"- [只读] {_name}：{_p}（仅作上下文，请勿改动）")
+        else:
+            lines.append(f"- [可写] {_name}：{_p}（项目活代码，可直接修改）")
+    if not lines:
+        return ""
+    return (
+        f"\n## 项目资产引用（本地目录）\n"
+        f"本项目在「资产」中引用了以下本地目录（真实绝对路径）。检索/编辑代码时，"
+        f"请在 code_search / file_find / repo_index / file 工具中传入对应路径：\n"
+        + "\n".join(lines) + "\n"
+        f"- 未指定 path 时默认在项目主目录搜索；多 repo 场景请明确传入目标 repo 的绝对路径。\n"
+    )
+
+
 def _build_injection(name):
     """构造追加到 user message 末尾的内容（两层设计的 L1 层）。
 
@@ -112,6 +149,7 @@ def _build_injection(name):
                 )
         except OSError:
             pass
+    refs_block = _asset_refs_block(name)  # 资产引用本地目录，注入项目上下文
     return (
         f"\n\n---\n"
         f"[PROJECT MODE: {name}]\n"
@@ -119,7 +157,7 @@ def _build_injection(name):
         f"## 规则\n"
         f"- 项目私域目录：{pdir}（todo、草稿、产物一律放这里，勿放 temp 根目录）\n"
         f"- {mem_hint}\n"
-        f"{inst_block}\n"
+        f"{inst_block}{refs_block}\n"
         f"## 收尾纪律\n"
         f"干完本轮活后自问一个问题：「记忆归零、重新接手本项目的我，缺了本轮哪条信息会重复付出认知代价"
         f"——再踩一次坑、再摸索一次、再问一次用户？」会的，就用 file 工具把那条追加进 {mem_path}，"

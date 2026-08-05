@@ -12,7 +12,7 @@
     },
     "windows": [
       {
-        "title": "GenericAgent",
+        "title": "",
         "label": "main",
         "width": 1280,
         "height": 800,
@@ -21,6 +21,9 @@
         "resizable": true,
         "maximized": false,
         "visible": false,
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": { "x": 16, "y": 8 },
+        "userAgent": "GenericAgentDesktop/2.0 (Tauri; macOS)",
         "url": "loading.html"
       },
       {
@@ -31,6 +34,7 @@
         "resizable": false,
         "visible": false,
         "center": true,
+        "titleBarStyle": "Overlay",
         "url": "fallback.html"
       }
     ]

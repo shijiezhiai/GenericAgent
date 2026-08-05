@@ -905,6 +905,21 @@ body{ background:var(--bg); color:var(--txt); font-size:13px; overflow:hidden; f
 .body.sb-collapsed .pt-sb-toggle svg,
 .body.rp-collapsed .pt-rp-toggle svg{ transform:rotate(180deg); }
 .pt-spacer{ flex:1 1 auto; }
+
+/* macOS 无边框(Overlay)模式:去掉原生标题栏(应用名已显示在系统菜单栏),
+   交通灯浮在内容上方。仅桌面端(.tauri-desktop)生效,不影响浏览器调试视图。
+   本 webview 经网桥加载,Tauri JS API 未注入,因此双击最大化通过 fetch 到 gateway
+   /__win/toggle_maximize 让 Rust 切换窗口(见 index.html);拖拽由 macOS 原生 Overlay
+   标题栏处理,不再覆盖 -webkit-app-region(避免其吞掉 JS 双击事件)。 */
+.tauri-desktop .brand{
+  padding-left:92px;                 /* 避让交通灯(16+52+24 余量) */
+  justify-content:flex-start;        /* logo 靠左 */
+  -webkit-user-select:none; user-select:none;
+}
+.tauri-desktop .brand-name,
+.tauri-desktop .brand-sub,
+.tauri-desktop .ga-wordmark{ display:none !important; }    /* 交通灯区宽度不够,隐藏文字仅留 logo */
+
 .tb-left{ display:flex; align-items:center; gap:14px; font-size:12px; }
 .pill{
   border:1px solid var(--line); background:var(--card); border-radius:20px;

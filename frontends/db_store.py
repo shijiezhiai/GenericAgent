@@ -35,7 +35,7 @@ from typing import Any, Dict, List, Optional
 _JSON_PLACEHOLDER = "{}"
 
 # Bump when the physical schema changes; add a branch in _migrate_schema for the step.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # Runtime maintenance. DuckDB's CHECKPOINT only folds the WAL into the main file; it
 # never hands free blocks back to the OS (a 268MB production store measured 514/1041
@@ -273,6 +273,7 @@ class DBStore:
                     created_at DOUBLE,
                     updated_at DOUBLE,
                     llm_history VARCHAR,
+                    llm_no BIGINT,
                     msg_seq BIGINT
                 )
             """)
@@ -446,6 +447,12 @@ class DBStore:
         cur = self._current_schema_version()
         if cur >= SCHEMA_VERSION:
             return
+        # v5: per-session model choice (llm_no). ALTER is idempotent-guarded for
+        # databases that were already partially migrated.
+        try:
+            self._w("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS llm_no BIGINT")
+        except Exception as e:
+            print(f"[db_store] migrate v5 sessions.llm_no failed: {e}", file=__import__("sys").stderr)
         self._w("INSERT INTO schema_version (version, applied_at) VALUES (?,?)",
                 [SCHEMA_VERSION, time.time()])
 
@@ -468,6 +475,7 @@ class DBStore:
             s.workspace or "", s.project or "",
             float(s.created_at), float(s.updated_at),
             json.dumps(llm_hist, ensure_ascii=False, default=str) if llm_hist is not None else None,
+            s.llm_no,
             int(s.msg_seq or 0),
         )
 
@@ -475,15 +483,15 @@ class DBStore:
         self._w(
             """INSERT INTO sessions
                (id,title,cwd,folder_id,pinned,untitled,plan_scan_baseline,plan_path,
-                workspace,project,created_at,updated_at,llm_history,msg_seq)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                workspace,project,created_at,updated_at,llm_history,llm_no,msg_seq)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(id) DO UPDATE SET
                  title=excluded.title, cwd=excluded.cwd, folder_id=excluded.folder_id,
                  pinned=excluded.pinned, untitled=excluded.untitled,
                  plan_scan_baseline=excluded.plan_scan_baseline, plan_path=excluded.plan_path,
                  workspace=excluded.workspace, project=excluded.project,
                  created_at=excluded.created_at, updated_at=excluded.updated_at,
-                 llm_history=excluded.llm_history, msg_seq=excluded.msg_seq""",
+                 llm_history=excluded.llm_history, llm_no=excluded.llm_no, msg_seq=excluded.msg_seq""",
             list(self._session_row(s)),
         )
 
@@ -530,21 +538,22 @@ class DBStore:
         self._w(
             """INSERT INTO sessions
                (id,title,cwd,folder_id,pinned,untitled,plan_scan_baseline,plan_path,
-                workspace,project,created_at,updated_at,llm_history,msg_seq)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                workspace,project,created_at,updated_at,llm_history,llm_no,msg_seq)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(id) DO UPDATE SET
                  title=excluded.title, cwd=excluded.cwd, folder_id=excluded.folder_id,
                  pinned=excluded.pinned, untitled=excluded.untitled,
                  plan_scan_baseline=excluded.plan_scan_baseline, plan_path=excluded.plan_path,
                  workspace=excluded.workspace, project=excluded.project,
                  created_at=excluded.created_at, updated_at=excluded.updated_at,
-                 llm_history=excluded.llm_history, msg_seq=excluded.msg_seq""",
+                 llm_history=excluded.llm_history, llm_no=excluded.llm_no, msg_seq=excluded.msg_seq""",
             [sid, item.get("title", "New chat"), item.get("cwd", ""), item.get("folder_id", "") or "",
              bool(item.get("pinned")), bool(item.get("untitled")),
              int(item.get("plan_scan_baseline") or 0), item.get("plan_path", "") or "",
              item.get("workspace", "") or "", item.get("project", "") or "",
              float(item.get("created_at") or time.time()), float(item.get("updated_at") or time.time()),
              json.dumps(llm_hist, ensure_ascii=False, default=str) if llm_hist is not None else None,
+             item.get("llm_no"),
              int(item.get("msg_seq", 0))],
         )
         self._w("DELETE FROM messages WHERE session_id=?", [sid])
@@ -651,7 +660,7 @@ class DBStore:
     def load_all_sessions(self, with_messages: bool = True) -> List[dict]:
         rows = self._q(
             "SELECT id,title,cwd,folder_id,pinned,untitled,plan_scan_baseline,plan_path,"
-            "workspace,project,created_at,updated_at,llm_history,msg_seq FROM sessions"
+            "workspace,project,created_at,updated_at,llm_history,llm_no,msg_seq FROM sessions"
         )
         counts = {} if with_messages else self.count_messages()
         out = []
@@ -662,7 +671,8 @@ class DBStore:
                 "pinned": r[4], "untitled": r[5], "plan_scan_baseline": r[6],
                 "plan_path": r[7], "workspace": r[8], "project": r[9],
                 "created_at": r[10], "updated_at": r[11], "llm_history": llm_history,
-                "msg_seq": r[13],
+                "llm_no": r[13],
+                "msg_seq": r[14],
             }
             if with_messages:
                 item["messages"] = self._get_messages(r[0], 0, 0)
