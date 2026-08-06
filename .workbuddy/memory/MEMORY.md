@@ -28,6 +28,7 @@
 - `USER_DATA_ENTRIES`=temp/sche_tasks/memory/mykey.py/.file_favorites.json，升级走合并模式（勿 remove_dir_all+stash，曾丢会话）。前端 POST 回写防呆：空不覆盖+写前 .bak。
 
 ## 其他
+- **设置弹窗=5 tab**（2026-08-05 起）：通用/模型/快捷键/定时任务/后台服务（原独立"服务"导航块已移除，定时任务→`settings-panel-tasks`，后台服务→`settings-panel-services`）。settings-nav 按钮**无 id、用 `data-settings-tab` 属性**区分（panel id 才是 `settings-panel-<tab>`）。外部入口 `window.openTasksSettings()` / `window.openServicesSettings('channels'|'status')`；tasks 面板含 list/history 子 tab，services 面板含 `.svc-tab`（消息通道/状态面板）+ `.svc-panel` 子区块。services 迁移 WIP 由并行会话 llmNo 写码（v343），本会话接管验证/部署/提交（a70210d）。
 - 目录名纯 ASCII `GenericAgent`。用户 plugin/skill 在 `app-support/ext_plugins/`（持久）。
 - 多 `.app` 共用 bundle id → 单实例只显最先启动的；`lsof -i :14168` 排查。
 - 调试忌讳：勿手动 exec 二进制做第二实例（BrokenPipeError 假故障）；测本地端口必须 `curl --noproxy '*'`（shell 有 HTTP_PROXY）。

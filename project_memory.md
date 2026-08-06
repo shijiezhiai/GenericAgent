@@ -14,3 +14,9 @@
 - mykey.py 顶层新增 `GLOBAL_DEFAULT={'thinking_display':'brief','thinking_display_chars':400}`，作用于所有 backend session；优先级: backend 自身字段 > GLOBAL_DEFAULT > 内置默认 full；/session.xxx 会话级 setattr 最高。
 - 实现: llmcore.py resolve_session 构造 session 时 merge GLOBAL_DEFAULT 的 thinking 字段（commit d3bc71c，仅改 llmcore.py+模板 zh/en，all:false 避开并行 WIP）。mykey.py 不入 git（本地配置）。
 - ⚠️ GLOBAL_DEFAULT 变量名不能含 api/config/cookie，否则被 load_llm_sessions 误当 backend；改默认输出模式只需改 mykey.py 里 GLOBAL_DEFAULT['thinking_display']，重启生效。
+
+## 2026-08-05 定时任务并入设置弹窗第4个 tab（tasks→settings）
+- index.html：settings-nav 加"定时任务"按钮；删独立"服务"导航块；tasks 页（list/history 子 tab）迁入 `settings-panel-tasks`。app.js：`set.tabTasks` i18n、`window.openTasksSettings()` 全局入口、switchSettingsTab 支持 tasks、services-btn 绑定移除；`app.js?v=342`。commit/checkpoint `4114e25`（分支 feat/memory-project-parity，all:false 仅 app.js+index.html）。
+- **坑**：settings-nav 按钮**无 id，用 `data-settings-tab` 属性**（aria-labelledby 引用的 settings-tab-* id 悬空但无害）；查 DOM 时别用 getElementById('settings-tab-tasks')。
+- 验证链：node --check → 三处部署 md5 一致 → curl served v342 → chrome 实开 14168 运行时验证（4 按钮/panel 切换/历史 84 条/子 tab/openTasksSettings 直达）全绿。
+- index.html 混入并行会话 llmNo 两行（brand-name + styles v262），已随部署；styles.css 改动属 llmNo 未纳入本提交。工作笔记：temp/tasks_tab_work_notes.md。
