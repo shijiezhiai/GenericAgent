@@ -455,7 +455,7 @@ const I18N = {
     'shortcut.askConfirm': '是否在桌面创建 GenericAgent 快捷方式？',
     'appearance.light': '浅色', 'appearance.dark': '深色',
     'set.noModels': '暂无模型，点击下方添加',
-    'set.tabGeneral': '通用', 'set.tabModels': '模型', 'set.tabShortcuts': '快捷键', 'set.tabTasks': '定时任务',
+    'set.tabGeneral': '通用', 'set.tabModels': '模型', 'set.tabShortcuts': '快捷键', 'set.tabTasks': '定时任务', 'set.tabServices': '后台服务',
     'set.appearanceDesc': '选择应用界面的颜色主题。', 'set.fontSizeDesc': '调整对话正文的显示字号。', 'set.langDesc': '选择应用界面与系统提示的显示语言。',
     'set.chatFilesDirDesc': '对话中上传文件与生成文件的保存目录。',
     'set.thinkingDisplay': '思考过程展示', 'set.thinkingDisplayDesc': '控制 AI 思考过程的显示模式。',
@@ -726,7 +726,7 @@ const I18N = {
     'shortcut.askConfirm': 'Create a desktop shortcut for GenericAgent?',
     'appearance.light': 'Light', 'appearance.dark': 'Dark',
     'set.noModels': 'No models yet — add one below',
-    'set.tabGeneral': 'General', 'set.tabModels': 'Models', 'set.tabShortcuts': 'Shortcuts', 'set.tabTasks': 'Tasks',
+    'set.tabGeneral': 'General', 'set.tabModels': 'Models', 'set.tabShortcuts': 'Shortcuts', 'set.tabTasks': 'Tasks', 'set.tabServices': 'Services',
     'set.appearanceDesc': 'Choose the app color theme.', 'set.fontSizeDesc': 'Adjust the chat text size.', 'set.langDesc': 'Select the language for the app interface and system prompts.',
     'set.chatFilesDirDesc': 'Directory for uploaded and generated chat files.',
     'set.modelDesc': 'Manage available LLM model profiles. The selected one is the default for new chats; existing chats keep theirs.',
@@ -1219,9 +1219,9 @@ const closeModals = () => document.querySelectorAll('.modal').forEach(m => {
 });
 const bindClick = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
 function openServiceManagerFromSettings() {
-  closeModals();
-  gaGoPage('services');
+  /* 后台服务已迁入设置弹窗：停留在弹窗内直接切到 services tab 的状态面板 */
   setSvcTab('status');
+  switchSettingsTab('services');
   void loadStatusPanel();
 }
 bindClick('add-model-btn', (e) => {
@@ -11122,6 +11122,13 @@ function openTasksSettings() {
   openModal('settings-modal');
   switchSettingsTab('tasks');
 }
+/* 后台服务已并入设置弹窗第 5 个 tab；外部入口（通用设置的状态面板按钮 / 启动恢复）统一从这里打开 */
+function openServicesSettings(tab) {
+  openModal('settings-modal');
+  if (tab) setSvcTab(tab);
+  switchSettingsTab('services');
+}
+window.openServicesSettings = openServicesSettings;
 function switchSettingsTab(tab) {
   document.querySelectorAll('#settings-nav .settings-nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.settingsTab === tab);
@@ -11130,6 +11137,7 @@ function switchSettingsTab(tab) {
     panel.classList.toggle('active', panel.id === 'settings-panel-' + tab);
   });
   if (tab === 'tasks') loadTasksPage();
+  if (tab === 'services') refreshServicesPanel();
 }
 (function bindSettingsNav() {
   const nav = document.getElementById('settings-nav');
@@ -12157,7 +12165,7 @@ const tokResetBtn=document.getElementById('tok-reset');
 if(tokResetBtn)tokResetBtn.addEventListener('click',()=>{if(fpSince)fpSince.clear();if(fpUntil)fpUntil.clear();_tokPage=0;loadTokenPage();});
 
 /* ─── Token trend chart ─── */
-nav.addEventListener('click',(e)=>{const item=e.target.closest('.nav-item');if(item&&item.dataset.page==='token'){if(_tokTab==='conductor')loadConductorTokens();else loadTokenPage();}if(item&&item.dataset.page==='services')refreshServicesPanel();if(item&&item.dataset.page==='files')loadFilesPage();if(item&&item.dataset.page==='skillhub')loadSkillHub();if(item&&item.dataset.page==='experts')loadExperts();});
+nav.addEventListener('click',(e)=>{const item=e.target.closest('.nav-item');if(item&&item.dataset.page==='token'){if(_tokTab==='conductor')loadConductorTokens();else loadTokenPage();}if(item&&item.dataset.page==='files')loadFilesPage();if(item&&item.dataset.page==='skillhub')loadSkillHub();if(item&&item.dataset.page==='experts')loadExperts();});
 /* ═══════════════ 定时任务 ═══════════════ */
 let _taskTab = 'list';
 const taskTabs = document.getElementById('task-tabs');
@@ -13288,7 +13296,8 @@ let _svcTab = 'channels';
 const svcTabsEl = document.getElementById('svc-tabs');
 
 function isServicesPageActive() {
-  return !!document.querySelector('.page[data-page="services"].active');
+  /* 后台服务已迁入设置弹窗：active = services panel 可见 */
+  return !!document.querySelector('#settings-panel-services.active');
 }
 function isSvcTab(tab) {
   return isServicesPageActive() && _svcTab === tab;
@@ -13544,9 +13553,10 @@ function showChanToast(title, detail, kind) {
     // so the dialog always renders on top — a native dialog from the Rust startup thread had no
     // parent window and got buried behind the main window on first launch.
     maybeAskDesktopShortcut();
-    // 恢复上次查看的功能页（聊天/后台服务/协作/项目/令牌/文件；任务页已并入设置弹窗）
+    // 恢复上次查看的功能页（聊天/协作/项目/令牌/文件；任务页与后台服务已并入设置弹窗）
     const savedPage = localStorage.getItem(STORE.page);
     if (savedPage === 'tasks') openTasksSettings();
+    else if (savedPage === 'services') openServicesSettings();
     else if (savedPage && savedPage !== 'chat' && nav?.querySelector(`.nav-item[data-page="${savedPage}"]`)) {
       gaGoPage(savedPage);
     }

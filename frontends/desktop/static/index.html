@@ -136,10 +136,6 @@
           <span data-i18n="nav.collab"></span>
           <span id="collab-badge" class="collab-nav-badge" hidden></span>
         </a>
-        <a class="nav-item" data-page="services">
-          <span class="ic" data-ga-icon="broadcast"></span>
-          <span data-i18n="nav.services"></span>
-        </a>
         <a class="nav-item" data-page="project">
           <span class="ic" data-ga-icon="folderSimple"></span>
           <span data-i18n="nav.project"></span>
@@ -363,33 +359,6 @@
             </div>
           </div>
           </div>
-          </div>
-        </section>
-
-        <!-- 后台服务：消息通道 + 状态面板 -->
-        <section class="page" data-page="services">
-          <div class="page-top">
-            <button type="button" class="pt-icon pt-sb-toggle" aria-label="toggle sidebar">
-              <span data-ga-icon="caretLeft"></span>
-            </button>
-            <span class="pt-spacer"></span>
-            <button type="button" class="pt-icon pt-rp-toggle" aria-label="toggle conversations">
-              <span data-ga-icon="caretRight"></span>
-            </button>
-          </div>
-          <div class="page-pad">
-            <div class="page-title" data-i18n="page.services.title"></div>
-            <div class="svc-tabs" id="svc-tabs">
-              <button type="button" class="svc-tab active" data-tab="channels" data-i18n="page.channels.title"></button>
-              <button type="button" class="svc-tab" data-tab="status" data-i18n="page.status.title"></button>
-            </div>
-            <div class="svc-panel active" data-svc-panel="channels">
-              <div class="list" id="chan-list"></div>
-              <div class="list-empty" id="chan-empty" hidden data-i18n="ch.empty"></div>
-            </div>
-            <div class="svc-panel" data-svc-panel="status">
-              <div class="list" id="status-list"></div>
-            </div>
           </div>
         </section>
 
@@ -1797,6 +1766,7 @@
           <button class="settings-nav-item" type="button" data-settings-tab="models" data-i18n="set.tabModels">模型</button>
           <button class="settings-nav-item" type="button" data-settings-tab="shortcuts" data-i18n="set.tabShortcuts">快捷键</button>
           <button class="settings-nav-item" type="button" data-settings-tab="tasks" data-i18n="set.tabTasks">定时任务</button>
+          <button class="settings-nav-item" type="button" data-settings-tab="services" data-i18n="set.tabServices">后台服务</button>
         </nav>
         <div class="settings-panels" id="settings-panels">
           <section class="settings-panel active" id="settings-panel-general" aria-labelledby="settings-tab-general">
@@ -1954,6 +1924,19 @@
             <div class="task-panel" data-task-panel="history">
               <div class="task-history-list" id="task-history-list"></div>
               <div class="task-history-empty" id="task-history-empty" hidden data-i18n="page.tasks.historyEmpty"></div>
+            </div>
+          </section>
+          <section class="settings-panel" id="settings-panel-services" aria-labelledby="settings-tab-services">
+            <div class="svc-tabs" id="svc-tabs">
+              <button type="button" class="svc-tab active" data-tab="channels" data-i18n="page.channels.title"></button>
+              <button type="button" class="svc-tab" data-tab="status" data-i18n="page.status.title"></button>
+            </div>
+            <div class="svc-panel active" data-svc-panel="channels">
+              <div class="list" id="chan-list"></div>
+              <div class="list-empty" id="chan-empty" hidden data-i18n="ch.empty"></div>
+            </div>
+            <div class="svc-panel" data-svc-panel="status">
+              <div class="list" id="status-list"></div>
             </div>
           </section>
         </div>
@@ -2477,6 +2460,6 @@
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js" crossorigin="anonymous"></script>
 <script src="phosphor-icons.js?v=7"></script>
 <script src="ga-ports.js"></script>
-<script src="app.js?v=342"></script>
+<script src="app.js?v=343"></script>
 </body>
 </html>
