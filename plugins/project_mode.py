@@ -12,11 +12,14 @@
   - 进入：agent 读 project_mode_sop，经用户确认后写锚（code_run 中 os.getppid() 即宿主 pid）
   - 退出：删除该文件。插件加载时清扫旧版无后缀锚与自己 pid 的前世残留（不碰他进程的锚）
 
-目录约定：
-  temp/projects/<项目名>/project_memory.md   单文件全文注入的项目记忆
-  temp/projects/<项目名>/                     项目私域文件（todo 等），解决多项目覆盖
+目录约定（两个根，别混）：
+  元数据根 temp/projects/<项目名>/  project_memory.md（注入指针的项目记忆）、instruction.md、
+                                    .asset_refs.json、.workspace.json。前端读写同一处。
+  产物根                            项目绑定了 workspace 就是 workspace 真实目录，否则同元数据根。
+                                    注入给模型的落盘位置，见 _output_root。
 """
 import os
+import sys
 import json
 import plugins.hooks as hooks
 
@@ -62,7 +65,44 @@ def _active_project(ctx=None):
 
 
 def _project_dir(name):
-    return os.path.join(_TEMP, 'projects', name)
+    """项目元数据根（记忆/指令/资产引用）。junction 项目解析到真实目录：Windows
+    junction 下 os.path.islink 恒为 False，故以 realpath 是否改变来判定链接。"""
+    p = os.path.join(_TEMP, 'projects', name)
+    r = os.path.realpath(p)
+    return r if r != os.path.abspath(p) and os.path.isdir(r) else p
+
+
+def _registered_ws_path(ws):
+    """注册表里的 workspace 真实路径；取不到返回 ''。
+
+    只认 sys.modules 里已有的 workspace_cmd（桌面端内核 desktop_bridge 以顶层名
+    import 并 attach 了 DuckDB，注册表已从 temp/workspaces.json 迁进库）。
+    **不主动 import**：换个包名 import 会得到另一个模块实例，_store 为 None 只能读到
+    已 migrated 的空文件，反而把正确的 junction 结果覆盖掉。"""
+    reg = getattr(sys.modules.get('workspace_cmd'), 'registry_load', None)
+    return ((reg().get(ws) or {}).get('path') or '') if callable(reg) else ''
+
+
+def _output_root(name):
+    """产物落地根：项目绑定了 workspace 就用 workspace 真实目录，否则退回元数据根。
+
+    workspace 真实路径两条来源，先 junction 后注册表：junction 是文件系统真源、
+    CLI/TUI/桌面端同源；但它常被 workspace_cmd.cleanup() 摘掉（未注册即删），
+    所以缺失时再查注册表。两条都落空才退回元数据根。
+    记忆不跟着搬：一个 workspace 可被多个项目绑定（见 _workspace_project_bindings），
+    合并会让项目记忆互相污染。"""
+    pdir = _project_dir(name)
+    try:
+        with open(os.path.join(pdir, '.workspace.json'), encoding='utf-8') as f:
+            ws = ((json.load(f) or {}).get('workspace') or '').strip()
+    except (OSError, ValueError):
+        return pdir
+    if not ws:
+        return pdir
+    ws_dir = _project_dir(ws)
+    if not os.path.isdir(ws_dir):
+        ws_dir = _registered_ws_path(ws)
+    return ws_dir if ws_dir and os.path.isdir(ws_dir) else pdir
 
 
 def _mem_path(name):
@@ -125,7 +165,7 @@ def _build_injection(name):
     L1（每轮全量注入）：规范/规则/操作说明 + 记忆文件指针（含行数/大小线索）。
     L2（按需）：project_memory.md 全文不注入，由模型自行判断是否用 file 工具去读。
     """
-    pdir = _project_dir(name)
+    out_root = _output_root(name)
     mem_path = _mem_path(name)
     inst_path = _inst_path(name)
     exists, lines, nbytes = _memory_stat(name)
@@ -155,7 +195,8 @@ def _build_injection(name):
         f"[PROJECT MODE: {name}]\n"
         f"你正在「{name}」项目模式中。\n\n"
         f"## 规则\n"
-        f"- 项目私域目录：{pdir}（todo、草稿、产物一律放这里，勿放 temp 根目录）\n"
+        f"- 项目产物目录：{out_root}（文档、todo、草稿、脚本一律放这里，相对路径以它为根；"
+        f"勿写进 GA 的 temp 目录）\n"
         f"- {mem_hint}\n"
         f"{inst_block}{refs_block}\n"
         f"## 收尾纪律\n"
