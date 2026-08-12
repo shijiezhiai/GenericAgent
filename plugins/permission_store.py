@@ -39,29 +39,35 @@ def _session_id():
 def _conn():
     if not _HAVE_DUCKDB:
         return None
-    os.makedirs(os.path.dirname(_DB), exist_ok=True)
-    c = duckdb.connect(_DB)
-    c.execute(
-        "CREATE TABLE IF NOT EXISTS permission_audit ("
-        " id BIGINT AUTO_INCREMENT PRIMARY KEY,"
-        " ts DOUBLE, session_id VARCHAR, tool VARCHAR, target VARCHAR,"
-        " action VARCHAR, decision VARCHAR, mode VARCHAR, frontend VARCHAR, detail VARCHAR)"
-    )
-    c.execute(
-        "CREATE TABLE IF NOT EXISTS permission_rules ("
-        " id BIGINT AUTO_INCREMENT PRIMARY KEY,"
-        " mode VARCHAR, tool VARCHAR, target_glob VARCHAR, decision VARCHAR,"
-        " created_at DOUBLE, note VARCHAR)"
-    )
-    c.execute(
-        "CREATE TABLE IF NOT EXISTS permission_config ("
-        " key VARCHAR PRIMARY KEY, value VARCHAR)"
-    )
-    # seed the persisted default mode once
-    c.execute(
-        "INSERT OR IGNORE INTO permission_config(key, value) VALUES('default_mode', ?)",
-        [DEFAULT_MODE])
-    return c
+    # Any connection/setup failure (e.g. bad DDL, locked/corrupt file) must NOT
+    # propagate — callers fall back to the JSON store when c is None. This is what
+    # keeps the broker from fail-closing every call when the DB is unavailable.
+    try:
+        os.makedirs(os.path.dirname(_DB), exist_ok=True)
+        c = duckdb.connect(_DB)
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS permission_audit ("
+            " id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,"
+            " ts DOUBLE, session_id VARCHAR, tool VARCHAR, target VARCHAR,"
+            " action VARCHAR, decision VARCHAR, mode VARCHAR, frontend VARCHAR, detail VARCHAR)"
+        )
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS permission_rules ("
+            " id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,"
+            " mode VARCHAR, tool VARCHAR, target_glob VARCHAR, decision VARCHAR,"
+            " created_at DOUBLE, note VARCHAR)"
+        )
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS permission_config ("
+            " key VARCHAR PRIMARY KEY, value VARCHAR)"
+        )
+        # seed the persisted default mode once
+        c.execute(
+            "INSERT OR IGNORE INTO permission_config(key, value) VALUES('default_mode', ?)",
+            [DEFAULT_MODE])
+        return c
+    except Exception:
+        return None
 
 
 def record_audit(tool, target="", action="call", decision="allow",
