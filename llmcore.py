@@ -93,9 +93,10 @@ def _sanitize_leading_user_msg(msg):
     return msg
 
 _oldprint = print
-def safeprint(*argv):
-    try: _oldprint(*argv)
-    except OSError: pass
+def safeprint(*argv, **kw):
+    kw.setdefault('file', sys.stderr)  # 红线：内核 stdout 是 JSON-RPC 管道，日志混入会错帧断会话
+    try: _oldprint(*argv, **kw)
+    except (OSError, ValueError): pass  # 管道已断/句柄已关，日志本身不值得抛
 print = safeprint
 
 # ---- P1: digest folding (replaces blind pop with summary retention) ----

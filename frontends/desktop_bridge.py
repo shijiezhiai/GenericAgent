@@ -4181,6 +4181,97 @@ async def project_library_patch_handler(request):
                     "name": item.get("name"), "parent_id": item.get("parent_id", "")})
 
 
+def _refresh_library_folder(items, folder_id, folder_path, depth=0, max_depth=8):
+    """递归同步一个文件系统目录资料库节点：新增磁盘上有但库里缺的直接子项、移除磁盘已删的子项（含后代）、校正 has_children。
+
+    直接修改传入的 items 列表，返回 (added, removed)。
+    仅对已有条目做增量对账，不改动未展开的深层次节点（保持与懒加载一致的边界）。
+    """
+    if depth > max_depth or not folder_path or not os.path.isdir(folder_path):
+        return 0, 0
+    import time as _time
+    now = int(_time.time())
+    added = 0
+    removed = 0
+    MAX_CHILDREN = 1000
+    # ① 移除磁盘上已不存在的直接子项（连同其后代），消除「幽灵条目」
+    direct_children = [it for it in items if (it.get("parent_id") or "") == folder_id]
+    stale_ids = set()
+    for ch in direct_children:
+        cp = ch.get("path") or ""
+        if ch.get("type") == "folder" or ch.get("is_dir"):
+            still_there = bool(cp) and os.path.isdir(cp)
+        else:
+            still_there = bool(cp) and os.path.isfile(cp)
+        if not still_there:
+            stale_ids.add(ch.get("id"))
+    if stale_ids:
+        for sid in list(stale_ids):
+            for d in _library_descendants(items, sid):
+                stale_ids.add(d)
+        items[:] = [it for it in items if it.get("id") not in stale_ids]
+        removed += len(stale_ids)
+    # ② 新增磁盘上有但库里缺的直接子项（按 path 去重）
+    existing = _library_existing_keys(items)
+    cnt = 0
+    for is_dir, cname, cfp in _list_dir_direct_entries(folder_path):
+        if cnt >= MAX_CHILDREN:
+            break
+        ckey = ("folder:" if is_dir else "file:") + cfp
+        if ckey in existing:
+            continue
+        existing.add(ckey)
+        items.append({
+            "id": "lib_" + uuid.uuid4().hex[:12],
+            "type": "folder" if is_dir else "file",
+            "name": cname, "path": cfp, "url": "", "desc": "",
+            "added_at": now, "parent_id": folder_id,
+            "has_children": bool(is_dir and _dir_has_children(cfp)),
+            "is_dir": is_dir,
+        })
+        added += 1
+        cnt += 1
+    # ③ 校正本节点 has_children
+    node = next((it for it in items if it.get("id") == folder_id), None)
+    if node is not None:
+        node["has_children"] = any((it.get("parent_id") or "") == folder_id for it in items)
+    # ④ 递归同步已入库的后代文件夹，使整棵已展开子树与磁盘一致
+    for ch in [it for it in items if (it.get("parent_id") or "") == folder_id]:
+        if (ch.get("is_dir") or ch.get("type") == "folder") and ch.get("path") and os.path.isdir(ch.get("path")):
+            a, r = _refresh_library_folder(items, ch["id"], ch["path"], depth + 1, max_depth)
+            added += a
+            removed += r
+    return added, removed
+
+
+async def project_library_refresh_handler(request):
+    """刷新文件夹类资料库条目，使其与文件系统最新内容同步（POST /projects/{name}/library/{id}/refresh）。
+
+    仅对「真实文件系统目录」(is_dir/type=folder 且 path 指向存在的目录) 生效；
+    虚拟资料夹(libfolder) 与文件条目不适用，返回 400。
+    """
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.json_response({"error": "invalid project name"}, status=400, headers=cors_headers())
+    pdir = os.path.join(manager.ga_root, 'temp', 'projects', name)
+    if not os.path.isdir(pdir):
+        return web.json_response({"error": "project not found", "name": name}, status=404, headers=cors_headers())
+    item_id = request.match_info.get("id", "")
+    item, items, _idx = _library_find_item(pdir, item_id)
+    if item is None:
+        return web.json_response({"error": "item not found"}, status=404, headers=cors_headers())
+    # 只对真实文件系统目录生效（虚拟资料夹无 path，文件条目无子目录结构）
+    folder_path = item.get("path") or ""
+    is_fs_dir = bool(item.get("is_dir")) or item.get("type") == "folder"
+    if not (is_fs_dir and folder_path and os.path.isdir(folder_path)):
+        return web.json_response({"error": "refresh only applies to existing filesystem folders"},
+                                  status=400, headers=cors_headers())
+    added, removed = _refresh_library_folder(items, item_id, folder_path)
+    if not _write_library(pdir, items):
+        return web.json_response({"error": "write failed"}, status=500, headers=cors_headers())
+    return json_ok({"ok": True, "name": name, "id": item_id, "added": added, "removed": removed, "items": items})
+
+
 async def project_library_open_handler(request):
     """用默认应用程序打开文件（POST /projects/{name}/library/{id}/open）。文件夹不支持。"""
     name = request.match_info.get("name", "")
@@ -5077,6 +5168,470 @@ async def project_asset_ref_patch_handler(request):
     if not _write_asset_refs(pdir, items):
         return json_ok({"error": "write failed"}, status=500)
     return json_ok({"ok": True, "item": target})
+
+
+# ---- 项目资产预览：按类型分发（md 渲染 / 图片 PDF 内联 / 文本 / 二进制）----
+# 复用资料库预览的类型分发逻辑，并把白名单扩展到：项目目录 + 本地引用目录 + workspace 路径，
+# 解决「引用目录里的 md 等文件位于 ga_root 之外、被通用 /api/files/read 白名单拒掉、误显为二进制文件」的问题。
+_ASSET_IMG_EXTS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg',
+                   'avif', 'heic', 'heif', 'tif', 'tiff'}
+_ASSET_MD_EXTS = {'md', 'markdown', 'mdx'}
+# 代码类：预览时做语法高亮（kind=code，附带 lang 提示）
+_ASSET_CODE_EXTS = {
+    'py', 'js', 'jsx', 'ts', 'tsx', 'go', 'rs', 'java', 'c', 'h', 'cpp', 'cc', 'hpp',
+    'cs', 'php', 'rb', 'swift', 'kt', 'kts', 'scala', 'lua', 'r', 'm', 'mm',
+    'json', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'env',
+    'sh', 'bash', 'zsh', 'ps1', 'bat', 'cmd',
+    'sql', 'html', 'htm', 'css', 'scss', 'less', 'xml', 'vue', 'svelte',
+    'dockerfile', 'makefile', 'cmake', 'gradle', 'proto', 'graphql', 'gql',
+}
+# docx：后端用纯标准库转 HTML（kind=docx，content=html）
+_ASSET_DOCX_EXTS = {'docx'}
+# 扩展名 → highlight.js 语言名（缺省走自动识别）
+_CODE_LANG_MAP = {
+    'py': 'python', 'js': 'javascript', 'jsx': 'javascript', 'ts': 'typescript',
+    'tsx': 'typescript', 'go': 'go', 'rs': 'rust', 'java': 'java', 'c': 'c', 'h': 'c',
+    'cpp': 'cpp', 'cc': 'cpp', 'hpp': 'cpp', 'cs': 'csharp', 'php': 'php', 'rb': 'ruby',
+    'swift': 'swift', 'kt': 'kotlin', 'kts': 'kotlin', 'scala': 'scala', 'lua': 'lua',
+    'r': 'r', 'm': 'objectivec', 'mm': 'objectivec', 'json': 'json', 'yaml': 'yaml',
+    'yml': 'yaml', 'toml': 'ini', 'ini': 'ini', 'cfg': 'ini', 'conf': 'ini', 'env': 'bash',
+    'sh': 'bash', 'bash': 'bash', 'zsh': 'bash', 'ps1': 'powershell', 'bat': 'dos',
+    'cmd': 'dos', 'sql': 'sql', 'html': 'xml', 'htm': 'xml', 'css': 'css', 'scss': 'scss',
+    'less': 'less', 'xml': 'xml', 'vue': 'xml', 'svelte': 'xml', 'dockerfile': 'dockerfile',
+    'makefile': 'makefile', 'cmake': 'cmake', 'gradle': 'groovy', 'proto': 'protobuf',
+    'graphql': 'graphql', 'gql': 'graphql',
+}
+
+
+def _asset_preview_roots(name, pdir, ga_root):
+    """返回项目资产预览允许读取的根目录集合（绝对路径，已 resolve 去重）。"""
+    roots = [pdir.resolve()]
+    # 已注册的本地引用目录（用户显式加入的本地目录，可能位于 ga_root 之外）
+    try:
+        for r in _read_asset_refs(pdir):
+            rp = (r.get("path") or "").strip()
+            if rp:
+                roots.append(Path(rp).resolve())
+    except Exception:
+        pass
+    # workspace 路径（只读资产）
+    try:
+        ws_file = pdir / ".workspace.json"
+        if ws_file.exists():
+            import json as _json
+            ws_data = _json.loads(ws_file.read_text(encoding="utf-8"))
+            ws_name = ws_data.get("workspace") or ""
+            if ws_name:
+                from frontends import workspace_cmd as _wsc
+                for ent in _wsc.registry_list():
+                    if ent.get("name") == ws_name and ent.get("path"):
+                        roots.append(Path(ent.get("path")).resolve())
+                        break
+    except Exception:
+        pass
+    # 既有的 ga_root 白名单（上传目录 / sche_tasks / chatFiles / ga_root 下非敏感文件）
+    roots.append((ga_root / "temp" / "desktop_uploads").resolve())
+    roots.append((ga_root / "sche_tasks").resolve())
+    try:
+        roots.append(resolve_chat_files_dir(ga_root).resolve())
+    except Exception:
+        pass
+    seen, uniq = set(), []
+    for r in roots:
+        try:
+            if r not in seen:
+                seen.add(r)
+                uniq.append(r)
+        except Exception:
+            pass
+    return uniq
+
+
+def _asset_preview_allowed(target, roots):
+    """target 是否在任一允许根下，且非敏感目录/后缀。"""
+    target = target.resolve()
+    if target.suffix.lower() in _PREVIEW_DENY_SUFFIX:
+        return False
+    for root in roots:
+        try:
+            rel = target.relative_to(root)
+        except ValueError:
+            continue
+        for part in rel.parts:
+            if part.startswith('.'):
+                return False
+            if part in _PREVIEW_DENY_DIRS:
+                return False
+        return True
+    return False
+
+
+async def project_asset_file_handler(request):
+    """GET /projects/{name}/assets/file?path=... - 读取项目资产文件用于预览，按类型分发。
+    返回 {ok, kind, content?, name, size, truncated, lang?}
+      kind: markdown | code | docx | image | pdf | text | binary
+    kind=image/pdf 时前端改用 /projects/{name}/assets/raw 内联；kind=binary 时回退下载。
+    kind=code 时附带 lang（highlight.js 语言名）；kind=docx 时 content 为 HTML。"""
+    from urllib.parse import unquote
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return json_ok({"error": "invalid project name"}, status=400)
+    ga_root = Path(DEFAULT_GA_ROOT)
+    pdir = manager._project_dir(name)
+    if not pdir.is_dir():
+        return json_ok({"error": "project not found", "name": name}, status=404)
+    raw = unquote(request.query.get("path") or "")
+    if not raw:
+        return json_ok({"error": "missing path"}, status=400)
+    target = Path(raw)
+    if not target.is_absolute():
+        target = ga_root / target
+    target = target.resolve()
+    roots = _asset_preview_roots(name, pdir, ga_root)
+    if not _asset_preview_allowed(target, roots):
+        return json_ok({"ok": False, "error": "path not allowed"}, status=403)
+    if not target.exists() or not target.is_file():
+        return json_ok({"ok": False, "error": "file not found"}, status=404)
+    size = target.stat().st_size
+    ext = (target.name.rsplit('.', 1)[-1].lower() if '.' in target.name else '')
+    if ext in _ASSET_IMG_EXTS:
+        return json_ok({"ok": True, "kind": "image", "name": target.name, "size": size})
+    if ext == 'pdf':
+        return json_ok({"ok": True, "kind": "pdf", "name": target.name, "size": size})
+    # docx：纯标准库转 HTML（失败则落到下方二进制分支走下载）
+    if ext in _ASSET_DOCX_EXTS:
+        try:
+            html = _docx_to_html(target)
+        except Exception:
+            html = None
+        if html:
+            return json_ok({"ok": True, "kind": "docx", "content": html,
+                            "name": target.name, "size": size, "truncated": False})
+    if size > 2 * 1024 * 1024:
+        return json_ok({"ok": True, "kind": "binary", "name": target.name, "size": size})
+    try:
+        with open(target, 'rb') as f:
+            head = f.read(min(size, 8192))
+        is_binary = (b'\x00' in head) and ext not in _ASSET_IMG_EXTS
+        if is_binary:
+            return json_ok({"ok": True, "kind": "binary", "name": target.name, "size": size})
+        with open(target, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read()
+        truncated = False
+        if size > 200 * 1024:
+            content = content[:200 * 1024]
+            truncated = True
+        if ext in _ASSET_CODE_EXTS:
+            lang = _CODE_LANG_MAP.get(ext, '')
+            return json_ok({"ok": True, "kind": "code", "content": content, "lang": lang,
+                            "name": target.name, "size": size, "truncated": truncated})
+        kind = 'markdown' if ext in _ASSET_MD_EXTS else 'text'
+        return json_ok({"ok": True, "kind": kind, "content": content,
+                        "name": target.name, "size": size, "truncated": truncated})
+    except OSError as e:
+        return json_ok({"ok": False, "error": "read failed: %s" % e}, status=500)
+
+
+async def project_asset_raw_handler(request):
+    """GET /projects/{name}/assets/raw?path=... - 流式返回项目资产文件原始字节（图片/PDF/二进制下载）。"""
+    from urllib.parse import unquote
+    import mimetypes
+    name = request.match_info.get("name", "")
+    if not name or '/' in name or '\\' in name or '..' in name or name.startswith('.'):
+        return web.Response(status=400, text="invalid project name", headers=cors_headers())
+    ga_root = Path(DEFAULT_GA_ROOT)
+    pdir = manager._project_dir(name)
+    if not pdir.is_dir():
+        return web.Response(status=404, text="project not found", headers=cors_headers())
+    raw = unquote(request.query.get("path") or "")
+    if not raw:
+        return web.Response(status=400, text="missing path", headers=cors_headers())
+    target = Path(raw)
+    if not target.is_absolute():
+        target = ga_root / target
+    target = target.resolve()
+    roots = _asset_preview_roots(name, pdir, ga_root)
+    if not _asset_preview_allowed(target, roots):
+        return web.Response(status=403, text="path not allowed", headers=cors_headers())
+    if not target.exists() or not target.is_file():
+        return web.Response(status=404, text="file not found", headers=cors_headers())
+    size = target.stat().st_size
+    if size > 50 * 1024 * 1024:
+        return web.Response(status=413, text="file too large", headers=cors_headers())
+    ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+    _EXT_CT = {'.pdf': 'application/pdf', '.svg': 'image/svg+xml',
+               '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+               '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+               '.ico': 'image/x-icon'}
+    ctype = _EXT_CT.get(target.suffix.lower(), ctype)
+    data = target.read_bytes()
+    return web.Response(body=data, content_type=ctype,
+                        headers={"Content-Disposition": "inline", "Cache-Control": "no-cache"})
+
+
+def _docx_to_html(path):
+    """Convert .docx → HTML using only the stdlib (zipfile + xml.etree).
+    支持：标题(按样式)、段落、run 的 粗体/斜体/下划线/删除线/颜色、超链接、
+    项目符号与编号列表、表格、以及内联图片(data: URI)。失败返回 None。"""
+    import os, base64, re, zipfile, xml.etree.ElementTree as ET
+    W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+    R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+    def w(t): return '{%s}%s' % (W, t)
+    def r(t): return '{%s}%s' % (R, t)
+    def local(tag):
+        return tag.rsplit('}', 1)[-1] if '}' in tag else tag
+    def esc(s):
+        return (s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    def ensure_xmlns(raw):
+        # 补齐常见命名空间声明，避免手写/异常 docx 因未声明前缀（如 r:id）导致 XML 解析失败
+        if isinstance(raw, (bytes, bytearray)):
+            raw = raw.decode('utf-8', 'replace')
+        nsmap = {
+            'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+            'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+            'wp': 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+            'pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture',
+            'v': 'urn:schemas-microsoft-com:vml',
+        }
+        extra = ['xmlns:%s="%s"' % (p, u) for p, u in nsmap.items() if ('xmlns:%s=' % p) not in raw]
+        if extra:
+            raw = re.sub(r'<[a-zA-Z:]+', lambda m: m.group(0) + ' ' + ' '.join(extra), raw, count=1)
+        return raw
+    try:
+        z = zipfile.ZipFile(path)
+    except Exception:
+        return None
+    try:
+        try:
+            doc_xml = z.read('word/document.xml')
+        except KeyError:
+            return None
+        # 样式 → 标题级别映射
+        hstyles = {}
+        try:
+            sroot = ET.fromstring(z.read('word/styles.xml'))
+            for st in sroot.iter(w('style')):
+                sid = st.get(w('styleId'))
+                if not sid:
+                    continue
+                lvl = None
+                ppr = st.find(w('pPr'))
+                if ppr is not None:
+                    ol = ppr.find(w('outlineLvl'))
+                    if ol is not None:
+                        try: lvl = min(int(ol.get(w('val'))) + 1, 6)
+                        except Exception: lvl = None
+                if lvl is None:
+                    nm = st.find(w('name'))
+                    if nm is not None:
+                        m = re.match(r'heading\s*(\d)', (nm.get(w('val')) or '').lower())
+                        if m: lvl = min(int(m.group(1)), 6)
+                if lvl is not None:
+                    hstyles[sid] = lvl
+        except Exception:
+            pass
+        # 编号 → 有序/无序映射 (numId,ilvl) → numFmt
+        num_fmt = {}
+        try:
+            nroot = ET.fromstring(z.read('word/numbering.xml'))
+            abs_fmt = {}
+            for an in nroot.iter(w('abstractNum')):
+                aid = an.get(w('abstractNumId'))
+                if aid is None:
+                    continue
+                for lvl in an.findall(w('lvl')):
+                    il = lvl.get(w('ilvl'))
+                    fmt = lvl.find(w('numFmt'))
+                    if il is not None and fmt is not None:
+                        abs_fmt[(aid, il)] = (fmt.get(w('val')) or 'bullet')
+            for num in nroot.iter(w('num')):
+                nid = num.get(w('numId'))
+                if nid is None:
+                    continue
+                ab = num.find(w('abstractNumId'))
+                if ab is None:
+                    continue
+                akey = ab.get(w('val'))
+                for (aid, il), fmt in abs_fmt.items():
+                    if aid == akey:
+                        num_fmt[(nid, il)] = fmt
+        except Exception:
+            pass
+        # 关系（超链接 / 图片）
+        rels = {}
+        try:
+            rroot = ET.fromstring(z.read('word/_rels/document.xml.rels'))
+            for rel in rroot:
+                rid = rel.get('Id'); tgt = rel.get('Target')
+                if rid and tgt:
+                    rels[rid] = tgt
+        except Exception:
+            pass
+        media_cache = {}
+        def media_uri(rid):
+            if rid in media_cache:
+                return media_cache[rid]
+            media_cache[rid] = None
+            tgt = rels.get(rid)
+            if not tgt or tgt.startswith(('http://', 'https://', 'mailto:')):
+                return None
+            mpath = os.path.normpath(os.path.join('word', tgt))
+            try:
+                data = z.read(mpath)
+            except Exception:
+                return None
+            if len(data) > 3 * 1024 * 1024:
+                return None
+            ext = mpath.rsplit('.', 1)[-1].lower() if '.' in mpath else 'png'
+            mime = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+                    'gif': 'image/gif', 'bmp': 'image/bmp', 'webp': 'image/webp',
+                    'svg': 'image/svg+xml', 'tiff': 'image/tiff'}.get(ext, 'image/png')
+            media_cache[rid] = 'data:%s;base64,%s' % (mime, base64.b64encode(data).decode('ascii'))
+            return media_cache[rid]
+        def run_props(rpr):
+            pre, post = '', ''
+            if rpr is None:
+                return pre, post
+            b = rpr.find(w('b'))
+            if b is not None and (b.get(w('val')) or '1') != '0':
+                pre += '<strong>'; post = '</strong>' + post
+            i = rpr.find(w('i'))
+            if i is not None and (i.get(w('val')) or '1') != '0':
+                pre += '<em>'; post = '</em>' + post
+            u = rpr.find(w('u'))
+            if u is not None and (u.get(w('val')) or 'single') not in ('none', '0'):
+                pre += '<u>'; post = '</u>' + post
+            if rpr.find(w('strike')) is not None:
+                pre += '<s>'; post = '</s>' + post
+            col = rpr.find(w('color'))
+            if col is not None:
+                cv = col.get(w('val'))
+                if cv and cv != 'auto':
+                    pre += '<span style="color:#%s">' % esc(cv); post = '</span>' + post
+            return pre, post
+        def find_blip_rid(elem):
+            for el in elem.iter():
+                lt = local(el.tag)
+                if lt == 'blip':
+                    rid = el.get(r('embed')) or el.get(r('link'))
+                    if rid: return rid
+                if lt == 'imagedata':
+                    rid = el.get(r('id')) or el.get(r('embed'))
+                    if rid: return rid
+            return None
+        def render_inline(elem, out_parts, present):
+            for child in elem:
+                lt = local(child.tag)
+                if lt == 'r':
+                    rpr = child.find(w('rPr'))
+                    pre, post = run_props(rpr)
+                    txt = ''.join((t.text or '') for t in child.findall(w('t'))).replace('\t', '    ')
+                    if txt:
+                        present.append(1)
+                    for br in child.findall(w('br')):
+                        txt += '<br>'
+                    for _tb in child.findall(w('tab')):
+                        txt += '    '
+                    out_parts.append(pre + esc(txt) + post)
+                    for dwg in child.findall(w('drawing')):
+                        rid = find_blip_rid(dwg)
+                        if rid:
+                            uri = media_uri(rid)
+                            if uri:
+                                present.append(1)
+                                out_parts.append('<img src="%s" alt="">' % uri)
+                    for pict in child.findall(w('pict')):
+                        rid = find_blip_rid(pict)
+                        if rid:
+                            uri = media_uri(rid)
+                            if uri:
+                                present.append(1)
+                                out_parts.append('<img src="%s" alt="">' % uri)
+                elif lt == 'hyperlink':
+                    rid = child.get(r('id'))
+                    href = rels.get(rid, '#')
+                    sub = []
+                    render_inline(child, sub, present)
+                    out_parts.append('<a href="%s">%s</a>' % (esc(href), ''.join(sub)))
+                elif lt in ('smartTag', 'ins', 'sdt', 'sdtContent'):
+                    render_inline(child, out_parts, present)
+                elif lt == 'br':
+                    out_parts.append('<br>')
+        def render_para(p):
+            ppr = p.find(w('pPr'))
+            present = []
+            parts = []
+            render_inline(p, parts, present)
+            inner = ''.join(parts)
+            level = 0
+            if ppr is not None:
+                ps = ppr.find(w('pStyle'))
+                if ps is not None:
+                    level = hstyles.get(ps.get(w('val')), 0)
+            if present or inner.strip() or '<img' in inner:
+                if level:
+                    return '<h%d>%s</h%d>' % (level, inner, level)
+                return '<p>%s</p>' % inner
+            return ''
+        def render_table(tbl):
+            rows = []
+            for tr in tbl.findall(w('tr')):
+                cells = []
+                for tc in tr.findall(w('tc')):
+                    cparts = []
+                    for p in tc.findall(w('p')):
+                        cparts.append(render_para(p))
+                    for nt in tc.findall(w('tbl')):
+                        cparts.append(render_table(nt))
+                    cells.append('<td>%s</td>' % ''.join(cparts))
+                rows.append('<tr>%s</tr>' % ''.join(cells))
+            return '<table><tbody>%s</tbody></table>' % ''.join(rows)
+        root = ET.fromstring(ensure_xmlns(doc_xml))
+        body = root.find(w('body'))
+        if body is None:
+            return None
+        out = []
+        list_open = [False]; list_tag = ['']
+        def close_list():
+            if list_open[0]:
+                out.append('</%s>' % list_tag[0]); list_open[0] = False
+        for child in body:
+            lt = local(child.tag)
+            if lt == 'tbl':
+                close_list(); out.append(render_table(child))
+            elif lt == 'p':
+                ppr = child.find(w('pPr'))
+                num_info = None
+                if ppr is not None:
+                    numpr = ppr.find(w('numPr'))
+                    if numpr is not None:
+                        nid = numpr.find(w('numId'))
+                        ilv = numpr.find(w('ilvl'))
+                        nidv = nid.get(w('val')) if nid is not None else None
+                        ilvv = ilv.get(w('val')) if ilv is not None else '0'
+                        if nidv is not None:
+                            num_info = num_fmt.get((nidv, ilvv)) or num_fmt.get((nidv, '0')) or 'bullet'
+                if num_info is not None:
+                    tag = 'ol' if num_info != 'bullet' else 'ul'
+                    if not list_open[0] or list_tag[0] != tag:
+                        close_list(); out.append('<%s>' % tag)
+                        list_open[0] = True; list_tag[0] = tag
+                    item = re.sub(r'^<p>(.*)</p>$', r'\1', render_para(child), flags=re.S)
+                    out.append('<li>%s</li>' % item)
+                else:
+                    close_list()
+                    para = render_para(child)
+                    if para:
+                        out.append(para)
+        close_list()
+        html = ''.join(out)
+        return html if html else None
+    except Exception:
+        return None
+    finally:
+        try: z.close()
+        except Exception:
+            pass
 
 
 async def skills_list_handler(request):
@@ -7098,6 +7653,7 @@ def create_app():
     app.router.add_post("/projects/{name}/library", project_library_add_handler)
     app.router.add_delete("/projects/{name}/library/{id}", project_library_delete_handler)
     app.router.add_get("/projects/{name}/library/{id}/children", project_library_children_handler)
+    app.router.add_post("/projects/{name}/library/{id}/refresh", project_library_refresh_handler)
     app.router.add_patch("/projects/{name}/library/{id}", project_library_patch_handler)
     app.router.add_post("/projects/{name}/library/{id}/open", project_library_open_handler)
     app.router.add_post("/projects/{name}/library/{id}/reveal", project_library_reveal_handler)
@@ -7125,6 +7681,9 @@ def create_app():
     app.router.add_post("/projects/{name}/assets/ref", project_asset_ref_add_handler)
     app.router.add_delete("/projects/{name}/assets/ref/{id}", project_asset_ref_delete_handler)
     app.router.add_patch("/projects/{name}/assets/ref/{id}", project_asset_ref_patch_handler)
+    # 项目资产预览（按类型分发：md 渲染 / 图片 PDF 内联 / 文本 / 二进制）
+    app.router.add_get("/projects/{name}/assets/file", project_asset_file_handler)
+    app.router.add_get("/projects/{name}/assets/raw", project_asset_raw_handler)
     # Data sources (webhook-based, e.g. GitLab)
     app.router.add_get("/datasources", datasources_handler)
     app.router.add_post("/datasources", datasources_handler)

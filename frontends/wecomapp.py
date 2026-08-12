@@ -19,7 +19,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agentmain import GeneraticAgent
 from chatapp_common import (AgentChatMixin, FILE_HINT, build_done_text, clean_reply,
                             ensure_single_instance, extract_files, public_access,
-                            redirect_log, require_runtime, split_text, strip_files)
+                            redirect_log, require_runtime, split_text, strip_files,
+                            extract_permission_event)
 from llmcore import mykeys
 
 try:
@@ -165,6 +166,11 @@ class WeComApp(AgentChatMixin):
                     resp = ctx.get("response")
                     result["raw"] = resp.content if hasattr(resp, "content") else str(resp)
                     result["summary"] = ctx.get("summary")
+                    # P2.5: a permission ask INTERRUPTs the run; remember it so we
+                    # prompt the user to decide via /perm instead of showing text.
+                    perm = extract_permission_event(ctx["exit_reason"])
+                    if perm:
+                        result["permission"] = perm
                     done_event.set()
                     return
                 summary = ctx.get("summary")
@@ -198,8 +204,12 @@ class WeComApp(AgentChatMixin):
 
             if result.get("raw") is not None:
                 self._stats["completed"] += 1
-                await self.send_done(chat_id, result["raw"])
-                label = result.get("summary") or f'{len(result["raw"])} 字'
+                # P2.5: permission ask -> prompt the user to decide via /perm
+                if result.get("permission"):
+                    await self.send_text(chat_id, self._permission_prompt(result["permission"]))
+                else:
+                    await self.send_done(chat_id, result["raw"])
+                label = result.get("summary") or f'{len(result.get("raw",""))} 字'
                 _tprint(f"[{_ts()}] ✅ Done ({chat_id}) — {label}")
             elif not state["running"]:
                 _tprint(f"[{_ts()}] ⏹️ 停止 ({chat_id})")

@@ -28,10 +28,26 @@ from continue_cmd import handle_frontend_command, reset_conversation
 from btw_cmd import handle_frontend_command as handle_btw_frontend_command
 from review_cmd import handle as handle_review_command
 from llmcore import mykeys
+try:
+    from plugins.permissions import (
+        PERMISSION_INTENT, record_session, answer_permission,
+        extract_permission_event, permission_decision_allowed)
+except Exception:
+    PERMISSION_INTENT = "PERMISSION_REQUEST"
+    record_session = lambda *a, **k: None
+    answer_permission = lambda *a, **k: None
+    extract_permission_event = lambda ctx: None
+    permission_decision_allowed = lambda agent, requester: True
 
 agent = GeneraticAgent()
 agent.verbose = False
 agent.inc_out = True
+# P2.5: enable the permission ask INTERRUPT for Telegram. This makes a
+# permission `ask` decision suspend the run (instead of the default safe-deny)
+# so the user can approve/deny via an inline keyboard. ask_user (the tool) is
+# unaffected — it always INTERRUPTs regardless of this flag.
+agent.ask_capable = True
+agent.frontend = "telegram"
 ALLOWED = set(mykeys.get('tg_allowed_users', []))
 
 _DRAFT_HINT = "thinking..."
@@ -52,7 +68,18 @@ _ASK_CANCEL_PROMPT = "已取消选择，请直接发送下一步操作。"
 _ASK_MULTI_HINT = "可多选：点选项目后点击 Done 提交。"
 _ASK_MULTI_EMPTY_HINT = "请至少选择一项，或选择 none of these above。"
 _LLM_MENU_PROMPT = "请选择要切换的 LLM："
+
+# ---- P2.5: permission confirmation (mirrors ask_user infra) ----
+_PERM_HOOK_KEY = "telegram_permission"
+_PERM_CALLBACK_PREFIX = "perm:"
+_PERM_ALLOW_ACTION = "allow"
+_PERM_DENY_ACTION = "deny"
+_PERM_ALLOW_LABEL = "✅ 允许（本会话）"
+_PERM_DENY_LABEL = "⛔ 拒绝"
+_PERM_RESUME_PROMPT = "继续（权限已决定，请继续执行原任务）"
 _ask_menu_events = Q.Queue()
+_perm_events = Q.Queue()
+_perm_store = {}
 _ask_menu_store = {}
 _llm_menu_store = {}
 _MULTI_SELECT_RE = re.compile(r"\[?(?:多选|multi(?:[-_ ]?select)?|select all)\]?", re.IGNORECASE)
@@ -297,6 +324,80 @@ def _drain_latest_ask_user_event():
         except Q.Empty:
             break
     return latest
+
+# ---- P2.5: permission confirmation ----
+def _extract_permission_event(ctx):
+    """Extract a PERMISSION_REQUEST INTERRUPT from a turn_end hook ctx.
+    Returns {"tool","mode","target","question"} or None."""
+    if ctx is None:
+        return None
+    ex = ctx.get("exit_reason") if isinstance(ctx, dict) else None
+    if not isinstance(ex, dict) or ex.get("result") != "EXITED":
+        return None
+    payload = ex.get("data")
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("status") != "INTERRUPT" or payload.get("intent") != PERMISSION_INTENT:
+        return None
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return None
+    return {
+        "tool": str(data.get("tool", "")),
+        "mode": str(data.get("mode", "")),
+        "target": str(data.get("target") or ""),
+        "question": str(data.get("question") or "").strip(),
+    }
+
+def _register_permission_hook():
+    if not hasattr(agent, "_turn_end_hooks"):
+        agent._turn_end_hooks = {}
+    def _hook(ctx):
+        event = _extract_permission_event(ctx)
+        if event:
+            _perm_events.put(event)
+    agent._turn_end_hooks[_PERM_HOOK_KEY] = _hook
+
+def _drain_latest_permission_event():
+    latest = None
+    while True:
+        try:
+            latest = _perm_events.get_nowait()
+        except Q.Empty:
+            break
+    return latest
+
+def _build_permission_markup(menu_id):
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(_PERM_ALLOW_LABEL, callback_data=f"{_PERM_CALLBACK_PREFIX}{menu_id}:{_PERM_ALLOW_ACTION}"),
+        InlineKeyboardButton(_PERM_DENY_LABEL, callback_data=f"{_PERM_CALLBACK_PREFIX}{menu_id}:{_PERM_DENY_ACTION}"),
+    ]])
+
+def _render_permission_result(event, decision):
+    tool = event.get("tool", "?")
+    target = event.get("target") or ""
+    verdict = "✅ 已允许" if decision == "allow" else "⛔ 已拒绝"
+    lines = [f"🔐 权限确认 — {verdict}", "", f"工具: `{tool}`"]
+    if target:
+        lines.append(f"目标: {target[:200]}")
+    return "\n".join(lines)
+
+async def _send_permission_menu(root_msg, event):
+    menu_id = uuid.uuid4().hex[:16]
+    _perm_store[menu_id] = {
+        "tool": event["tool"],
+        "mode": event.get("mode", ""),
+        "target": event.get("target", ""),
+    }
+    question = event.get("question") or f"是否允许执行工具 `{event['tool']}`？"
+    detail = f"\n目标: {event['target']}" if event.get("target") else ""
+    prompt = f"🔐 权限确认 — {question}{detail}"
+    try:
+        await root_msg.reply_text(prompt, reply_markup=_build_permission_markup(menu_id))
+    except Exception as exc:
+        _perm_store.pop(menu_id, None)
+        print(f"[TG permission menu error] {type(exc).__name__}: {exc}", flush=True)
+        await root_msg.reply_text(f"{prompt}\n（请回复 /perm allow {event['tool']} 或 /perm deny {event['tool']}）")
 
 def _build_ask_user_markup(menu_id, candidates, multi=False, selected_indexes=None):
     selected_indexes = set(selected_indexes or [])
@@ -831,6 +932,9 @@ async def _stream(dq, msg):
                 event = _drain_latest_ask_user_event()
                 if event:
                     await _send_ask_user_menu(msg, event)
+                perm_event = _drain_latest_permission_event()
+                if perm_event:
+                    await _send_permission_menu(msg, perm_event)
                 break
     except asyncio.CancelledError:
         await stream.finish_with_notice("⏹️ 已停止")
@@ -895,6 +999,8 @@ async def handle_msg(update, ctx):
     uid = update.effective_user.id
     if ALLOWED and uid not in ALLOWED:
         return await update.message.reply_text("no")
+    # P4: attribute this task (and its permission decisions) to its initiator.
+    agent.initiator = f"telegram:{uid}"
     prompt = _build_text_prompt(update.message.text)
     dq = agent.put_task(prompt, source="telegram")
     task = asyncio.create_task(_stream(dq, update.message))
@@ -974,6 +1080,41 @@ async def handle_ask_callback(update, ctx):
     task = asyncio.create_task(_stream(dq, query.message))
     ctx.user_data['stream_task'] = task
 
+async def handle_permission_callback(update, ctx):
+    """P2.5: Telegram inline Allow/Deny for a permission prompt."""
+    query = update.callback_query
+    if query is None:
+        return
+    uid = update.effective_user.id if update.effective_user else None
+    if ALLOWED and uid not in ALLOWED:
+        return await query.answer("no", show_alert=True)
+    if not (query.data or "").startswith(_PERM_CALLBACK_PREFIX):
+        return
+    payload = query.data[len(_PERM_CALLBACK_PREFIX):]
+    menu_id, sep, action = payload.partition(":")
+    if not sep or not menu_id or action not in (_PERM_ALLOW_ACTION, _PERM_DENY_ACTION):
+        return await query.answer("菜单无效")
+    event = _perm_store.get(menu_id)
+    if event is None:
+        return await query.answer("菜单已过期")
+    decision = "allow" if action == _PERM_ALLOW_ACTION else "deny"
+    _perm_store.pop(menu_id, None)
+    # P4: only the task initiator may decide. Reject before any state change.
+    if not permission_decision_allowed(agent, f"telegram:{uid}"):
+        await query.answer("⛔ 权限决策仅限任务发起人", show_alert=True)
+        return
+    await query.answer()
+    try:
+        await query.edit_message_text(_render_permission_result(event, decision), reply_markup=None)
+    except Exception as exc:
+        print(f"[TG permission edit] {type(exc).__name__}: {exc}", flush=True)
+    dq = answer_permission(agent, event["tool"], decision, mode=event.get("mode"),
+                           resume_prompt=_PERM_RESUME_PROMPT, initiator=f"telegram:{uid}")
+    if dq is not None and query.message is not None:
+        _cancel_stream_task(ctx)
+        task = asyncio.create_task(_stream(dq, query.message))
+        ctx.user_data['stream_task'] = task
+
 async def _send_llm_menu(message):
     llms = agent.list_llms()
     if not llms:
@@ -1037,6 +1178,27 @@ async def cmd_llm(update, ctx):
     else:
         await _send_llm_menu(update.message)
 
+async def cmd_perm(update, ctx, cmd):
+    """P2.5 fallback: /perm allow <tool> | /perm deny <tool>.
+    Lets a user decide a permission prompt by text when the inline keyboard is
+    unavailable/expired, or record a standing preference for the session."""
+    parts = cmd.split()
+    if len(parts) < 3 or parts[1] not in ("allow", "deny"):
+        return await update.message.reply_text("用法: /perm allow <tool>  或  /perm deny <tool>")
+    # P4: only the task initiator may decide.
+    uid = update.effective_user.id if update.effective_user else None
+    if not permission_decision_allowed(agent, f"telegram:{uid}"):
+        return await update.message.reply_text("⛔ 权限决策仅限任务发起人操作。")
+    decision = parts[1]
+    tool = parts[2].strip()
+    dq = answer_permission(agent, tool, decision, mode=getattr(agent, "permission_mode", None),
+                           initiator=f"telegram:{uid}")
+    if dq is None:
+        return await update.message.reply_text("⚠️ 无法记录权限决策。")
+    await update.message.reply_text(f"🔐 已为本次会话{'允许' if decision=='allow' else '拒绝'}工具 `{tool}`，正在继续执行…")
+    task = asyncio.create_task(_stream(dq, update.message))
+    ctx.user_data['stream_task'] = task
+
 async def handle_photo(update, ctx):
     uid = update.effective_user.id
     if ALLOWED and uid not in ALLOWED: return await update.message.reply_text("no")
@@ -1094,6 +1256,8 @@ async def handle_command(update, ctx):
     if op == '/continue':
         if cmd != '/continue': _cancel_stream_task(ctx)
         return await update.message.reply_text(handle_frontend_command(agent, cmd))
+    if op == '/perm':
+        return await cmd_perm(update, ctx, cmd)
     return await update.message.reply_text(HELP_TEXT)
 
 if __name__ == '__main__':
@@ -1104,6 +1268,7 @@ if __name__ == '__main__':
     require_runtime(agent, "Telegram", tg_bot_token=mykeys.get("tg_bot_token"))
     redirect_log(__file__, "tgapp.log", "Telegram", ALLOWED)
     _register_ask_user_hook()
+    _register_permission_hook()
     threading.Thread(target=agent.run, daemon=True).start()
     proxy = mykeys.get('proxy')
     if proxy:
@@ -1125,6 +1290,7 @@ if __name__ == '__main__':
             app = (ApplicationBuilder().token(mykeys['tg_bot_token'])
                    .request(request).get_updates_request(request).post_init(_sync_commands).build())
             app.add_handler(CallbackQueryHandler(handle_ask_callback, pattern=r"^ask:"))
+            app.add_handler(CallbackQueryHandler(handle_permission_callback, pattern=r"^perm:"))
             app.add_handler(CallbackQueryHandler(handle_llm_callback, pattern=r"^llm:"))
             app.add_handler(MessageHandler(filters.COMMAND, handle_command))
             app.add_handler(MessageHandler(filters.PHOTO, handle_photo))

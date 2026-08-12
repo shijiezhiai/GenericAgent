@@ -22,7 +22,7 @@
         "maximized": false,
         "visible": false,
         "titleBarStyle": "Overlay",
-        "trafficLightPosition": { "x": 16, "y": 8 },
+        "trafficLightPosition": { "x": 16, "y": 28 },
         "userAgent": "GenericAgentDesktop/2.0 (Tauri; macOS)",
         "url": "loading.html"
       },

@@ -5,6 +5,15 @@ _parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _parent_dir not in sys.path:
     sys.path.insert(0, _parent_dir)
 
+# P2.5: permission ask support for chat-frontend mixin apps (QQ/WeCom/DingTalk…)
+try:
+    from plugins.permissions import (
+        extract_permission_event, record_session, permission_decision_allowed)
+except Exception:
+    extract_permission_event = lambda ctx: None
+    record_session = lambda *a, **k: None
+    permission_decision_allowed = lambda agent, requester: True
+
 HELP_COMMANDS = (
     ("/help", "显示帮助"),
     ("/status", "查看状态"),
@@ -28,6 +37,7 @@ TELEGRAM_MENU_COMMANDS = (
     ("btw", "临时插问主 agent 进展，不打断主线"),
     ("review", "in-session code review；/review scope 指定范围"),
     ("llm", "查看模型列表；/llm n 切换到指定模型"),
+    ("perm", "权限决策；/perm allow <tool> 或 /perm deny <tool>"),
 )
 
 
@@ -259,12 +269,42 @@ class AgentChatMixin:
     source = "chat"
     split_limit = 1500
     ping_interval = 20
+    _perm_resume_prompt = "继续（权限已决定，请继续执行原任务）"
 
     def __init__(self, agent, user_tasks):
         self.agent, self.user_tasks = agent, user_tasks
+        # P2.5: enable the permission ask INTERRUPT for this chat frontend so the
+        # user gets prompted (via /perm) instead of a silent safe-deny. A single
+        # turn-end hook stashes the last exit_reason on the agent; run_agent reads
+        # it to tell a normal completion from a permission prompt.
+        agent.ask_capable = True
+        agent.frontend = self.source
+        if not getattr(agent, "_perm_hook_registered", False):
+            agent._perm_hook_registered = True
+            def _perm_exit_hook(ctx):
+                agent._last_exit_reason = (ctx or {}).get("exit_reason")
+            if not hasattr(agent, "_turn_end_hooks"):
+                agent._turn_end_hooks = {}
+            agent._turn_end_hooks["chatmixin_exit_reason"] = _perm_exit_hook
 
     async def send_text(self, chat_id, content, **ctx):
         raise NotImplementedError
+
+    def _permission_prompt(self, event):
+        tool = event.get("tool", "?")
+        target = event.get("target") or ""
+        detail = f"\n目标: {target}" if target else ""
+        return (f"🔐 权限确认：工具 `{tool}` 需要授权{detail}\n"
+                f"回复 `/perm allow {tool}` 允许，或 `/perm deny {tool}` 拒绝（本会话生效）。")
+
+    async def _maybe_send_permission_prompt(self, chat_id, ctx):
+        """If the last run ended on a permission ask, notify the user via /perm.
+        Returns True when a prompt was sent (so the caller should skip send_done)."""
+        perm_event = extract_permission_event(getattr(self.agent, "_last_exit_reason", None))
+        if perm_event:
+            await self.send_text(chat_id, self._permission_prompt(perm_event), **ctx)
+            return True
+        return False
 
     async def send_done(self, chat_id, raw_text, **ctx):
         await self.send_text(chat_id, build_done_text(raw_text), **ctx)
@@ -314,11 +354,25 @@ class AgentChatMixin:
             return await self.send_text(chat_id, answer, **ctx)
         if op == "/review":
             return await self.run_agent(chat_id, cmd, **ctx)
+        if op == "/perm":
+            # P2.5: text fallback for permission decisions
+            if len(parts) < 3 or parts[1] not in ("allow", "deny"):
+                return await self.send_text(chat_id, "用法: /perm allow <tool>  或  /perm deny <tool>", **ctx)
+            decision, tool = parts[1], parts[2].strip()
+            # P4: only the task initiator (or an unrestricted chat) may decide.
+            if not permission_decision_allowed(self.agent, f"{self.source}:{chat_id}"):
+                return await self.send_text(chat_id, "⛔ 权限决策仅限任务发起人操作。", **ctx)
+            record_session(self.agent, tool, decision, mode=getattr(self.agent, "permission_mode", None),
+                           initiator=f"{self.source}:{chat_id}")
+            await self.send_text(chat_id, f"🔐 已为本次会话{'允许' if decision == 'allow' else '拒绝'}工具 `{tool}`，正在继续…", **ctx)
+            return await self.run_agent(chat_id, self._perm_resume_prompt, **ctx)
         return await self.send_text(chat_id, HELP_TEXT, **ctx)
 
     async def run_agent(self, chat_id, text, **ctx):
         state = {"running": True}
         self.user_tasks[chat_id] = state
+        # P4: attribute this task (and its permission decisions) to its initiator.
+        self.agent.initiator = f"{self.source}:{chat_id}"
         try:
             await self.send_text(chat_id, "思考中...", **ctx)
             dq = self.agent.put_task(f"{FILE_HINT}\n\n{text}", source=self.source)
@@ -332,7 +386,10 @@ class AgentChatMixin:
                         last_ping = time.time()
                     continue
                 if "done" in item:
-                    await self.send_done(chat_id, item.get("done", ""), **ctx)
+                    # P2.5: a permission ask INTERRUPTs the run; instead of showing the
+                    # (empty) streamed text, prompt the user to decide via /perm.
+                    if not await self._maybe_send_permission_prompt(chat_id, ctx):
+                        await self.send_done(chat_id, item.get("done", ""), **ctx)
                     break
             if not state["running"]:
                 await self.send_text(chat_id, "⏹️ 已停止", **ctx)

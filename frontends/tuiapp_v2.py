@@ -2027,6 +2027,10 @@ class AgentSession:
     _done_at: Optional[float] = None
     # ask_user INTERRUPT events; drained by display thread on turn done.
     ask_user_events: Any = field(default_factory=lambda: queue.Queue())
+    # P2: PERMISSION_REQUEST INTERRUPT events; drained on turn done, rendered as
+    # an allow/deny prompt. The chosen decision is written into session memory so
+    # the re-issued tool call is auto-approved instead of asking again.
+    permission_events: Any = field(default_factory=lambda: queue.Queue())
     # Pending `{question:str}` after the user picks free-text in an ask_user
     # picker; next submission becomes a 2-step "Ready to submit?" confirm.
     free_text_pending: Optional[dict] = None
@@ -2057,6 +2061,10 @@ def default_agent_factory() -> Any:
     from frontends.slash_cmds import COMMIT_SIGNATURE_PROMPT
     agent = GenericAgent()
     agent.inc_out = True
+    # P2: declare this frontend can render a PERMISSION_REQUEST INTERRUPT (allow/deny
+    # prompt) instead of falling back to a sync input()/deny. dispatch routes asks here.
+    agent.frontend = "tui"
+    agent.ask_capable = True
     agent.extra_sys_prompts.append(COMMIT_SIGNATURE_PROMPT)
     return agent
 
@@ -4298,17 +4306,24 @@ class GenericAgentTUI(App[None]):
             hooks = getattr(agent, "_turn_end_hooks", None)
             if hooks is None:
                 hooks = agent._turn_end_hooks = {}
-            def _hook(ctx, _q=sess.ask_user_events):
+            def _hook(ctx, _q=sess.ask_user_events, _pq=sess.permission_events):
                 er = (ctx or {}).get("exit_reason") or {}
                 if er.get("result") != "EXITED": return
                 payload = er.get("data")
                 if not isinstance(payload, dict): return
-                if payload.get("status") != "INTERRUPT" or payload.get("intent") != "HUMAN_INTERVENTION": return
-                data = payload.get("data") or {}
-                cands = _sanitize_candidates(data.get("candidates"))
-                if not cands: return
-                q = str(data.get("question") or "请选择：").strip() or "请选择："
-                _q.put({"question": q, "candidates": cands})
+                if payload.get("status") != "INTERRUPT": return
+                intent = payload.get("intent")
+                if intent == "HUMAN_INTERVENTION":
+                    data = payload.get("data") or {}
+                    cands = _sanitize_candidates(data.get("candidates"))
+                    if not cands: return
+                    q = str(data.get("question") or "请选择：").strip() or "请选择："
+                    _q.put({"question": q, "candidates": cands})
+                elif intent == "PERMISSION_REQUEST":
+                    # P2: capture a permission ask as an allow/deny event.
+                    data = payload.get("data") or {}
+                    _pq.put({"tool": data.get("tool"), "mode": data.get("mode"),
+                             "target": data.get("target"), "question": data.get("question")})
             hooks["_ga_tui_ask_user"] = _hook
         except Exception:
             pass
@@ -6792,6 +6807,7 @@ class GenericAgentTUI(App[None]):
             self._rw_commit(s)   # 落 checkpoint 节点(文件改动已由 tool_before 钩子追踪)
             self._update_plan_state(s, text)
             self._drain_ask_user_events(s)
+            self._drain_permission_events(s)
 
     # Phrasing-based opt-in for multi-select picker (no core schema change).
     _MULTI_RE = re.compile(r"\[?(?:多选|multi(?:[-_ ]?select)?|select all)\]?", re.IGNORECASE)
@@ -6828,6 +6844,45 @@ class GenericAgentTUI(App[None]):
         sess.messages.append(msg)
         if sess.agent_id == self.current_id:
             self._refresh_messages()
+
+    def _drain_permission_events(self, sess: AgentSession) -> None:
+        """P2: pop any pending PERMISSION_REQUEST INTERRUPTs and surface them as an
+        allow/deny prompt. The user's choice is written into session memory so the
+        re-issued tool call is auto-approved/denied instead of asking again.
+        """
+        latest = None
+        while True:
+            try: latest = sess.permission_events.get_nowait()
+            except queue.Empty: break
+        if not latest: return
+        tool = latest.get("tool", "?")
+        mode = latest.get("mode", "")
+        target = latest.get("target") or ""
+        question = (latest.get("question") or f"是否允许执行工具 `{tool}`？").strip()
+        detail = f"工具: {tool}" + (f"\n目标: {target}" if target else "")
+        head = f"🔐 权限确认 — {question}\n{detail}    ↑/↓ 选择 · Enter 确认 · Esc 取消"
+        choices = [("✅ 允许（本会话）", "allow"), ("⛔ 拒绝", "deny")]
+        msg = ChatMessage(
+            role="system", content=head, kind="choice", choices=choices,
+            on_select=lambda v, a=sess.agent_id, t=tool, m=mode: self._answer_permission(a, t, m, v),
+        )
+        sess.messages.append(msg)
+        if sess.agent_id == self.current_id:
+            self._refresh_messages()
+
+    def _answer_permission(self, agent_id: int, tool: str, mode: str, decision: str) -> str:
+        """P2: persist the user's allow/deny into session memory and re-trigger the
+        run so the model re-issues the call — broker short-circuits via memory."""
+        s = self.sessions.get(agent_id)
+        if not s: return decision
+        agent = s.agent
+        k = f"{mode}|{tool}"
+        if decision == "allow":
+            agent._perm_allow.add(k); agent._perm_deny.discard(k)
+        else:
+            agent._perm_deny.add(k); agent._perm_allow.discard(k)
+        # Re-issue: the model re-calls the tool; broker now short-circuits.
+        return self._answer_ask_user(agent_id, "继续（权限已决定，请继续执行）")
 
     def _enter_free_text_mode(self, msg: ChatMessage) -> None:
         """User picked the free-text option. Swap the picker for a one-line

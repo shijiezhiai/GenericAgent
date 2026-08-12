@@ -1,10 +1,21 @@
-import json, re, os
+import json, re, os, sys
 from dataclasses import dataclass
 from typing import Any, Optional
 try: from plugins.hooks import trigger as _hook
 except ImportError: _hook = lambda *a, **k: None
 try: from plugins.plugin_loader import run_cc_hook as _run_cc_hook
 except ImportError: _run_cc_hook = None
+try:
+    from plugins.permission_store import (
+        record_audit as _record_audit, DEFAULT_MODE, _VALID_MODES)
+except Exception:  # pragma: no cover
+    _record_audit = lambda *a, **k: None
+    DEFAULT_MODE = "workspace-write"
+    _VALID_MODES = ("full-access", "workspace-write", "read-only", "plan")
+try:
+    from plugins.permissions import PermissionBroker as _PermissionBroker
+except Exception:  # pragma: no cover
+    _PermissionBroker = None
 @dataclass
 class StepOutcome:
     data: Any
@@ -19,7 +30,90 @@ class BaseHandler:
     def turn_end_callback(self, response, tool_calls, tool_results, turn, next_prompt, exit_reason): return next_prompt
     def dispatch(self, tool_name, args, response, index=0, tool_num=1):
         method_name = f"do_{tool_name}"
-        if hasattr(self, method_name):
+        _has = hasattr(self, method_name)
+        _parent = getattr(self, "parent", None)
+        _mode = getattr(_parent, "permission_mode", DEFAULT_MODE)
+        if _mode not in _VALID_MODES: _mode = DEFAULT_MODE
+        _frontend = getattr(_parent, "frontend", "")
+        _target = ""
+        if isinstance(args, dict):
+            _target = (args.get("path") or args.get("cwd") or args.get("script")
+                       or args.get("command") or args.get("url") or args.get("query") or "")
+        # P1: centralized permission broker (fail-closed). Runs BEFORE the tool and
+        # before the CC PreToolUse hook so a deny short-circuits everything. Covers
+        # built-in tools, MCP tools, and CC-hook-surfaced calls uniformly.
+        try:
+            _broker = _PermissionBroker(mode=_mode, frontend=_frontend, parent=_parent)
+            _decision, _reason, _rule_id = _broker.evaluate(
+                tool_name, args, tool_type=("mcp" if not _has else "builtin"))
+        except Exception as _e:
+            _decision, _reason, _rule_id = "deny", f"broker_init_error:{type(_e).__name__}", None
+        # audit every dispatch centrally — covers ALL frontends (CLI/TUI/desktop/
+        # IM/conductor) that funnel through agent_runner_loop. Best-effort; never blocks.
+        _record_audit(tool_name, target=str(_target)[:512], action="decision",
+                      decision=_decision, mode=_mode, frontend=_frontend, detail=_reason)
+        if _decision == "deny":
+            yield f"⛔ 权限拒绝: 工具 `{tool_name}`（mode={_mode}, {_reason}）\n"
+            return StepOutcome({"error": "permission_denied", "reason": _reason},
+                               next_prompt=f"工具 `{tool_name}` 被权限策略拒绝（{_reason}）。请换一种不越权的方式完成目标。")
+        if _decision == "ask":
+            # P2: resolve ask -> allow (fall through) / deny (return) / prompt (INTERRUPT).
+            # Session memory is already checked inside broker.evaluate, so reaching here
+            # means this is the first time this tool is asked this session.
+            _ni = bool(os.environ.get("GA_NON_INTERACTIVE")) or getattr(_parent, "non_interactive", False)
+
+            def _ask_deny(reason, remember=True):
+                if remember and _parent is not None:
+                    try:
+                        from plugins.permissions import record_session
+                        record_session(_parent, tool_name, "deny", _mode)
+                    except Exception:
+                        pass
+                return StepOutcome({"error": "permission_denied", "reason": reason},
+                                   next_prompt=f"工具 `{tool_name}` 需要人工确认但被拒绝（{reason}）。请换一种不越权的方式完成目标。")
+
+            if _ni:
+                yield f"⛔ 权限需确认但运行于非交互模式，已拒绝: `{tool_name}`（{_reason}）\n"
+                return _ask_deny("non_interactive")
+            # interactive frontends
+            _cli = (getattr(_parent, "frontend", "cli") == "cli")
+            if _cli and os.isatty(0):
+                # CLI: synchronous prompt — no INTERRUPT/cross-run needed.
+                _q = (f"⚠️ 权限确认: 是否允许执行工具 `{tool_name}`？"
+                      + (f"\n   目标: {str(_target)[:200]}" if _target else "")
+                      + "\n   允许请回车或输入 y/Y，拒绝输入 n/N: ")
+                try:
+                    _ans = input(_q)
+                except Exception:
+                    _ans = "n"
+                if str(_ans).strip().lower() in ("y", "yes", ""):
+                    try:
+                        from plugins.permissions import record_session
+                        record_session(_parent, tool_name, "allow", _mode)
+                    except Exception:
+                        pass
+                    yield f"✅ 已授权本次会话执行 `{tool_name}`。\n"
+                    # fall through to execution below
+                else:
+                    yield f"⛔ 已拒绝执行 `{tool_name}`。\n"
+                    return _ask_deny("user_denied")
+            elif getattr(_parent, "ask_capable", False):
+                # TUI/desktop: INTERRUPT -> turn_end_hook -> re-put_task; the user's
+                # choice is recorded into session memory by the frontend handler.
+                from plugins.permissions import PERMISSION_INTENT
+                _payload = {"status": "INTERRUPT", "intent": PERMISSION_INTENT,
+                            "data": {"tool": tool_name, "mode": _mode,
+                                     "target": str(_target)[:512],
+                                     "question": f"是否允许执行工具 `{tool_name}`？"}}
+                yield "Waiting for your approval ...\n"
+                return StepOutcome(_payload, next_prompt="", should_exit=True)
+            else:
+                # Frontend is interactive but doesn't implement PERMISSION_REQUEST
+                # (IM bots / unhandled). Fail safe: deny + remember, let the model
+                # pick a non-privileged path. Full IM interaction = P2.5.
+                yield f"⛔ 权限需确认但当前前端不支持交互授权，已拒绝: `{tool_name}`（{_reason}）\n"
+                return _ask_deny("frontend_uncapable")
+        if _has:
             args['_index'] = index; args['_tool_num'] = tool_num
             _hook('tool_before', locals())
             # Claude Code plugin hooks (PreToolUse): block / 改写参数 / 停止 agent。fail-open：hook 异常不阻断工具。

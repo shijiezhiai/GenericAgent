@@ -392,7 +392,7 @@ const I18N = {
     'project.title': '项目', 'project.subtitle': '多人协同打造超级团队', 'project.newBtn': '新建项目', 'project.myProjects': '我的项目', 'project.searchPh': '搜索项目', 'project.fromTemplate': '从模版创建', 'project.menuTitle': '更多操作', 'project.promptName': '请输入项目名称', 'project.addedAgo': '添加于 {0} 前', 'project.justNow': '刚刚', 'project.minAgo': '{0} 分钟前', 'project.hourAgo': '{0} 小时前', 'project.dayAgo': '{0} 天前', 'project.monAgo': '{0} 个月前', 'project.yearAgo': '{0} 年前',
     'project.create': '新建项目', 'project.name': '项目名称', 'project.template': '选择模板', 'project.tplBlank': '不使用模板', 'project.instruction': '指令', 'project.instructionPh': '输入项目背景、规范或系统提示词…', 'project.instructionHint': '可选。作为项目指令写入 CLAUDE.md，进入项目后自动生效。', 'project.createBtn': '创建', 'project.nameRequired': '请输入项目名称', 'project.tplOverwrite': '切换模板将覆盖当前指令内容，是否继续？', 'project.skills': '技能', 'project.skillsHint': '可选。选择该项目启用的 Skills，未勾选的不会被注入。留空则启用全部。', 'project.skillsLoading': '加载中…', 'project.skillsNone': '未发现可用技能', 'project.editSkills': '编辑技能', 'project.skillsSaved': '技能已保存，新会话生效', 'project.rename': '重命名', 'project.renamePrompt': '输入新的项目名称', 'project.renameErr': '重命名失败', 'project.delete': '删除项目', 'project.deleteConfirm': '确定要删除项目「{0}」吗？此操作不可恢复。', 'project.deleteErr': '删除失败', 'project.nameInvalid': '名称不能包含 / \\ 或以 . 开头', 'project.workspace': '工作区', 'project.wsNone': '无绑定', 'project.wsExisting': '使用已有工作区', 'project.wsHint': '工作区需先在左侧「工作区」页面添加。', 'project.wsSelectErr': '请选择一个已有工作区', 'project.wsSaved': '工作区已更新', 'project.wsCurrent': '当前工作区', 'project.addSkill': '添加技能', 'project.skillsSearchPh': '搜索技能…', 'project.skillsActiveHint': '已启用的技能；点击 × 可移除。清空表示启用全部技能。', 'project.expertsLoading': '加载中…', 'project.expertNone': '暂无专家', 'project.expertsNone': '未发现可用专家', 'project.expertsSaved': '专家已保存，新会话生效', 'project.addExpert': '添加专家', 'project.expertsSearchPh': '搜索专家…',
     'project.tpl.req.t': '产品需求全流程', 'project.tpl.req.d': '从需求采集到评审的完整流程', 'project.tpl.research.t': '市场调研与竞品分析', 'project.tpl.research.d': '行业趋势、用户洞察与竞品对比', 'project.tpl.kb.t': '团队知识库', 'project.tpl.kb.d': '沉淀团队经验与协作规范', 'project.tpl.delivery.t': '项目交付', 'project.tpl.delivery.d': '里程碑、交付物与验收管理', 'project.tpl.bug.t': 'Bug 跟踪测试验收', 'project.tpl.bug.d': '缺陷记录、复现与回归验证',
-    'ph.invite': '邀请', 'ph.tab.feed': '动态', 'ph.tab.plan': '计划', 'ph.tab.task': '任务', 'ph.tab.asset': '资产', 'ph.tab.library': '资料库', 'ph.filter.mine': '与我相关', 'ph.filter.member': '成员动态', 'ph.empty.feed': '暂无与我有关的动态', 'ph.empty.plan': '暂无计划', 'ph.empty.task': '暂无任务', 'ph.empty.asset': '暂无资产', 'ph.empty.library': '暂无资料', 'ph.lib.add': '添加资料', 'ph.lib.addFile': '本地文件引用', 'ph.lib.addWeb': '网页资料', 'ph.lib.name': '名称', 'ph.lib.path': '文件路径', 'ph.lib.url': '网址', 'ph.lib.includeSubpages': '同时加入子页面', 'ph.lib.subpagesHint': '适用于 Confluence / Wiki 等有层级结构的页面', 'ph.lib.subpagesAdded': '已加入 {n} 个页面（含 {m} 个子页面）', 'ph.lib.desc': '描述（可选）', 'ph.lib.empty': '资料库为空，点击"添加资料"开始', 'ph.lib.noChildren': '暂无子页面', 'ph.lib.loadFailed': '加载子页面失败', 'ph.lib.del': '确定要移除资料「', 'ph.lib.delSuffix': '」吗？', 'ph.lib.added': '已加入资料库', 'ph.lib.file': '文件', 'ph.lib.web': '网页', 'ph.lib.generated': '生成文件', 'ph.lib.folder': '文件夹', 'ph.lib.collection': '资料夹', 'ph.lib.addFolder': '新建资料夹', 'ph.lib.moveToFolder': '移动到资料夹', 'ph.lib.removeFromFolder': '移出资料夹', 'ph.lib.renameItem': '重命名', 'ph.lib.newSubFolder': '新建子资料夹', 'ph.lib.deleteFolder': '删除资料夹', 'ph.lib.deleteFolderConfirm': '确定删除该资料夹吗？其中的资料将移回根目录。', 'ph.lib.copied': '已复制链接', 'ph.lib.fetching': '正在抓取网页…', 'ph.lib.webFetchFail': '网页抓取失败', 'ph.lib.webFetchHint': '在浏览器中打开以查看完整内容', 'ph.lib.mkdirDone': '已新建资料夹', 'ph.lib.mkdirFailed': '新建资料夹失败', 'ph.lib.moveFailed': '移动失败', 'ph.lib.movedToFolder': '已移动到资料夹', 'ph.lib.removedFromFolder': '已移出资料夹', 'ph.lib.renameDone': '已重命名', 'ph.lib.renameFailed': '重命名失败', 'ph.lib.renameItemPrompt': '输入新的名称', 'ph.lib.nameRequired': '名称不能为空', 'ph.lib.newFolderPrompt': '请输入资料夹名称', 'ph.lib.noFolderYet': '还没有资料夹，是否现在新建？', 'ph.lib.needProject': '请先选择项目', 'ph.lib.preview': '预览', 'ph.lib.open': '打开', 'ph.lib.reveal': '打开文件位置', 'ph.lib.pin': '置顶', 'ph.lib.unpin': '取消置顶', 'ph.lib.pinned': '已置顶', 'ph.lib.copyLink': '复制链接', 'ph.lib.openUrl': '在浏览器打开', 'ph.lib.delete': '删除', 'ph.lib.addToSession': '添加到会话', 'ph.lib.addedToSession': '已添加到会话', 'ph.lib.addToSessionFail': '添加到会话失败', 'ph.lib.noUrl': '该资料没有可用链接', 'ph.lib.copyUrl': '复制链接', 'ph.lib.openFailed': '打开失败', 'ph.lib.revealFailed': '定位失败', 'ph.lib.pinFailed': '置顶失败', 'ph.lib.previewFailed': '预览失败', 'ph.lib.binaryFile': '该文件为二进制文件，无法预览', 'ph.lib.truncated': '（内容已截断，仅显示前 200KB）', 'ph.lib.refFromLibrary': '引用资料库', 'ph.lib.refTitle': '引用资料', 'ph.lib.refConfirm': '引用', 'ph.lib.refNone': '请选择要引用的资料', 'ph.lib.addToLibrary': '加入资料库', 'ph.lib.addSubtitle': '把文件、网页或生成产物收进项目资料库', 'ph.lib.browse': '浏览…', 'ph.lib.browseFile': '选择文件…', 'ph.lib.browseFolder': '选择文件夹…', 'ph.lib.filePath': '文件路径', 'ph.lib.filePathPh': '输入文件路径，或点「选择文件」/「选择文件夹」', 'ph.lib.folderAdded': '已添加 {n} 个文件', 'ph.lib.folderTruncated': '超出上限，仅添加前 500 个', 'ph.lib.namePh': '资料名称', 'ph.lib.descPh': '简要描述这份资料（可选）', 'ph.lib.refHint': '选择要在对话中引用的资料（可多选）', 'ph.lib.searchPh': '搜索资料…', 'ph.composer.ph': '输入消息…', 'md.edit': '编辑', 'md.preview': '预览', 'md.hint': '支持 Markdown', 'md.empty': '（无内容）',
+    'ph.tab.feed': '动态', 'ph.tab.plan': '计划', 'ph.tab.task': '任务', 'ph.tab.asset': '资产', 'ph.tab.library': '资料库', 'ph.filter.mine': '与我相关', 'ph.filter.member': '成员动态', 'ph.empty.feed': '暂无与我有关的动态', 'ph.empty.plan': '暂无计划', 'ph.empty.task': '暂无任务', 'ph.empty.asset': '暂无资产', 'ph.empty.library': '暂无资料', 'ph.lib.add': '添加资料', 'ph.lib.addFile': '本地文件引用', 'ph.lib.addWeb': '网页资料', 'ph.lib.name': '名称', 'ph.lib.path': '文件路径', 'ph.lib.url': '网址', 'ph.lib.includeSubpages': '同时加入子页面', 'ph.lib.subpagesHint': '适用于 Confluence / Wiki 等有层级结构的页面', 'ph.lib.subpagesAdded': '已加入 {n} 个页面（含 {m} 个子页面）', 'ph.lib.desc': '描述（可选）', 'ph.lib.empty': '资料库为空，点击"添加资料"开始', 'ph.lib.noChildren': '暂无子页面', 'ph.lib.loadFailed': '加载子页面失败', 'ph.lib.del': '确定要移除资料「', 'ph.lib.delSuffix': '」吗？', 'ph.lib.added': '已加入资料库', 'ph.lib.file': '文件', 'ph.lib.web': '网页', 'ph.lib.generated': '生成文件', 'ph.lib.folder': '文件夹', 'ph.lib.collection': '资料夹', 'ph.lib.addFolder': '新建资料夹', 'ph.lib.moveToFolder': '移动到资料夹', 'ph.lib.removeFromFolder': '移出资料夹', 'ph.lib.renameItem': '重命名', 'ph.lib.newSubFolder': '新建子资料夹', 'ph.lib.deleteFolder': '删除资料夹', 'ph.lib.deleteFolderConfirm': '确定删除该资料夹吗？其中的资料将移回根目录。', 'ph.lib.copied': '已复制链接', 'ph.lib.fetching': '正在抓取网页…', 'ph.lib.webFetchFail': '网页抓取失败', 'ph.lib.webFetchHint': '在浏览器中打开以查看完整内容', 'ph.lib.mkdirDone': '已新建资料夹', 'ph.lib.mkdirFailed': '新建资料夹失败', 'ph.lib.moveFailed': '移动失败', 'ph.lib.movedToFolder': '已移动到资料夹', 'ph.lib.removedFromFolder': '已移出资料夹', 'ph.lib.renameDone': '已重命名', 'ph.lib.renameFailed': '重命名失败', 'ph.lib.renameItemPrompt': '输入新的名称', 'ph.lib.nameRequired': '名称不能为空', 'ph.lib.newFolderPrompt': '请输入资料夹名称', 'ph.lib.noFolderYet': '还没有资料夹，是否现在新建？', 'ph.lib.needProject': '请先选择项目', 'ph.lib.preview': '预览', 'ph.lib.open': '打开', 'ph.lib.reveal': '打开文件位置', 'ph.lib.pin': '置顶', 'ph.lib.unpin': '取消置顶', 'ph.lib.pinned': '已置顶', 'ph.lib.copyLink': '复制链接', 'ph.lib.openUrl': '在浏览器打开', 'ph.lib.delete': '删除', 'ph.lib.addToSession': '添加到会话', 'ph.lib.addedToSession': '已添加到会话', 'ph.lib.addToSessionFail': '添加到会话失败', 'ph.lib.noUrl': '该资料没有可用链接', 'ph.lib.copyUrl': '复制链接', 'ph.lib.openFailed': '打开失败', 'ph.lib.revealFailed': '定位失败', 'ph.lib.pinFailed': '置顶失败', 'ph.lib.previewFailed': '预览失败', 'ph.lib.binaryFile': '该文件为二进制文件，无法预览', 'ph.lib.truncated': '（内容已截断，仅显示前 200KB）', 'ph.lib.refFromLibrary': '引用资料库', 'ph.lib.refTitle': '引用资料', 'ph.lib.refConfirm': '引用', 'ph.lib.refNone': '请选择要引用的资料', 'ph.lib.addToLibrary': '加入资料库', 'ph.lib.addSubtitle': '把文件、网页或生成产物收进项目资料库', 'ph.lib.browse': '浏览…', 'ph.lib.browseFile': '选择文件…', 'ph.lib.browseFolder': '选择文件夹…', 'ph.lib.filePath': '文件路径', 'ph.lib.filePathPh': '输入文件路径，或点「选择文件」/「选择文件夹」', 'ph.lib.folderAdded': '已添加 {n} 个文件', 'ph.lib.folderTruncated': '超出上限，仅添加前 500 个', 'ph.lib.namePh': '资料名称', 'ph.lib.descPh': '简要描述这份资料（可选）', 'ph.lib.refHint': '选择要在对话中引用的资料（可多选）', 'ph.lib.searchPh': '搜索资料…', 'ph.composer.ph': '输入消息…', 'md.edit': '编辑', 'md.preview': '预览', 'md.hint': '支持 Markdown', 'md.empty': '（无内容）',
     'ph.asset.upload': '上传文件', 'ph.asset.mkdir': '新建文件夹', 'ph.asset.search': '搜索文件或文件夹…', 'ph.asset.items': '项', 'ph.asset.loading': '加载中…', 'ph.asset.empty': '暂无资产',
     'ph.asset.filter.all': '全部来源', 'ph.asset.filter.project': '项目文件', 'ph.asset.filter.upload': '上传文件', 'ph.asset.filter.ref': '本地引用',
     'ph.asset.folder': '文件夹', 'ph.asset.readonly': '只读', 'ph.asset.addref': '添加本地目录', 'ph.asset.ref': '引用', 'ph.asset.ref.readonly': '引用(只读)', 'ph.asset.source.ref': '引用', 'ph.asset.rename': '重命名', 'ph.asset.rename.prompt': '请输入新的引用名称：', 'ph.asset.reveal': '在访达中显示',
@@ -453,7 +453,7 @@ const I18N = {
     'builtinPreset.restoreBtn': '恢复默认预设',
     'set.appearance': '外观', 'set.plainUi': '素色', 'set.fontSize': '聊天字号', 'set.lang': '语言', 'set.model': '模型', 'set.addModel': '添加模型', 'set.features': '功能', 'set.chatFilesDir': '对话文件目录', 'set.save': '保存', 'set.importMykey': '导入已有模型配置（mykey.py）', 'set.exportMykey': '导出当前模型配置', 'set.serviceManager': '后台服务管理',
     'shortcut.askConfirm': '是否在桌面创建 GenericAgent 快捷方式？',
-    'appearance.light': '浅色', 'appearance.dark': '深色',
+    'appearance.system': '跟随系统', 'appearance.light': '浅色模式', 'appearance.dark': '深色模式',
     'set.noModels': '暂无模型，点击下方添加',
     'set.tabGeneral': '通用', 'set.tabModels': '模型', 'set.tabShortcuts': '快捷键', 'set.tabTasks': '定时任务', 'set.tabServices': '后台服务',
     'set.appearanceDesc': '选择应用界面的颜色主题。', 'set.fontSizeDesc': '调整对话正文的显示字号。', 'set.langDesc': '选择应用界面与系统提示的显示语言。',
@@ -481,7 +481,8 @@ const I18N = {
     'model.modelHint': '须与中转站/官方文档中的 model 字段完全一致', 'model.copySuffix': '副本',
     'model.retries': '重试 (次)', 'model.connTimeout': '连接超时 (s)', 'model.readTimeout': '读取超时 (s)',
     'model.save': '保存', 'common.cancel': '取消', 'common.confirm': '确认', 'common.edit': '编辑', 'common.delete': '删除', 'common.add': '添加', 'common.duplicate': '复制',
-    'pq.title': '快速接入官方模型', 'pq.sub': '填好 API Key 即可使用', 'pq.toggle': '展开 / 收起',
+    'set.presetProviders': '预置供应商快速接入',
+    'set.presetProvidersDesc': '一键配置 DeepSeek / 通义千问，填好 API Key 即可使用',
     'pq.deepseekDesc': '官方 API · OpenAI 兼容', 'pq.qwenDesc': '通义千问 · 阿里云百炼',
     'guide.step1': '点击下方链接，登录后创建并复制 API Key',
     'guide.step2': '把 Key 粘贴到下方「API Key」输入框',
@@ -661,6 +662,7 @@ const I18N = {
     'files.favorites': '我的收藏', 'files.favorite': '收藏', 'files.unfavorite': '取消收藏', 'files.favorited': '已收藏',
     'files.selected': '已选 {n} 项', 'files.cancel': '取消',
     'conv.untitled': '新对话', 'notify.done': '对话已完成',
+    'ph.lib.refresh': '刷新', 'ph.lib.refreshing': '刷新中…', 'ph.lib.refreshDone': '已同步最新内容', 'ph.lib.refreshFailed': '刷新失败',
   },
   en: {
     'app.title': 'GenericAgent Desktop',
@@ -724,7 +726,7 @@ const I18N = {
     'builtinPreset.restoreBtn': 'Restore defaults',
     'set.appearance': 'Appearance', 'set.plainUi': 'Plain', 'set.fontSize': 'Chat font size', 'set.lang': 'Language', 'set.model': 'Model', 'set.addModel': 'Add model', 'set.features': 'Features', 'set.chatFilesDir': 'Chat files dir', 'set.save': 'Save', 'set.importMykey': 'Import model config (mykey.py)', 'set.exportMykey': 'Export current model config', 'set.serviceManager': 'Service manager',
     'shortcut.askConfirm': 'Create a desktop shortcut for GenericAgent?',
-    'appearance.light': 'Light', 'appearance.dark': 'Dark',
+    'appearance.system': 'Follow system', 'appearance.light': 'Light mode', 'appearance.dark': 'Dark mode',
     'set.noModels': 'No models yet — add one below',
     'set.tabGeneral': 'General', 'set.tabModels': 'Models', 'set.tabShortcuts': 'Shortcuts', 'set.tabTasks': 'Tasks', 'set.tabServices': 'Services',
     'set.appearanceDesc': 'Choose the app color theme.', 'set.fontSizeDesc': 'Adjust the chat text size.', 'set.langDesc': 'Select the language for the app interface and system prompts.',
@@ -749,7 +751,8 @@ const I18N = {
     'model.modelHint': 'Must match the model field in your provider docs exactly', 'model.copySuffix': ' (copy)',
     'model.retries': 'Retries (×)', 'model.connTimeout': 'Connect (s)', 'model.readTimeout': 'Read (s)',
     'model.save': 'Save', 'common.cancel': 'Cancel', 'common.confirm': 'Confirm', 'common.edit': 'Edit', 'common.delete': 'Delete', 'common.add': 'Add', 'common.duplicate': 'Duplicate',
-    'pq.title': 'Quick connect a model', 'pq.sub': 'Add your API key to get started', 'pq.toggle': 'Expand / collapse',
+    'set.presetProviders': 'Quick start with preset providers',
+    'set.presetProvidersDesc': 'One-click setup for DeepSeek / Qwen — just enter your API key',
     'pq.deepseekDesc': 'Official API · OpenAI-compatible', 'pq.qwenDesc': 'Tongyi Qwen · Aliyun Bailian',
     'guide.step1': 'Open the link, sign in, then create & copy your API key',
     'guide.step2': 'Paste the key into the “API Key” field below',
@@ -933,7 +936,14 @@ const I18N = {
 };
 const LANGS = ['zh', 'en'];
 const STORE = { lang: 'ga_lang', theme: 'ga_theme', appearance: 'ga_appearance', plain: 'ga_plain', fontSize: 'ga_font_size', llmNo: 'ga_llm_no', page: 'ga_page', sbW: 'ga_sb_w', rpW: 'ga_rp_w', sbCol: 'ga_sb_col' };
-const APPEARANCE_IDS = ['light', 'dark'];
+const APPEARANCE_IDS = ['system', 'light', 'dark'];
+/** system → 按系统 prefers-color-scheme 解析为 light/dark（dataset.appearance 只存解析值，CSS 零改动）。 */
+function resolveAppearance(app) {
+  if (app !== 'system') return app;
+  try {
+    return (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  } catch (_) { return 'light'; }
+}
 const CHAT_FONT_MIN = 10;
 const CHAT_FONT_MAX = 20;
 const CHAT_FONT_DEFAULT = 14;
@@ -952,7 +962,11 @@ function bootUiFromDom() {
   const out = { lang: 'zh', theme: '1', appearance: 'light', plainUi: false, chatFontSize: CHAT_FONT_DEFAULT };
   if (root.lang === 'en') out.lang = 'en';
   if (root.dataset.theme) out.theme = root.dataset.theme;
-  if (APPEARANCE_IDS.includes(root.dataset.appearance)) out.appearance = root.dataset.appearance;
+  // 首帧内联脚本把 dataset.appearance 写成了解析值(light/dark)，故用户原始选择从 localStorage 读；
+  // 兜底再读 dataset（无 localStorage 时）。
+  const storedApp = localStorage.getItem(STORE.appearance);
+  if (storedApp && APPEARANCE_IDS.includes(storedApp)) out.appearance = storedApp;
+  else if (APPEARANCE_IDS.includes(root.dataset.appearance)) out.appearance = root.dataset.appearance;
   if (out.appearance === 'light' && root.dataset.plain === '1') out.plainUi = true;
   if (root.dataset.chatFont) out.chatFontSize = normalizeChatFontSize(root.dataset.chatFont);
   return out;
@@ -961,7 +975,7 @@ let { lang, theme, appearance, plainUi, chatFontSize } = bootUiFromDom();
 
 function syncHljsTheme() {
   const link = document.getElementById('hljs-theme');
-  if (link) link.href = HLJS_THEME_BASE + (appearance === 'dark' ? 'github-dark.min.css' : 'github.min.css');
+  if (link) link.href = HLJS_THEME_BASE + (resolveAppearance(appearance) === 'dark' ? 'github-dark.min.css' : 'github.min.css');
   document.querySelectorAll('.bubble.md pre code').forEach(block => {
     if (typeof hljs !== 'undefined') hljs.highlightElement(block);
   });
@@ -1169,7 +1183,7 @@ function applyAppearance(nextApp, nextPlain, { persist } = { persist: true }) {
   appearance = APPEARANCE_IDS.includes(nextApp) ? nextApp : 'light';
   if (appearance === 'light') plainUi = !!nextPlain;
   else plainUi = false;
-  document.documentElement.dataset.appearance = appearance;
+  document.documentElement.dataset.appearance = resolveAppearance(appearance);
   if (plainUi) document.documentElement.dataset.plain = '1';
   else delete document.documentElement.dataset.plain;
   document.querySelectorAll('#appearance-seg .appear-card').forEach(el => {
@@ -1296,35 +1310,27 @@ bindClick('export-mykey-btn', async (e) => {
     showChanToast(t('err.mykeyExport'), err.message || String(err), 'err');
   }
 });
-// 侧边栏「快速接入」：点击官方模型按钮 → 打开预填好的添加模型表单
-const pqEl = document.getElementById('provider-quickstart');
-if (pqEl) pqEl.addEventListener('click', (e) => {
+// 设置 → 模型「预置供应商快速接入」：渲染 PROVIDER_PRESETS 按钮列表，点击 → 打开预填好的添加模型表单
+function renderPresetProviders() {
+  const list = document.getElementById('preset-provider-list');
+  if (!list) return;
+  list.innerHTML = Object.entries(PROVIDER_PRESETS).map(([key, p]) => `
+    <button type="button" class="pq-btn" data-provider="${key}" style="background:${p.tint};color:${p.color};">
+      <span class="pq-ic" data-ga-icon="${p.logo}"></span>
+      <span class="pq-name">${p.name}</span>
+      <span class="pq-model">${p.model}</span>
+    </button>`).join('');
+  if (window.gaHydrateIcons) gaHydrateIcons(list);
+  if (typeof applyI18n === 'function') applyI18n(list);
+}
+// 注意：渲染调用在 PROVIDER_PRESETS 声明之后（本文件靠后位置）执行，
+// 此处顶层调用会触发 TDZ ReferenceError 并中断整个脚本初始化。
+document.getElementById('preset-provider-list')?.addEventListener('click', (e) => {
   const btn = e.target.closest('.pq-btn[data-provider]');
   if (!btn) return;
   e.preventDefault(); e.stopPropagation();
   openAddModelFormForProvider(btn.dataset.provider);
 });
-// 「快速接入」卡片折叠/展开（向下箭头），状态记忆到 localStorage
-const pqToggle = document.getElementById('pq-toggle');
-if (pqEl && pqToggle) {
-  const applyPq = (collapsed) => {
-    pqEl.classList.toggle('collapsed', collapsed);
-    pqToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-  };
-  let pqCollapsed = false;
-  try { pqCollapsed = localStorage.getItem('ga_pq_collapsed') === '1'; } catch (_) {}
-  applyPq(pqCollapsed);
-  const togglePq = (e) => {
-    if (e) e.stopPropagation();
-    pqCollapsed = !pqEl.classList.contains('collapsed');
-    applyPq(pqCollapsed);
-    try { localStorage.setItem('ga_pq_collapsed', pqCollapsed ? '1' : '0'); } catch (_) {}
-  };
-  pqToggle.addEventListener('click', togglePq);
-  pqToggle.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePq(); }
-  });
-}
 // 接入指引：复制获取 API Key 的链接
 bindClick('model-guide-copy', (e) => {
   e.preventDefault(); e.stopPropagation();
@@ -1429,6 +1435,8 @@ if (typeof marked !== 'undefined') {
   marked.setOptions({ gfm: true, breaks: true, mangle: false, headerIds: false });
 }
 const ALLOWED_URI_RE = /^(https?:|mailto:|tel:|#|\/)/i;
+// docx 内联图片用 data: URI，放宽 sanitize 允许范围（仅限 data:image/）
+const DOCX_URI_RE = /^(https?:|mailto:|tel:|#|\/|data:image\/)/i;
 function escapeHtml(s) {
   const d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML;
 }
@@ -1521,7 +1529,8 @@ function profileLabel(name) {
 function normalizeProfiles(list) {
   return (list || []).map(p => ({ ...p, name: profileLabel(p.name) || p.name }));
 }
-function sanitizeMarkdown(html) {
+function sanitizeMarkdown(html, uriRe) {
+  const _uriRe = uriRe || ALLOWED_URI_RE;
   const tpl = document.createElement('template');
   tpl.innerHTML = String(html);
   const blocked = new Set(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','LINK','META','BASE','FORM','INPUT','BUTTON']);
@@ -1533,7 +1542,7 @@ function sanitizeMarkdown(html) {
     for (const attr of Array.from(el.attributes)) {
       const n = attr.name.toLowerCase(), v = attr.value.trim();
       if (n.startsWith('on') || n === 'srcdoc') { el.removeAttribute(attr.name); continue; }
-      if ((n === 'href' || n === 'src' || n === 'xlink:href') && v && !ALLOWED_URI_RE.test(v)) el.removeAttribute(attr.name);
+      if ((n === 'href' || n === 'src' || n === 'xlink:href') && v && !_uriRe.test(v)) el.removeAttribute(attr.name);
     }
     if (el.tagName === 'A') { el.setAttribute('rel','noopener noreferrer'); el.setAttribute('target','_blank'); }
   }
@@ -3649,6 +3658,14 @@ function setBusy(sess, busy) {
     sendBtn.setAttribute('aria-label', busy ? t('act.stop') : t('act.send'));
     sendBtn.title = busy ? t('act.stop') : '';
   }
+  // Tasks 聊天视图的发送键（#ph-send，纸飞机）同样需要在运行时切换为停止键，
+  // 否则运行中一直显示纸飞机，用户没有「停止」的视觉提示也无法手动停止。
+  const phSend = document.getElementById('ph-send');
+  if (phSend) {
+    phSend.classList.toggle('is-stop', busy);
+    phSend.setAttribute('aria-label', busy ? t('act.stop') : t('act.send'));
+    phSend.title = busy ? t('act.stop') : '';
+  }
 }
 // run-toggle 现为纯状态展示组件：运行中转红，不再响应点击（停止改由发送键的录制键承担）
 
@@ -4566,27 +4583,48 @@ async function loadProjects() {
 
 async function enterProject(name) {
   if (!name) return;
-  const localId = 'local-' + Date.now() + '-' + Math.random().toString(16).slice(2);
-  const sess = { id: localId, bridgeSessionId: null, title: name, messages: [], untitled: true, project: name, lastActiveTs: Date.now() };
-  state.sessions.set(localId, sess);
-  try {
-    const res = await window.ga.rpc('session/new', { cwd: state.gaRoot || '', project: name, mcp_servers: [] });
-    if (res?.error) throw new Error(res.error.message || res.error);
-    sess.bridgeSessionId = res.sessionId || res.result?.sessionId;
-    state.sessions.delete(localId);
-    sess.id = sess.bridgeSessionId;
-    state.sessions.set(sess.id, sess);
-  } catch (e) { state.sessions.delete(localId); showError(t('project.enterErr') + ': ' + (e.message || e)); return; }
-  setActiveSession(sess.id);
-  saveSessions();
-  renderSessionList();
+  // 复用已有的「项目主会话」：避免每次打开项目都通过 session/new 新建一个会话，
+  // 否则这些空会话会不断累积在「任务」tab 里。用 isProjectMain 标记主会话，
+  // 与未来可能出现的其他项目会话区分；对升级前无标记的历史会话做一次兼容复用。
+  let reuseId = null, reuseSess = null, candidates = [];
+  for (const s of state.sessions.values()) {
+    if (s.project === name) {
+      if (s.isProjectMain) { reuseId = s.id; reuseSess = s; break; }
+      candidates.push(s);
+    }
+  }
+  if (!reuseId && candidates.length) {
+    candidates.sort((a, b) => (b.lastActiveTs || 0) - (a.lastActiveTs || 0));
+    reuseSess = candidates[0];
+    reuseSess.isProjectMain = true;
+    reuseId = reuseSess.id;
+    saveSessions();
+  }
+  if (reuseId) {
+    setActiveSession(reuseId);
+  } else {
+    const localId = 'local-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+    const sess = { id: localId, bridgeSessionId: null, title: name, messages: [], untitled: true, project: name, isProjectMain: true, lastActiveTs: Date.now() };
+    state.sessions.set(localId, sess);
+    try {
+      const res = await window.ga.rpc('session/new', { cwd: state.gaRoot || '', project: name, mcp_servers: [] });
+      if (res?.error) throw new Error(res.error.message || res.error);
+      sess.bridgeSessionId = res.sessionId || res.result?.sessionId;
+      state.sessions.delete(localId);
+      sess.id = sess.bridgeSessionId;
+      state.sessions.set(sess.id, sess);
+    } catch (e) { state.sessions.delete(localId); showError(t('project.enterErr') + ': ' + (e.message || e)); return; }
+    setActiveSession(sess.id);
+    saveSessions();
+    renderSessionList();
+  }
   // project-home 不在侧边栏导航中，gaGoPage会因找不到nav-item提前return，
   // 所以这里手动切换 section active 状态
   currentPage = 'project-home';
   nav?.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   pages.forEach(p => p.classList.toggle('active', p.dataset.page === 'project-home'));
   if (bodyEl) bodyEl.classList.add('rp-collapsed');
-  initProjectHome(name, sess.id);
+  initProjectHome(name, state.activeId);
 }
 
 /* ═══════════════ 项目主页 (project-home) ═══════════════ */
@@ -4817,6 +4855,12 @@ function renderPhDatasourceList() {
   }).join('') + '</div>';
 }
 
+function truncateStr(s, n) {
+  s = String(s == null ? '' : s);
+  if (s.length <= n) return s;
+  return s.slice(0, n) + '…';
+}
+
 async function initProjectHome(name, sessionId) {
   phState.project = name;
   phState.sessionId = sessionId;
@@ -4824,9 +4868,21 @@ async function initProjectHome(name, sessionId) {
   phState.filter = 'mine';
   phState.datasources = [];
   phState.dsLoadedFor = '';
-  // 面包屑项目名
+  // 面包屑项目名（可点击 → 进入项目主页）
   const crumbName = document.getElementById('ph-project-name');
-  if (crumbName) { crumbName.textContent = name; crumbName.title = name; }
+  if (crumbName) {
+    crumbName.textContent = name;
+    crumbName.title = name;
+    crumbName.onclick = function () {
+      if (phState.chatView) { closePhChatView(); }
+      else { renderPhContent(); }
+    };
+  }
+  // 面包屑第三级（会话名）默认隐藏，进入会话聊天视图时再显示
+  const crumbSession = document.getElementById('ph-session-name');
+  const crumbSep2 = document.getElementById('ph-crumb-sep2');
+  if (crumbSession) { crumbSession.textContent = '—'; crumbSession.title = ''; crumbSession.hidden = true; }
+  if (crumbSep2) crumbSep2.hidden = true;
   // 面包屑「项目」可点击 → 返回项目列表页
   const crumbProject = document.getElementById('ph-crumb-project');
   if (crumbProject) crumbProject.onclick = function () { gaGoPage('project'); };
@@ -4848,9 +4904,6 @@ async function initProjectHome(name, sessionId) {
       renderPhContent();
     };
   });
-  // 邀请按钮
-  const inviteBtn = document.querySelector('.ph-invite-btn');
-  if (inviteBtn) inviteBtn.onclick = function () { alert(t('ph.invite') + ': ' + name); };
   // 配置卡片 + 号按钮
   document.querySelectorAll('.ph-cfg-add').forEach(function (btn) {
     btn.onclick = function (e) {
@@ -4946,8 +4999,14 @@ function openPhChatView(sid) {
     if (msgsEl) phMsgArea.appendChild(msgsEl);
     if (msgLoading) phMsgArea.appendChild(msgLoading);
   }
+  var sTitle = (typeof displayTitle === 'function' ? displayTitle(sess) : (sess.title || '')) || sess.id || '—';
   var titleEl = document.getElementById('ph-chat-title');
-  if (titleEl) titleEl.textContent = (typeof displayTitle === 'function' ? displayTitle(sess) : (sess.title || '')) || sess.id || '—';
+  if (titleEl) titleEl.textContent = sTitle;
+  // 面包屑第三级：显示当前会话名称（超长截断）
+  var bcrumb = document.getElementById('ph-session-name');
+  var bsep = document.getElementById('ph-crumb-sep2');
+  if (bcrumb) { bcrumb.textContent = truncateStr(sTitle, 22); bcrumb.title = sTitle; bcrumb.hidden = false; }
+  if (bsep) bsep.hidden = false;
   var phInput = document.getElementById('ph-input');
   if (phInput && inputEl) phInput.innerHTML = inputEl.innerHTML;
   /* 填充 ph-chat-view 内的 model chip 显示 */
@@ -4968,6 +5027,11 @@ function closePhChatView() {
   var phOldComposer = document.querySelector('.ph-composer');
   if (phOldComposer) phOldComposer.classList.add('is-hidden');
   phState.chatView = false;
+  // 退出会话聊天视图 → 隐藏面包屑第三级
+  var bcrumb = document.getElementById('ph-session-name');
+  var bsep = document.getElementById('ph-crumb-sep2');
+  if (bcrumb) bcrumb.hidden = true;
+  if (bsep) bsep.hidden = true;
   if (phState.sessionId) setActiveSession(phState.sessionId);
   if (typeof updateModelChip === 'function') updateModelChip();
 }
@@ -5514,6 +5578,9 @@ function openLibMenu(anchor, id) {
   // 新建子资料夹：仅虚拟资料夹提供（文件系统目录的子项由磁盘决定）
   var newSubItem = libMenu.querySelector('[data-act="new-sub-folder"]');
   if (newSubItem) newSubItem.hidden = !isLibFolder;
+  // 刷新：仅真实文件系统目录提供（虚拟资料夹无磁盘对应，刷新无意义）
+  var refreshItem = libMenu.querySelector('[data-act="refresh"]');
+  if (refreshItem) refreshItem.hidden = !isFsDir;
   var pinSpan = libMenu.querySelector('[data-act="pin"] [data-i18n]');
   if (pinSpan) {
     var k = it.pinned ? 'ph.lib.unpin' : 'ph.lib.pin';
@@ -6235,7 +6302,103 @@ function _assetPreview(row) {
   openAssetPreview(row);
 }
 
-// 资产预览弹窗：图片/PDF 内联渲染，文本渲染为纯文本，未知二进制回退下载
+// 资产预览弹窗：按文件类型分发渲染（md 渲染为 HTML / 图片 PDF 内联 / 文本 / 二进制回退下载）
+// PDF 在线翻页查看器：基于本地 vendor/pdf.js（pdfjsLib）。
+// 工具栏：上一页/下一页、页码 x/y、缩放 +/-、适应宽度、下载；canvas 渲染。
+// 若 pdfjsLib 不可用，回退到原生 <iframe>，再不行则下载链接。
+function renderPdfViewer(bodyEl, rawUrl, name) {
+  if (!bodyEl) return;
+  var wrap = document.createElement('div');
+  wrap.className = 'lib-preview-pdf-viewer';
+  wrap.innerHTML =
+    '<div class="pdf-toolbar">' +
+      '<button type="button" class="pdf-btn" data-act="prev" aria-label="上一页" title="上一页">‹</button>' +
+      '<span class="pdf-page-info">…</span>' +
+      '<button type="button" class="pdf-btn" data-act="next" aria-label="下一页" title="下一页">›</button>' +
+      '<span class="pdf-sep"></span>' +
+      '<button type="button" class="pdf-btn" data-act="zoom-out" aria-label="缩小" title="缩小">−</button>' +
+      '<span class="pdf-zoom-val">100%</span>' +
+      '<button type="button" class="pdf-btn" data-act="zoom-in" aria-label="放大" title="放大">+</button>' +
+      '<button type="button" class="pdf-btn" data-act="fit" title="适应宽度">适应宽度</button>' +
+      '<a class="pdf-dl" href="' + encodeURI(rawUrl) + '" download="' + escapeHtml(name || '') + '">' + escapeHtml(t('common.download') || '下载') + '</a>' +
+    '</div>' +
+    '<div class="pdf-canvas-wrap"><canvas class="pdf-canvas"></canvas></div>';
+  bodyEl.innerHTML = '';
+  bodyEl.appendChild(wrap);
+  var canvas = wrap.querySelector('.pdf-canvas');
+  var info = wrap.querySelector('.pdf-page-info');
+  var zoomVal = wrap.querySelector('.pdf-zoom-val');
+  var ctx = canvas.getContext('2d');
+  var state = { pdf: null, pageNum: 1, scale: 1, rendering: false };
+
+  function fallbackIframe() {
+    var frame = document.createElement('iframe');
+    frame.className = 'lib-preview-pdf';
+    frame.src = rawUrl;
+    bodyEl.innerHTML = '';
+    bodyEl.appendChild(frame);
+  }
+  function renderPage() {
+    if (!state.pdf || state.rendering) return;
+    state.rendering = true;
+    state.pdf.getPage(state.pageNum).then(function (page) {
+      var viewport = page.getViewport({ scale: state.scale });
+      var dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
+      canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
+      canvas.style.width = Math.floor(viewport.width) + 'px';
+      canvas.style.height = Math.floor(viewport.height) + 'px';
+      var renderCtx = { canvasContext: ctx, viewport: viewport };
+      if (dpr !== 1) renderCtx.transform = [dpr, 0, 0, dpr, 0, 0];
+      return page.render(renderCtx).promise.then(function () { state.rendering = false; });
+    }).catch(function (e) {
+      state.rendering = false;
+      info.textContent = '⚠ ' + String((e && e.message) || e);
+    });
+  }
+  function gotoPage(n) {
+    if (!state.pdf) return;
+    n = Math.max(1, Math.min(n, state.pdf.numPages));
+    state.pageNum = n;
+    info.textContent = n + ' / ' + state.pdf.numPages;
+    renderPage();
+  }
+  function fitWidth() {
+    if (!state.pdf) return;
+    state.pdf.getPage(state.pageNum).then(function (page) {
+      var base = page.getViewport({ scale: 1 });
+      var wrapEl = wrap.querySelector('.pdf-canvas-wrap');
+      var avail = (wrapEl.clientWidth || 600) - 24;
+      state.scale = Math.max(0.3, Math.min(avail / base.width, 3));
+      zoomVal.textContent = Math.round(state.scale * 100) + '%';
+      renderPage();
+    });
+  }
+  wrap.querySelector('[data-act="prev"]').onclick = function () { gotoPage(state.pageNum - 1); };
+  wrap.querySelector('[data-act="next"]').onclick = function () { gotoPage(state.pageNum + 1); };
+  wrap.querySelector('[data-act="zoom-in"]').onclick = function () { state.scale = Math.min(state.scale * 1.2, 4); zoomVal.textContent = Math.round(state.scale * 100) + '%'; renderPage(); };
+  wrap.querySelector('[data-act="zoom-out"]').onclick = function () { state.scale = Math.max(state.scale / 1.2, 0.3); zoomVal.textContent = Math.round(state.scale * 100) + '%'; renderPage(); };
+  wrap.querySelector('[data-act="fit"]').onclick = fitWidth;
+
+  if (typeof pdfjsLib === 'undefined') { fallbackIframe(); return; }
+  try {
+    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+    }
+    info.textContent = (t('common.loading') || '加载中…');
+    pdfjsLib.getDocument(rawUrl).promise.then(function (pdf) {
+      state.pdf = pdf;
+      info.textContent = '1 / ' + pdf.numPages;
+      fitWidth();
+    }).catch(function (e) {
+      // 部分环境 getDocument 走 worker 失败，回退原生 iframe
+      fallbackIframe();
+    });
+  } catch (e) {
+    fallbackIframe();
+  }
+}
+
 async function openAssetPreview(row) {
   var path = row.dataset.path;
   var name = row.dataset.name;
@@ -6251,26 +6414,84 @@ async function openAssetPreview(row) {
   if (metaEl) metaEl.textContent = path || '';
   if (bodyEl) bodyEl.innerHTML = '<div class="ph-lib-loading">' + escapeHtml(t('common.loading')) + '</div>';
   m.hidden = false;
-  var ext = _assetFileExt(name || '').toLowerCase();
-  var rawUrl = '/api/files/raw?path=' + encodeURIComponent(path);
-  var imgExt = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico'];
-  if (imgExt.indexOf(ext) >= 0) {
-    if (bodyEl) bodyEl.innerHTML = '<div class="lib-preview-image"><img src="' + encodeURI(rawUrl) + '" alt="' + escapeHtml(name || '') + '"></div>';
+  var project = phState.project || '';
+  if (!project) {
+    if (bodyEl) bodyEl.innerHTML = '<div class="lib-preview-binary">' + gaIcon('fileX') + '<p>' + escapeHtml(t('ph.asset.preview.noProject') || '未关联项目，无法预览') + '</p></div>';
     return;
   }
-  if (ext === 'pdf') {
-    if (bodyEl) bodyEl.innerHTML = '<iframe class="lib-preview-pdf" src="' + encodeURI(rawUrl) + '" title="' + escapeHtml(name || '') + '"></iframe>';
-    return;
-  }
-  // 文本：拉取 JSON 内容渲染；非文本/读取失败则回退到下载
+  // 走项目资产专用端点：白名单覆盖引用目录/workspace，并按类型返回 kind
+  var fileUrl = '/projects/' + encProject(project) + '/assets/file?path=' + encodeURIComponent(path);
   try {
-    var res = await fetch('/api/files/read?path=' + encodeURIComponent(path));
+    var res = await fetch(fileUrl);
     var d = await res.json();
     if (!d || !d.ok) {
+      // 无法读取（路径不在允许范围 / 文件不存在等）：回退到通用下载链接
+      var dl = '/api/files/raw?path=' + encodeURIComponent(path);
+      if (bodyEl) bodyEl.innerHTML = '<div class="lib-preview-binary">' + gaIcon('fileX') + '<p>' + escapeHtml(t('ph.lib.binaryFile')) + '</p><a class="lib-preview-dl" href="' + encodeURI(dl) + '" download="' + escapeHtml(name || '') + '">' + escapeHtml(t('common.download') || '下载文件') + '</a></div>';
+      return;
+    }
+    var kind = d.kind || 'text';
+    var rawUrl = '/projects/' + encProject(project) + '/assets/raw?path=' + encodeURIComponent(path);
+    if (kind === 'image') {
+      if (bodyEl) bodyEl.innerHTML = '<div class="lib-preview-image"><img src="' + encodeURI(rawUrl) + '" alt="' + escapeHtml(name || '') + '"></div>';
+      return;
+    }
+    if (kind === 'pdf') {
+      renderPdfViewer(bodyEl, rawUrl, name);
+      return;
+    }
+    if (kind === 'binary') {
       if (bodyEl) bodyEl.innerHTML = '<div class="lib-preview-binary">' + gaIcon('fileX') + '<p>' + escapeHtml(t('ph.lib.binaryFile')) + '</p><a class="lib-preview-dl" href="' + encodeURI(rawUrl) + '" download="' + escapeHtml(name || '') + '">' + escapeHtml(t('common.download') || '下载文件') + '</a></div>';
       return;
     }
+    if (kind === 'code') {
+      var codeText = d.content || '';
+      if (d.truncated) codeText += '\n\n… ' + t('ph.lib.truncated');
+      var lang = d.lang || '';
+      var pre = document.createElement('pre');
+      pre.className = 'lib-preview-code';
+      var code = document.createElement('code');
+      if (lang) code.className = 'language-' + lang;
+      code.textContent = codeText;
+      pre.appendChild(code);
+      if (bodyEl) {
+        bodyEl.innerHTML = '';
+        bodyEl.appendChild(pre);
+        if (typeof postRenderEnhance === 'function') postRenderEnhance(pre);
+        if (typeof gaHydrateIcons === 'function') gaHydrateIcons();
+      }
+      return;
+    }
+    if (kind === 'markdown') {
+      var md = d.content || '';
+      if (d.truncated) md += '\n\n… ' + t('ph.lib.truncated');
+      if (bodyEl) {
+        var mdw = document.createElement('div');
+        mdw.className = 'lib-preview-md';
+        mdw.innerHTML = renderMarkdown(md);
+        bodyEl.innerHTML = '';
+        bodyEl.appendChild(mdw);
+        if (typeof postRenderEnhance === 'function') postRenderEnhance(mdw);
+        if (typeof gaHydrateIcons === 'function') gaHydrateIcons();
+      }
+      return;
+    }
+    if (kind === 'docx') {
+      var dx = d.content || '';
+      if (bodyEl) {
+        var dv = document.createElement('div');
+        dv.className = 'lib-preview-md lib-preview-docx';
+        dv.innerHTML = sanitizeMarkdown(dx, DOCX_URI_RE);
+        bodyEl.innerHTML = '';
+        bodyEl.appendChild(dv);
+        if (typeof postRenderEnhance === 'function') postRenderEnhance(dv);
+        if (typeof gaHydrateIcons === 'function') gaHydrateIcons();
+      }
+      return;
+    }
+    // text
     var txt = d.content || '';
+    if (d.truncated) txt += '\n\n… ' + t('ph.lib.truncated');
     if (bodyEl) {
       var pre = document.createElement('pre');
       pre.className = 'lib-preview-text';
@@ -7990,11 +8211,27 @@ libMenu.addEventListener('click', async function (e) {
         var m3 = ''; try { m3 = (await r3.json()).error || ''; } catch (_) {} showToast(t('ph.lib.pinFailed') + (m3 ? ': ' + m3 : ''));
       }
     } catch (err) { showToast(String(err)); }
+  } else if (act === 'refresh') {
+    refreshLibraryItem(id);
   } else if (act === 'add') {
     var itA = phLibItems.find(function (x) { return x.id === id; }) || {};
     _addLibToSession(itA);
   }
 });
+
+// 资料库文件夹刷新：调用后端 /library/{id}/refresh 同步文件系统最新内容
+async function refreshLibraryItem(id) {
+  var projectName = phState.project;
+  if (!projectName || !id) return;
+  var box = document.querySelector('.ph-content');
+  try {
+    showToast(t('ph.lib.refreshing') || '刷新中…');
+    var r = await fetch('/projects/' + encProject(projectName) + '/library/' + encodeURIComponent(id) + '/refresh', { method: 'POST' });
+    if (!r.ok) { var m = ''; try { m = (await r.json()).error || ''; } catch (_) {} showToast(t('ph.lib.refreshFailed') + (m ? ': ' + m : '')); return; }
+    if (box && phState.tab === 'library') renderPhLibrary(box); // 整棵资料库重渲染以反映磁盘最新状态
+    showToast(t('ph.lib.refreshDone') || '已同步最新内容');
+  } catch (err) { showToast(String(err)); }
+}
 
 // 资料库条目 PATCH 封装：成功则重渲染并回调，失败弹 toast
 async function _patchLibraryItem(id, patch, failMsg, okCb) {
@@ -10862,6 +11099,8 @@ const PROVIDER_PRESETS = {
   },
 };
 window.gaProviderPresets = PROVIDER_PRESETS;
+// 渲染「设置 → 模型」预置供应商按钮列表（须在 PROVIDER_PRESETS 初始化后调用）
+renderPresetProviders();
 
 // 在「添加模型」弹窗顶部显示/隐藏接入指引横幅。key 为 null 时隐藏。
 function setModelGuide(key) {

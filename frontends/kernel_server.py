@@ -15,6 +15,7 @@ This makes the gateway<->kernel boundary explicit and lets a future Rust/axum ga
 keeps working byte-for-byte.
 """
 import atexit
+import io
 import faulthandler
 import json
 import os
@@ -24,6 +25,107 @@ import sys
 import threading
 import time
 from pathlib import Path
+
+# --------------------------------------------------------------------------
+# CRITICAL: protect the JSON-RPC stdout pipe.
+# In the desktop kernel, sys.stdout IS the protocol pipe to the gateway.
+# Many GA core modules (llmcore, agentmain, ga, ...) do bare print() calls
+# (e.g. "[Info] Load mykeys", "[Cut]", "[LLM Retry]", "Backend Error", ...)
+# that would otherwise inject non-JSON bytes into the pipe and drop the
+# session. Capture the real pipe and redirect sys.stdout to stderr so all
+# stray prints become harmless logs; the protocol writer below uses the
+# captured pipe fd exclusively.
+# --------------------------------------------------------------------------
+_PROTOCOL_STDOUT = sys.stdout  # the JSON-RPC pipe — never write stray bytes here
+
+
+class _StderrProxy(io.TextIOBase):
+    def __init__(self, sink):
+        self._sink = sink
+
+    def write(self, s):
+        try:
+            self._sink.write(s)
+        except Exception:
+            pass
+        return len(s) if isinstance(s, str) else 1
+
+    def flush(self):
+        try:
+            self._sink.flush()
+        except Exception:
+            pass
+
+    def isatty(self):
+        return False
+
+    def reconfigure(self, *a, **k):
+        pass
+
+    def fileno(self):
+        try:
+            return self._sink.fileno()
+        except Exception:
+            return 2
+
+
+# --------------------------------------------------------------------------
+# Persist stderr. The gateway spawns us with Stdio::inherit(), and a GUI app
+# launched from Finder inherits /dev/null — so every log line and crash
+# traceback evaporates silently. Since the guard above funnels all stray
+# prints into stderr, not persisting it means discarding them outright.
+# --------------------------------------------------------------------------
+_STDERR_LOG_MAX = 8 * 1024 * 1024
+
+
+def _open_stderr_log():
+    try:
+        root = os.environ.get("GA_KERNEL_ROOT") or Path(__file__).resolve().parent.parent
+        d = Path(root) / "temp"
+        d.mkdir(parents=True, exist_ok=True)
+        p = d / "kernel_stderr.log"
+        if p.exists() and p.stat().st_size > _STDERR_LOG_MAX:
+            p.replace(d / "kernel_stderr.log.1")
+        f = open(p, "a", buffering=1, encoding="utf-8", errors="replace")
+        f.write("\n===== kernel start pid=%s @ %s =====\n"
+                % (os.getpid(), time.strftime("%Y-%m-%d %H:%M:%S")))
+        return f
+    except Exception:
+        return None  # logging must never block startup
+
+
+class _Tee(io.TextIOBase):
+    def __init__(self, *sinks):
+        self._sinks = [s for s in sinks if s is not None]
+
+    def write(self, s):
+        for k in self._sinks:
+            try:
+                k.write(s)
+                k.flush()  # unbuffered: the line before a crash must survive
+            except Exception:
+                pass
+        return len(s) if isinstance(s, str) else 1
+
+    def flush(self):
+        for k in self._sinks:
+            try:
+                k.flush()
+            except Exception:
+                pass
+
+    def isatty(self):
+        return False
+
+    def fileno(self):
+        return 2
+
+
+_STDERR_LOG = _open_stderr_log()  # module-global: faulthandler holds this fd
+if _STDERR_LOG is not None:
+    sys.stderr = _Tee(sys.stderr, _STDERR_LOG)
+
+sys.stdout = _StderrProxy(getattr(sys, "stderr", _PROTOCOL_STDOUT))
 
 # 诊断用：`kill -USR1 <kernel pid>` 把所有线程栈 dump 到 /tmp/ga_kernel_fault.log（排查卡死）。
 # 每次重开文件，避免 fd 被内核 stdout(JSON-RPC 管道) 重定向干扰。
@@ -36,7 +138,8 @@ def _dump_threads(signum, frame):
         faulthandler.dump_traceback(file=f, all_threads=True)
 
 
-faulthandler.enable()
+# 崩溃栈写日志文件而非 stderr——后者在 GUI 启动时是 /dev/null，段错误将无迹可查。
+faulthandler.enable(file=_STDERR_LOG if _STDERR_LOG is not None else sys.__stderr__)
 signal.signal(signal.SIGUSR1, _dump_threads)
 
 HERE = Path(__file__).resolve().parent
@@ -87,8 +190,8 @@ _write_lock = threading.Lock()
 
 def _write(obj):
     with _write_lock:
-        sys.stdout.write(json.dumps(obj, ensure_ascii=False, default=str) + "\n")
-        sys.stdout.flush()
+        _PROTOCOL_STDOUT.write(json.dumps(obj, ensure_ascii=False, default=str) + "\n")
+        _PROTOCOL_STDOUT.flush()
 
 
 def _notify(method, params):

@@ -13,6 +13,7 @@ from chatapp_common import (
     public_access, redirect_log, require_runtime, split_text, strip_files, clean_reply,
     HELP_TEXT, FILE_HINT, format_restore,
     _handle_continue_frontend, _reset_conversation,
+    extract_permission_event, record_session,
 )
 from llmcore import mykeys
 
@@ -168,6 +169,18 @@ class DiscordApp(AgentChatMixin):
             if ga is None:
                 ga = GeneraticAgent()
                 ga.verbose = False
+                # P2.5: enable the permission ask INTERRUPT for this per-chat agent
+                # (dcapp runs an isolated agent per chat, so the mixin's base-agent
+                # init doesn't cover it). Also stash exit_reason for run_agent to read.
+                ga.ask_capable = True
+                ga.frontend = self.source
+                if not getattr(ga, "_perm_hook_registered", False):
+                    ga._perm_hook_registered = True
+                    def _perm_exit_hook(ctx):
+                        ga._last_exit_reason = (ctx or {}).get("exit_reason")
+                    if not hasattr(ga, "_turn_end_hooks"):
+                        ga._turn_end_hooks = {}
+                    ga._turn_end_hooks["chatmixin_exit_reason"] = _perm_exit_hook
                 self._agents[chat_id] = ga
                 threading.Thread(target=ga.run, daemon=True, name=f"discord-agent-{chat_id}").start()
                 if len(self._agents) > 200:
@@ -278,6 +291,14 @@ class DiscordApp(AgentChatMixin):
             return await self.send_text(chat_id, _handle_continue_frontend(ga, cmd), **ctx)
         if op == "/new":
             return await self.send_text(chat_id, _reset_conversation(ga), **ctx)
+        if op == "/perm":
+            # P2.5: text fallback for permission decisions (per-chat agent)
+            if len(parts) < 3 or parts[1] not in ("allow", "deny"):
+                return await self.send_text(chat_id, "用法: /perm allow <tool>  或  /perm deny <tool>", **ctx)
+            decision, tool = parts[1], parts[2].strip()
+            record_session(ga, tool, decision, mode=getattr(ga, "permission_mode", None))
+            await self.send_text(chat_id, f"🔐 已为本次会话{'允许' if decision == 'allow' else '拒绝'}工具 `{tool}`，正在继续…", **ctx)
+            return await self.run_agent(chat_id, "继续（权限已决定，请继续执行原任务）", **ctx)
         return await self.send_text(chat_id, HELP_TEXT, **ctx)
 
     async def run_agent(self, chat_id, text, **ctx):
@@ -308,7 +329,12 @@ class DiscordApp(AgentChatMixin):
                         last_ping = time.time()
                     continue
                 if "done" in item:
-                    await self.send_done(chat_id, item.get("done", ""), **ctx)
+                    # P2.5: a permission ask INTERRUPTs the run; prompt via /perm instead of finishing.
+                    perm_event = extract_permission_event(getattr(ga, "_last_exit_reason", None))
+                    if perm_event:
+                        await self.send_text(chat_id, self._permission_prompt(perm_event), **ctx)
+                    else:
+                        await self.send_done(chat_id, item.get("done", ""), **ctx)
                     break
             if not state["running"]:
                 await self.send_text(chat_id, "⏹️ 已停止", **ctx)

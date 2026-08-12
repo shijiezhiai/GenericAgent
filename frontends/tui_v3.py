@@ -1340,6 +1340,19 @@ AgentEvent = StreamEvent | DoneEvent | AskUserEvent | SystemEvent | ErrorEvent
 _HOOK_KEY = '_tui_v3_ask_user'
 
 
+def _extract_permission(ctx: dict | None) -> dict | None:
+    """P2: extract a PERMISSION_REQUEST INTERRUPT payload into a plain dict."""
+    er = (ctx or {}).get('exit_reason') or {}
+    if er.get('result') != 'EXITED':
+        return None
+    payload = er.get('data') or {}
+    if payload.get('status') != 'INTERRUPT' or payload.get('intent') != 'PERMISSION_REQUEST':
+        return None
+    data = payload.get('data') or {}
+    return {'tool': data.get('tool'), 'mode': data.get('mode'),
+            'target': data.get('target'), 'question': data.get('question')}
+
+
 def _extract_ask_user(ctx: dict | None) -> AskUserEvent | None:
     er = (ctx or {}).get('exit_reason') or {}
     if er.get('result') != 'EXITED':
@@ -1369,6 +1382,9 @@ class AgentBridge:
     def __init__(self, llm_no: int = 0):
         self.agent = GeneraticAgent()
         self.agent.llm_no = llm_no
+        # P2: declare this frontend can render a PERMISSION_REQUEST INTERRUPT.
+        self.agent.frontend = 'tui'
+        self.agent.ask_capable = True
         if llm_no and hasattr(self.agent, 'llmclients') and self.agent.llmclients:
             self.agent.llmclient = self.agent.llmclients[llm_no % len(self.agent.llmclients)]
         self.agent.inc_out = True
@@ -1387,6 +1403,10 @@ class AgentBridge:
         # run that never used intervene; `consume_file` tolerates a missing dir.
         self.agent.task_dir = os.path.join(_ROOT, 'temp', f'_tui_v3_{os.getpid()}')
         self.ask_user_queue: queue.Queue[AskUserEvent] = queue.Queue()
+        # P2: when a PERMISSION_REQUEST card is shown, holds {tool, mode} so the
+        # user's allow/deny answer can be written into session memory before the
+        # re-run. None when no permission prompt is pending.
+        self._perm_pending: dict | None = None
         # Wrapped user messages we appended to `_intervene` since the last
         # turn boundary.  At a non-exit boundary the file was consumed and
         # next_prompt now carries our text — clear the list.  At an exit
@@ -1459,6 +1479,16 @@ class AgentBridge:
         ev = _extract_ask_user(ctx)
         if ev:
             self.ask_user_queue.put(ev)
+        # P2: surface a PERMISSION_REQUEST as an allow/deny card via the same
+        # ask_user queue/renderer, and remember which tool it was so the answer
+        # can be written into session memory.
+        pe = _extract_permission(ctx)
+        if pe:
+            self.ask_user_queue.put(AskUserEvent(
+                question=f"🔐 权限确认 — {pe['question'] or ('是否允许执行工具 `' + str(pe['tool']) + '`？')}"
+                         + (f"\n目标: {pe['target']}" if pe['target'] else ""),
+                candidates=["✅ 允许（本会话）", "⛔ 拒绝"]))
+            self._perm_pending = {"tool": pe["tool"], "mode": pe["mode"]}
         with self._intervene_lk:
             if not self._intervene_pending:
                 return
@@ -4241,6 +4271,8 @@ class SB:
             self._undo.clear(); self._redo.clear(); self._sel = None
             self._picker_reset()
             self._commit_user(_t('msg.answer_prefix', text=ans))
+            if self._bridge._perm_pending is not None:
+                self._apply_perm_answer(ans)
             self._submit(ans, [])
             try:                                              # parallel sub-agent asks:
                 self._asking = self._bridge.ask_user_queue.get_nowait()
@@ -5278,6 +5310,20 @@ class SB:
             if replay is not None:
                 threading.Thread(target=self._ticker, daemon=True).start()
                 self._drain(replay)
+
+    def _apply_perm_answer(self, ans: str) -> None:
+        """P2: write the user's allow/deny for a permission prompt into session
+        memory so the re-issued tool call is auto-approved instead of asking again."""
+        pp = self._bridge._perm_pending
+        if pp is None:
+            return
+        agent = self._bridge.agent
+        k = f"{pp['mode']}|{pp['tool']}"
+        if '允许' in ans:
+            agent._perm_allow.add(k); agent._perm_deny.discard(k)
+        else:
+            agent._perm_deny.add(k); agent._perm_allow.discard(k)
+        self._bridge._perm_pending = None
 
     def _enter_ask(self, ae: AskUserEvent) -> None:
         if self._stream.strip():

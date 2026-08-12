@@ -32,6 +32,25 @@ def _generic_agent_class():
     return cls
 
 
+# P4: sub-agent permission decay. A sub-agent is spawned by the agent-team /
+# conductor machinery and must never hold MORE privilege than the parent that
+# created it — and is made one level stricter — to bound privilege escalation
+# through autonomous sub-agents.
+_PERM_PRIV_ORDER = {"plan": 0, "read-only": 1, "workspace-write": 2, "full-access": 3}
+def _decay_permission_mode(parent_mode=None):
+    if parent_mode not in _PERM_PRIV_ORDER:
+        try:
+            from plugins.permission_store import get_config, DEFAULT_MODE
+            parent_mode = get_config("default_mode", DEFAULT_MODE)
+        except Exception:
+            parent_mode = "workspace-write"
+    child = max(0, _PERM_PRIV_ORDER.get(parent_mode, 2) - 1)
+    for k, v in _PERM_PRIV_ORDER.items():
+        if v == child:
+            return k
+    return "plan"
+
+
 def _desktop_llm_no() -> Optional[int]:
     """Read the model index the user picked in the desktop UI.
     Persisted by the bridge at ~/.ga_desktop_settings.json under ui.llmNo.
@@ -152,6 +171,8 @@ class SubagentPool:
     def __init__(self):
         self.subagents: Dict[str, SubagentState] = {}
         self.lock = threading.RLock()
+        # P4: parent (master conductor) permission_mode; sub-agents decay from this.
+        self.parent_permission_mode: Optional[str] = None
         threading.Thread(target=self._auto_cleanup_loop, name="subagent-cleanup", daemon=True).start()
     def snapshot(self) -> list:
         with self.lock:
@@ -200,6 +221,9 @@ class SubagentPool:
         agent.inc_out = True
         agent.verbose = False
         agent.no_print = True
+        # P4: sub-agent permission decay — run strictly below the parent's privilege.
+        agent.permission_mode = _decay_permission_mode(pool.parent_permission_mode)
+        agent.initiator = f"subagent:{sid}"
         _apply_desktop_model(agent)
         th = start_agent_runner(agent, f"subagent-{sid}")
         state = SubagentState(id=sid, agent=agent, prompt=prompt, status="running", thread=th)
@@ -475,6 +499,8 @@ API: {base}；requests，GET /readme查用法，GET /chat读未读对话，GET /
     def _run(self):
         self.agent = _generic_agent_class()()
         self.agent.inc_out = True
+        # P4: master conductor agent is the parent; sub-agents decay from its mode.
+        pool.parent_permission_mode = getattr(self.agent, "permission_mode", None)
         start_agent_runner(self.agent, "conductor-agent")
         self.started = True
         while True:

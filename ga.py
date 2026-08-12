@@ -9,6 +9,28 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agent_loop import BaseHandler, StepOutcome, json_default
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
+# P0-T3: strip credential-like env vars from code_run child processes so a single
+# `env | curl` line inside an LLM-driven script cannot exfiltrate API keys.
+try:
+    from plugins.permission_store import record_audit
+except Exception:  # pragma: no cover
+    record_audit = lambda *a, **k: None
+
+# 用"字母数字边界"而非 \b：env 名用下划线分隔，\b 会把 _SECRET 的前导下划线
+# 当成词内、导致令牌不匹配。该边界对 PATH/PATHEXT 安全（PAT 后接字母即排除）。
+_SECRET_ENV_RE = re.compile(
+    r'(?<![A-Za-z0-9])(API_?KEY|API_?TOKEN|SECRET|TOKEN|PASSWD|PASSWORD|'
+    r'PRIVATE_?KEY|PAT|CREDENTIAL|ACCESS_?KEY|OAUTH|SESSION_?ID|BEARER|KEYFILE)'
+    r'(?![A-Za-z0-9])', re.IGNORECASE)
+
+def _sanitize_child_env():
+    env = {}
+    for k, v in os.environ.items():
+        if _SECRET_ENV_RE.search(k):
+            continue
+        env[k] = v
+    return env
+
 def safe_print(*args, **kwargs):
     # 一律输出到 stderr。在桌面内核(kernel_server)中 sys.stdout 是 JSON-RPC 管道，
     # 任何写向 stdout 的内容都会污染协议导致会话中断；kernel 自身日志也走 stderr。
@@ -22,6 +44,7 @@ def code_run(code, code_type="python", timeout=60, cwd=None, code_cwd=None, stop
     优先使用python，仅在必要系统操作时使用powershell"""
     preview = (code[:60].replace('\n', ' ') + '...') if len(code) > 60 else code.strip()
     cwd = cwd or os.path.join(script_dir, 'temp'); tmp_path = None
+    tmp_dir = None; sandbox_profile_path = None
     yield f"[Action] Running {code_type} in {os.path.basename(cwd)}: {preview}\n"
     if code_type in ["python", "py"]:
         tmp_dir = code_cwd
@@ -48,6 +71,27 @@ def code_run(code, code_type="python", timeout=60, cwd=None, code_cwd=None, stop
         else: cmd = ["bash", "-c", code]
     else:
         return {"status": "error", "msg": f"不支持的类型: {code_type}"}
+    # P3: wrap the child in an OS sandbox — the only real boundary against a
+    # crafted snippet reading ~/.ssh or writing outside the workspace. fail-closed:
+    # if a sandbox is expected but can't be built, the exception propagates and
+    # code_run returns a tool error instead of running unsandboxed.
+    try:
+        from plugins.sandbox import wrap_code_run as _wrap_sbx
+        _extra = [tmp_dir] if tmp_dir else None
+        cmd, _sbx_applied, _sbx_detail, sandbox_profile_path = _wrap_sbx(
+            cmd, cwd, extra_roots=_extra)
+    except Exception as _sbe:
+        return {"status": "error", "msg": f"沙箱初始化失败，已拒绝执行: {_sbe}"}
+    if _sbx_applied:
+        myprint(f"[Sandbox] {_sbx_detail} 已启用（L0 内核级边界）")
+    else:
+        myprint(f"[Sandbox] 未启用: {_sbx_detail}")
+        if sys.platform == "darwin" and "no_sandbox_exec" in _sbx_detail:
+            try:
+                from plugins.permission_store import record_audit as _sbx_audit
+                _sbx_audit("code_run", action="sandbox", decision="unavailable", detail=_sbx_detail)
+            except Exception:
+                pass
     myprint("code run output:")
     startupinfo = None
     if os.name == 'nt':
@@ -70,7 +114,8 @@ def code_run(code, code_type="python", timeout=60, cwd=None, code_cwd=None, stop
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             bufsize=0, cwd=cwd, startupinfo=startupinfo,
-            creationflags=0x08000000 if os.name == 'nt' else 0
+            creationflags=0x08000000 if os.name == 'nt' else 0,
+            env=_sanitize_child_env()
         )
         start_t = time.time()
         t = threading.Thread(target=stream_reader, args=(process, full_stdout), daemon=True)
@@ -107,6 +152,7 @@ def code_run(code, code_type="python", timeout=60, cwd=None, code_cwd=None, stop
         return {"status": "error", "msg": str(e)}
     finally:
         if code_type == "python" and tmp_path and os.path.exists(tmp_path): os.remove(tmp_path)
+        if sandbox_profile_path and os.path.exists(sandbox_profile_path): os.remove(sandbox_profile_path)
 
 
 def ask_user(question, candidates=None):
@@ -494,7 +540,29 @@ class GenericAgentHandler(BaseHandler):
 
     def _get_abs_path(self, path):
         if not path: return ""
-        return os.path.abspath(os.path.join(self.cwd, path))   
+        p = os.path.expanduser(str(path))
+        if os.path.isabs(p):
+            return os.path.realpath(p)
+        return os.path.realpath(os.path.join(self.cwd, p))
+
+    # P0-T1: workspace-write boundary for write tools.
+    _SENSITIVE_WRITE_ROOTS = (
+        os.path.expanduser("~/.ssh"), "/etc", "/System",
+        "/private/etc", os.path.expanduser("~/Library/Keychains"),
+    )
+
+    def _safe_write_path(self, path):
+        """Resolve + contain a write target. Returns (abs_path, None) or (None, error)."""
+        if not path:
+            return None, "路径为空"
+        ap = self._get_abs_path(path)
+        for d in self._SENSITIVE_WRITE_ROOTS:
+            if ap == d or ap.startswith(d + os.sep):
+                return None, f"⚠️ 安全策略拒绝写入敏感路径: {ap}"
+        roots = [os.path.realpath(self.cwd), os.path.realpath(script_dir)]
+        if not any(ap == r or ap.startswith(r + os.sep) for r in roots):
+            return None, f"⚠️ workspace-write 模式拒绝写入工作区外: {ap}"
+        return ap, None
 
     def _extract_code_block(self, response, code_type):
         code_type = {'python':'python|py', 'powershell':'powershell|ps1|pwsh', 'bash':'bash|sh|shell'}.get(code_type, re.escape(code_type))
@@ -511,26 +579,31 @@ class GenericAgentHandler(BaseHandler):
         try: timeout = int(args.get("timeout", 60))
         except: timeout = 60
         raw_path = os.path.join(self.cwd, args.get("cwd", './'))
-        cwd = os.path.normpath(os.path.abspath(raw_path))
-        code_cwd = os.path.normpath(self.cwd)
+        cwd = os.path.realpath(os.path.normpath(os.path.abspath(raw_path)))
+        code_cwd = os.path.realpath(os.path.normpath(self.cwd))
         maxlen = 10000 // args.get('_tool_num', 1)
-        if code_type == 'python' and args.get("inline_eval"):
-            ns = {'handler':self, 'parent':self.parent, 'history':json.dumps(self.parent.llmclient.backend.history)}
-            old_cwd = os.getcwd()
-            try:
-                os.chdir(cwd)
-                try:
-                    try: result = repr(eval(code, ns))
-                    except SyntaxError: exec(code, ns); result = ns.get('_r', 'OK')
-                except Exception as e: result = f'Error: {e}'
-            finally: os.chdir(old_cwd)
-        else: result = yield from code_run(code, code_type, timeout, cwd, code_cwd=code_cwd, stop_signal=self.code_stop_signal, maxlen=maxlen, myprint=self.print)
+        # P0-T2: inline_eval branch removed. It eval'd in the agent's OWN process and
+        # exposed handler/parent, defeating any OS-level sandbox (P3). All code now runs
+        # in a sandboxed subprocess with credentials stripped from env (P0-T3).
+        result = yield from code_run(code, code_type, timeout, cwd, code_cwd=code_cwd, stop_signal=self.code_stop_signal, maxlen=maxlen, myprint=self.print)
         next_prompt = self._get_anchor_prompt(skip=args.get('_index', 0) > 0)
         return StepOutcome(result, next_prompt=next_prompt)
     
     def do_ask_user(self, args, response):
         question = args.get("question", "请提供输入：")
         candidates = args.get("candidates", [])
+        record_audit("ask_user", target=str(question)[:256], action="ask", decision="ask",
+                     detail=f"candidates={len(candidates)}")
+        # P0-T5: headless / non-interactive frontends (conductor, IM bots, scheduler,
+        # autonomous) have no human to answer. should_exit would silently kill the whole
+        # run; instead auto-deny and continue so the task degrades instead of dying.
+        # Interactive frontends keep the INTERRUPT suspend behavior (full ask parity = P2).
+        non_interactive = bool(os.environ.get("GA_NON_INTERACTIVE")) or getattr(
+            getattr(self, "parent", None), "non_interactive", False)
+        if non_interactive:
+            yield f"[Security] 非交互模式：ask_user 自动拒绝并继续（问题: {question[:80]}）\n"
+            return StepOutcome({"status": "denied", "reason": "non_interactive auto-deny",
+                                "question": question}, next_prompt="\n")
         result = ask_user(question, candidates)
         yield f"Waiting for your answer ...\n"
         return StepOutcome(result, next_prompt="", should_exit=True)
@@ -563,12 +636,16 @@ class GenericAgentHandler(BaseHandler):
         result = web_execute_js(script, switch_tab_id=switch_tab_id, no_monitor=no_monitor)
         if save_to_file and "js_return" in result:
             content = str(result["js_return"] or '')
-            abs_path = self._get_abs_path(save_to_file)
+            ap, werr = self._safe_write_path(save_to_file)
             result["js_return"] = smart_format(content, max_str_len=170)
-            try:
-                with open(abs_path, 'w', encoding='utf-8') as f: f.write(str(content))
-                result["js_return"] += f"\n\n[已保存完整内容到 {abs_path}]"
-            except: result['js_return'] += f"\n\n[保存失败，无法写入文件 {abs_path}]"
+            if werr:
+                record_audit("web_execute_js", target=str(save_to_file), decision="deny", detail=werr)
+                result["js_return"] += f"\n\n[保存被安全策略拒绝: {werr}]"
+            else:
+                try:
+                    with open(ap, 'w', encoding='utf-8') as f: f.write(str(content))
+                    result["js_return"] += f"\n\n[已保存完整内容到 {ap}]"
+                except Exception as e: result['js_return'] += f"\n\n[保存失败，无法写入文件 {ap}: {e}]"
         show = smart_format(json.dumps(result, ensure_ascii=False, indent=2, default=json_default), max_str_len=300)
         self.print("Web Execute JS Result:", show)
         yield f"JS 执行结果:\n{show}\n"
@@ -578,7 +655,11 @@ class GenericAgentHandler(BaseHandler):
         return StepOutcome(smart_format(result, max_str_len=maxlen), next_prompt=next_prompt)
     
     def do_file_patch(self, args, response):
-        path = self._get_abs_path(args.get("path", ""))
+        path, werr = self._safe_write_path(args.get("path", ""))
+        if werr:
+            record_audit("file_patch", target=str(args.get("path", "")), decision="deny", detail=werr)
+            yield f"[Status] ❌ {werr}\n"
+            return StepOutcome({"status": "error", "msg": werr}, next_prompt="\n")
         yield f"[Action] Patching file: {path}\n"
         old_content = args.get("old_content", "")
         new_content = args.get("new_content", "")
@@ -594,7 +675,11 @@ class GenericAgentHandler(BaseHandler):
     def do_file_write(self, args, response):
         '''用于对整个文件的大量处理，精细修改要用file_patch。
         需要将要写入的内容放在<file_content>标签内，或者放在代码块中'''
-        path = self._get_abs_path(args.get("path", ""))
+        path, werr = self._safe_write_path(args.get("path", ""))
+        if werr:
+            record_audit("file_write", target=str(args.get("path", "")), decision="deny", detail=werr)
+            yield f"[Status] ❌ {werr}\n"
+            return StepOutcome({"status": "error", "msg": werr}, next_prompt="\n")
         mode = args.get("mode", "overwrite")  # overwrite/append/prepend
         action_str = {"prepend": "Prepending to", "append": "Appending to"}.get(mode, "Overwriting")
         yield f"[Action] {action_str} file: {os.path.basename(path)}\n"

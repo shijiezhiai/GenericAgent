@@ -6,6 +6,11 @@ from Crypto.Cipher import AES
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _TEMP_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'temp')
 from agentmain import GeneraticAgent
+try:
+    from plugins.permissions import extract_permission_event, record_session
+except Exception:
+    extract_permission_event = lambda ctx: None
+    record_session = lambda *a, **k: None
 
 # ── AuthExpired (errcode -14 from getUpdates) ──
 class AuthExpired(Exception):
@@ -308,6 +313,18 @@ def _dl_media(items):
 
 agent = GeneraticAgent()
 agent.verbose = False
+# P2.5: enable the permission ask INTERRUPT for WeChat so the user gets prompted
+# via /perm instead of a silent safe-deny. Stash the last exit_reason so the run
+# loop can tell a normal completion from a permission prompt.
+agent.ask_capable = True
+agent.frontend = "wechat"
+if not getattr(agent, "_perm_hook_registered", False):
+    agent._perm_hook_registered = True
+    def _perm_exit_hook(ctx):
+        agent._last_exit_reason = (ctx or {}).get("exit_reason")
+    if not hasattr(agent, "_turn_end_hooks"):
+        agent._turn_end_hooks = {}
+    agent._turn_end_hooks["chatmixin_exit_reason"] = _perm_exit_hook
 
 _TAG_PATS = [r'<' + t + r'>.*?</' + t + r'>' for t in ('thinking', 'tool_use')]
 _TAG_PATS.append(r'<file_content>.*?</file_content>')
@@ -381,8 +398,20 @@ def on_message(bot, msg):
             bot.send_text(uid, 'LLMs:\n' + '\n'.join(lines), context_token=ctx)
         return
 
-    def _handle():
-        prompt = text if text.startswith('/') else f"If you need to show files to user, use [FILE:filepath] in your response.\n\n{text}"
+    # P2.5: /perm allow|deny <tool> — decide a pending permission prompt via text
+    if text.startswith('/perm'):
+        parts = text.split()
+        if len(parts) < 3 or parts[1] not in ('allow', 'deny'):
+            bot.send_text(uid, "用法: /perm allow <tool>  或  /perm deny <tool>", context_token=ctx)
+        else:
+            decision, tool = parts[1], parts[2].strip()
+            record_session(agent, tool, decision, mode=getattr(agent, 'permission_mode', None))
+            bot.send_text(uid, f"🔐 已为本次会话{'允许' if decision == 'allow' else '拒绝'}工具 `{tool}`，正在继续…", context_token=ctx)
+            threading.Thread(target=_run_agent_task, args=("继续（权限已决定，请继续执行原任务）", uid, ctx), daemon=True).start()
+        return
+
+    def _run_agent_task(prompt_text, uid, ctx):
+        prompt = prompt_text if prompt_text.startswith('/') else f"If you need to show files to user, use [FILE:filepath] in your response.\n\n{prompt_text}"
         dq = agent.put_task(prompt, source="wechat")
         _typing_stop = threading.Event()
         def _keep_typing():
@@ -414,7 +443,18 @@ def on_message(bot, msg):
             done = []; turn = 1
             while True:
                 item = dq.get(timeout=300)
-                if 'done' in item: break
+                # P2.5: a permission ask INTERRUPTs the run; prompt the user to decide via /perm.
+                if 'done' in item:
+                    perm_event = extract_permission_event(getattr(agent, "_last_exit_reason", None))
+                    if perm_event:
+                        tool = perm_event.get("tool", "?")
+                        target = perm_event.get("target") or ""
+                        detail = f"\n目标: {target}" if target else ""
+                        bot.send_text(uid, f"🔐 权限确认：工具 `{tool}` 需要授权{detail}\n"
+                                           f"回复 `/perm allow {tool}` 允许，或 `/perm deny {tool}` 拒绝（本会话生效）。",
+                                     context_token=ctx)
+                        return
+                    break
                 if item.get('turn', turn) > turn:
                     outputs = item.get('outputs', [])
                     lastdone = outputs[-2] if len(outputs) >= 2 else ''
@@ -446,7 +486,7 @@ def on_message(bot, msg):
                 print(f'[WX] sent media: {fpath}', file=sys.__stdout__)
             except Exception as e: print(f'[WX] send media err: {e}', file=sys.__stdout__)
 
-    threading.Thread(target=_handle, daemon=True).start()
+    threading.Thread(target=_run_agent_task, args=(text, uid, ctx), daemon=True).start()
 
 if __name__ == '__main__':
     _do_relogin = '--relogin' in sys.argv

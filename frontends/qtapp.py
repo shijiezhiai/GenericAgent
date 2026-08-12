@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import (
     Qt, QTimer, QPoint, QPointF, QByteArray, QSize,
-    Signal, QMetaObject, Q_ARG, QObject, QDateTime, QEvent,
+    Signal, QMetaObject, Q_ARG, QObject, QDateTime, QEvent, Slot,
 )
 from PySide6.QtGui import (
     QPainter, QColor, QLinearGradient, QRadialGradient,
@@ -31,6 +31,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from agentmain import GeneraticAgent
 from chatapp_common import FILE_HINT, HELP_TEXT, clean_reply, build_done_text, format_restore
 from remote_channels import CHANNEL_REGISTRY, ChannelManager, get_channel
+try:
+    from plugins.permissions import extract_permission_event, answer_permission
+except Exception:
+    extract_permission_event = lambda ctx: None
+    answer_permission = lambda *a, **k: None
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1063,9 +1068,17 @@ def _action_btn(label: str, color: str, icon: QIcon | None = None) -> QPushButto
 class ChatPanel(QWidget):
     """Frameless always-on-top chat window."""
 
+    # P2.5: signal bridges the agent (background) thread to the GUI thread so a
+    # permission prompt can be shown as a modal dialog without touching Qt from a
+    # non-GUI thread.
+    permission_requested = Signal(object)
+
     def __init__(self, agent):
         super().__init__()
         self.agent = agent
+        # P2.5: permission ask state (guarded by the GUI thread via the signal)
+        self._perm_event = threading.Event()
+        self._perm_decision = None
 
         # session state
         self._messages: list[dict] = []
@@ -1095,6 +1108,8 @@ class ChatPanel(QWidget):
         self._user_scrolled_up = False
         self._poll_timer = QTimer(self)
         self._poll_timer.timeout.connect(self._poll_queue)
+        # P2.5: permission ask -> modal dialog on the GUI thread
+        self.permission_requested.connect(self._show_permission_dialog)
 
         # autonomous mode
         self.autonomous_enabled = False
@@ -2250,6 +2265,57 @@ class ChatPanel(QWidget):
         self._display_queue = self.agent.put_task(f"{FILE_HINT}\n\n{full_prompt}", source="user")
         self._poll_timer.start(40)
 
+    def _show_permission_dialog(self, event: dict):
+        """P2.5: GUI-thread slot for a permission ask. Shows a modal Allow/Deny
+        dialog and records the decision so the agent thread can resume."""
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton
+        tool = event.get("tool", "?")
+        target = event.get("target") or ""
+        mode = event.get("mode", "")
+        self._perm_decision = None
+        self._perm_event.clear()
+        dlg = QDialog(self)
+        dlg.setWindowTitle("🔐 权限确认")
+        dlg.setModal(True)
+        layout = QVBoxLayout(dlg)
+        q = event.get("question") or f"是否允许执行工具 `{tool}`？"
+        detail = f"工具: {tool}"
+        if mode:
+            detail += f"\n权限模式: {mode}"
+        if target:
+            detail += f"\n目标: {target}"
+        layout.addWidget(QLabel(f"{q}\n\n{detail}"))
+        btns = QHBoxLayout()
+        allow_btn = QPushButton("✅ 允许（本会话）")
+        deny_btn = QPushButton("⛔ 拒绝")
+        btns.addWidget(allow_btn)
+        btns.addWidget(deny_btn)
+        layout.addLayout(btns)
+
+        def _choose(decision):
+            self._perm_decision = decision
+            dlg.accept()
+
+        allow_btn.clicked.connect(lambda: _choose("allow"))
+        deny_btn.clicked.connect(lambda: _choose("deny"))
+        dlg.finished.connect(lambda _r: self._perm_event.set())
+        self._add_system_notice(f"🔐 权限确认: 工具 `{tool}` 需要授权（{'允许' if True else ''}请选择）")
+        dlg.exec()
+
+    @Slot(object)
+    def _resume_after_permission(self, dq):
+        """P2.5: start streaming the resumed run produced by answer_permission."""
+        if dq is None:
+            return
+        self._display_queue = dq
+        self._streaming_text = ""
+        self._streaming_row = self._add_msg_row("assistant", "▌")
+        if self._streaming_row:
+            self._streaming_row.set_finished(False)
+        self._set_stop_mode()
+        self._streaming_badge.show()
+        self._poll_timer.start(40)
+
     def _handle_command(self, cmd: str):
         parts = cmd.split()
         op = parts[0].lower() if parts else ""
@@ -2287,6 +2353,15 @@ class ChatPanel(QWidget):
         elif op == "/new":
             self._do_clear()
             self._add_system_notice("✅ 已开启新对话")
+        elif op == "/perm":
+            # P2.5: text fallback for permission decisions
+            if len(parts) < 3 or parts[1] not in ("allow", "deny"):
+                self._add_system_notice("用法: /perm allow <tool>  或  /perm deny <tool>")
+            else:
+                decision, tool = parts[1], parts[2].strip()
+                dq = answer_permission(self.agent, tool, decision, mode=getattr(self.agent, "permission_mode", None))
+                self._add_system_notice(f"🔐 已为本次会话{'允许' if decision == 'allow' else '拒绝'}工具 `{tool}`，正在继续…")
+                self._resume_after_permission(dq)
         else:
             self._add_system_notice(f"未知命令: {cmd}\n{HELP_TEXT}")
 
@@ -2906,6 +2981,10 @@ def main():
 
     # ── Agent initialisation ──────────────────────────────
     agent = GeneraticAgent()
+    # P2.5: enable the permission ask INTERRUPT for the desktop GUI so the user
+    # gets a modal Allow/Deny prompt instead of a silent safe-deny.
+    agent.ask_capable = True
+    agent.frontend = "qt"
     if agent.llmclient is None:
         QMessageBox.critical(
             None,
@@ -2919,6 +2998,26 @@ def main():
     panel = ChatPanel(agent)
     button = FloatingButton(panel)
     button.show()
+
+    # P2.5: capture PERMISSION_REQUEST INTERRUPTs and surface them as a modal
+    # dialog. Runs in the agent (background) thread; it emits a signal to the GUI
+    # thread, blocks on the decision, then records it and resumes the run.
+    def _qt_permission_hook(ctx):
+        event = extract_permission_event(ctx)
+        if not event:
+            return
+        panel._perm_decision = None
+        panel._perm_event.clear()
+        panel.permission_requested.emit(event)
+        if not panel._perm_event.wait(timeout=3600):
+            return  # user dismissed; no resume
+        decision = panel._perm_decision
+        if decision not in ("allow", "deny"):
+            return
+        dq = answer_permission(panel.agent, event["tool"], decision, mode=event.get("mode"))
+        # Resume streaming on the GUI thread.
+        QMetaObject.invokeMethod(panel, "_resume_after_permission", Qt.QueuedConnection, Q_ARG(object, dq))
+    agent._turn_end_hooks["qt_permission"] = _qt_permission_hook
 
     # Position panel next to button and show it on first launch
     button._position_panel()

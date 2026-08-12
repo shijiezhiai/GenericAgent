@@ -6,6 +6,16 @@ if sys.stderr is None: sys.stderr = open(os.devnull, "w")
 elif hasattr(sys.stderr, 'reconfigure'): sys.stderr.reconfigure(errors='replace')
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# 内核 stdio 红线：作为模块被 import 时（kernel / bridge / IM 链路）stdout 是 JSON-RPC 管道，
+# 日志混入即错帧断会话。仅 CLI 直跑保留 stdout（流式输出、`PID:` 供脚本解析、重定向语义）。
+_oldprint = print
+_LOG_TO_STDERR = __name__ != '__main__'
+def safeprint(*argv, **kw):
+    if _LOG_TO_STDERR: kw.setdefault('file', sys.stderr)
+    try: _oldprint(*argv, **kw)
+    except (OSError, ValueError): pass
+print = safeprint
+
 from llmcore import reload_mykeys, ToolClient, MixinSession, NativeToolClient, NativeClaudeSession, NativeOAISession, resolve_client
 from agent_loop import agent_runner_loop
 try:
@@ -56,7 +66,25 @@ class GenericAgent:
         os.makedirs(os.path.join(script_dir, 'temp'), exist_ok=True)
         self.lock = threading.Lock()
         self.task_dir = None
-        self.history = []; self.handler = None; 
+        self.history = []; self.handler = None;
+        # P1: permission mode wiring. Default persisted mode (DuckDB) overridden by
+        # GA_PERMISSION_MODE env; frontends may set .frontend/.non_interactive.
+        try:
+            from plugins.permission_store import get_config, DEFAULT_MODE, _VALID_MODES
+            _dm = os.environ.get("GA_PERMISSION_MODE") or get_config("default_mode", DEFAULT_MODE)
+            self.permission_mode = _dm if _dm in _VALID_MODES else DEFAULT_MODE
+        except Exception:
+            self.permission_mode = "workspace-write"
+        self.frontend = os.environ.get("GA_FRONTEND", "cli")
+        self.non_interactive = bool(os.environ.get("GA_NON_INTERACTIVE"))
+        # P2: session-level permission memory + frontend ask capability flag.
+        # _perm_allow/_perm_deny hold "mode|tool" keys remembered for this session so
+        # a permission `ask` never loops. `ask_capable` tells dispatch the frontend
+        # can render a PERMISSION_REQUEST INTERRUPT (TUI/desktop); CLI uses a sync
+        # input() instead and does not need it. IM/headless stay False -> safe deny.
+        self._perm_allow = set()
+        self._perm_deny = set()
+        self.ask_capable = False
         self.task_queue = queue.Queue() 
         self.is_running = False; self.stop_sig = False; self.llm_no = 0;  
         self.inc_out = False; self.verbose = True
@@ -176,6 +204,13 @@ class GenericAgent:
             return None
         if raw_query.strip() == '/resume':
             return r'帮我看看最近有哪些会话可以恢复。读model_responses/目录，按修改时间取最近10个文件，从每个文件里找最后一个<history>...</history>块，用一句话总结每个会话在聊什么，列表给我选。注意读文件后要把字面的\n替换成真换行才能正确匹配。'
+        if raw_query.strip().startswith('/permissions'):
+            try:
+                from plugins.permissions import permissions_cli
+                display_queue.put({'done': permissions_cli(raw_query.strip(), agent=self), 'source': 'system'})
+            except Exception as _e:
+                display_queue.put({'done': f"⚠️ /permissions 执行失败: {_e}", 'source': 'system'})
+            return None
         return raw_query
 
     def run(self):

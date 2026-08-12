@@ -672,7 +672,7 @@ body{ background:var(--bg); color:var(--txt); font-size:13px; overflow:hidden; f
   box-sizing:border-box;
   overflow:hidden;
 }
-.brand-logo{ width:28px; height:28px; flex-shrink:0; margin-right:8px; border-radius:7px; }
+.brand-logo{ width:22px; height:22px; flex-shrink:0; margin-right:8px; border-radius:5px; }
 .brand-text{ display:flex; flex-direction:column; min-width:0; justify-content:center; }
 .brand-name{
   font-family:var(--font-brand);
@@ -911,14 +911,36 @@ body{ background:var(--bg); color:var(--txt); font-size:13px; overflow:hidden; f
    本 webview 经网桥加载,Tauri JS API 未注入,因此双击最大化通过 fetch 到 gateway
    /__win/toggle_maximize 让 Rust 切换窗口(见 index.html);拖拽由 macOS 原生 Overlay
    标题栏处理,不再覆盖 -webkit-app-region(避免其吞掉 JS 双击事件)。 */
+/* 交通灯实测占位:三颗灯 x=16~29 / 40~53 / 62~75(直径约14px,组右边缘75)。
+   trafficLightPosition.y 已改为 28,使灯中心与 brand 中心(shell-pad14 + 28/2 = 28)
+   在同一水平线,不再上下错开。padding-left 需 > 75 才不与绿灯相撞。 */
 .tauri-desktop .brand{
-  padding-left:92px;                 /* 避让交通灯(16+52+24 余量) */
-  justify-content:flex-start;        /* logo 靠左 */
+  padding-left:73px;                 /* sidebar已有12px内边距,12+73=85 = 灯组右边缘75 + 10px 间隙 */
+  justify-content:flex-start;        /* logo+文字靠左 */
   -webkit-user-select:none; user-select:none;
+  overflow:visible;                  /* 防止文字被截断 */
+  flex:0 0 auto !important;          /* 关键:覆盖基础 .brand 的 flex:0 0 28px 固定宽度 */
+  width:auto;                        /* 宽度由内容决定 */
+  max-width:none;
+  box-sizing:border-box;
 }
-.tauri-desktop .brand-name,
+.tauri-desktop .brand-logo{
+  width:20px; height:20px;           /* 略缩小,给文字腾出宽度 */
+  margin-right:7px;
+  border-radius:5px;
+}
+.tauri-desktop .brand-text{
+  flex:0 0 auto;                     /* 文字区域不收缩 */
+  min-width:auto;
+  overflow:visible;
+}
+.tauri-desktop .brand-name{
+  font-size:13px;                    /*  sidebar 宽度有限,13px 刚好放下 GenericAgent */
+  color:var(--txt-2);
+  overflow:visible;
+}
 .tauri-desktop .brand-sub,
-.tauri-desktop .ga-wordmark{ display:none !important; }    /* 交通灯区宽度不够,隐藏文字仅留 logo */
+.tauri-desktop .ga-wordmark:not(.brand-name){ display:none !important; }
 
 .tb-left{ display:flex; align-items:center; gap:14px; font-size:12px; }
 .pill{
@@ -3813,8 +3835,12 @@ html[data-appearance="dark"] .bubble.md pre code{ color:var(--txt-2); }
 .ph-crumb-link:hover{ background:var(--accent-soft,#f4f5f7); color:var(--accent,#8e8e93); text-decoration:underline; }
 .ph-crumb-link:active{ background:var(--accent-bg,#eef0f3); }
 .ph-crumb-link:focus-visible{ outline:2px solid var(--accent,#8e8e93); outline-offset:1px; }
-.ph-invite-btn{ padding:6px 16px; background:var(--text-1,#1a1a1a); color:#fff; border:none; border-radius:20px; font-size:13px; cursor:pointer; transition:opacity .15s; }
-.ph-invite-btn:hover{ opacity:.85; }
+/* 面包屑两级名称（项目名 / 会话名）按内容宽度排列，超长由 JS 截断 + CSS 兜底省略号 */
+#ph-project-name{ flex:0 1 auto; min-width:0; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:inherit; font-weight:600; border:none; background:none; padding:3px 7px; margin:0 -3px; border-radius:7px; cursor:pointer; transition:background .15s, color .15s; }
+#ph-project-name:hover{ background:var(--accent-soft,#f4f5f7); text-decoration:underline; }
+#ph-project-name:active{ background:var(--accent-bg,#eef0f3); }
+#ph-project-name:focus-visible{ outline:2px solid var(--accent,#8e8e93); outline-offset:1px; }
+#ph-session-name{ flex:0 1 auto; min-width:0; max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 /* Tab 导航 */
 .ph-tabnav{ display:flex; align-items:center; justify-content:space-between; padding:0 24px; border-bottom:1px solid var(--border,#eee); }
@@ -4678,6 +4704,25 @@ html[data-appearance="dark"] .bubble.md pre code{ color:var(--txt-2); }
 .lib-preview-pdf{ width:100%; height:72vh; border:0; border-radius:6px; background:#fff; }
 .lib-preview-dl{ display:inline-block; margin-top:4px; padding:8px 16px; border-radius:8px; background:var(--accent, #3b82f6); color:#fff; text-decoration:none; font-size:13px; }
 .lib-preview-dl:hover{ opacity:.9; }
+
+/* 代码高亮预览（复用 .hljs 主题，背景随主题） */
+.lib-preview-code{ margin:0; padding:0; background:var(--field-bg); border-radius:var(--radius-sm); overflow:auto; max-height:74vh; }
+.lib-preview-code code.hljs{ display:block; background:transparent; padding:14px 16px; font:13px/1.6 var(--font-mono); color:inherit; }
+
+/* docx 预览：复用 .lib-preview-md 排版（标题/段落/列表/表格/图片） */
+
+/* PDF 在线翻页查看器 */
+.lib-preview-pdf-viewer{ display:flex; flex-direction:column; height:72vh; background:var(--bg-soft); border-radius:var(--radius-sm); overflow:hidden; }
+.pdf-toolbar{ display:flex; align-items:center; gap:6px; padding:8px 10px; border-bottom:1px solid var(--line); background:var(--panel); flex:0 0 auto; flex-wrap:wrap; }
+.pdf-btn{ min-width:30px; height:30px; padding:0 9px; border:1px solid var(--line); background:var(--field-bg); color:var(--txt); border-radius:6px; cursor:pointer; font-size:15px; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
+.pdf-btn:hover{ background:var(--hover-dim); color:var(--txt-strong); }
+.pdf-sep{ width:1px; height:20px; background:var(--line); margin:0 4px; }
+.pdf-page-info{ font-size:13px; color:var(--txt); min-width:62px; text-align:center; }
+.pdf-zoom-val{ font-size:12px; color:var(--txt-2); min-width:46px; text-align:center; }
+.pdf-dl{ margin-left:auto; display:inline-flex; align-items:center; padding:0 12px; height:30px; border-radius:6px; background:var(--accent, #3b82f6); color:#fff; text-decoration:none; font-size:13px; }
+.pdf-dl:hover{ opacity:.92; }
+.pdf-canvas-wrap{ flex:1 1 auto; overflow:auto; display:flex; align-items:flex-start; justify-content:center; padding:12px; background:var(--bg-soft); }
+.pdf-canvas{ background:#fff; box-shadow:0 1px 5px rgba(0,0,0,.18); max-width:100%; }
 /* ── 资料库网页类型预览卡 ── */
 .lib-preview-web{ display:flex; flex-direction:column; gap:14px; padding:6px 2px; }
 .lib-preview-web-head{ display:flex; align-items:center; gap:12px; padding:14px 16px; background:var(--bg-soft, #f7f8fa); border:1px solid var(--line-soft); border-radius:10px; }

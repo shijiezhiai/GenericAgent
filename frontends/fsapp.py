@@ -79,7 +79,10 @@ def _ensure_runtime_paths():
 
 _ensure_runtime_paths()
 from agentmain import GeneraticAgent
-from frontends.chatapp_common import AgentChatMixin, FILE_HINT, split_text
+from frontends.chatapp_common import (
+    AgentChatMixin, FILE_HINT, split_text,
+    extract_permission_event,  # noqa: F401  (used in run_agent for P2.5)
+)
 
 _TAG_PATS = [r"<" + t + r">.*?</" + t + r">" for t in ("thinking", "summary", "tool_use", "file_content")]
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico", ".tiff", ".tif"}
@@ -771,7 +774,13 @@ class FeishuApp(AgentChatMixin):
                 except Q.Empty:
                     item = None
                 if item and "done" in item:
-                    await asyncio.to_thread(_finish, item.get("done", ""))
+                    # P2.5: a permission ask INTERRUPTs the run; prompt via /perm instead of finishing.
+                    perm_event = extract_permission_event(getattr(self.agent, "_last_exit_reason", None))
+                    if perm_event:
+                        await self.send_text(chat_id, self._permission_prompt(perm_event),
+                                            receive_id=receive_id, receive_id_type=receive_id_type)
+                    else:
+                        await asyncio.to_thread(_finish, item.get("done", ""))
                     break
                 if time.time() - start > AGENT_TIMEOUT_SEC:
                     self.agent.abort()

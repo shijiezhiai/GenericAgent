@@ -6,8 +6,7 @@
       "script": {"type": "string", "description": "[Mutually exclusive] NEVER use this param when use reply code block."},
       "type": {"type": "string", "enum": ["python", "bash", "powershell"], "description": "python: run .py code ONLY (never shell commands); bash: shell commands like ls/mkdir/grep/git (mac/linux); powershell: windows", "default": "python"},
       "timeout": {"type": "integer", "description": "in seconds", "default": 60},
-      "cwd": {"type": "string", "description": "Working directory, defaults to cwd"},
-      "inline_eval": {"type": "boolean", "description": "DO NOT USE except explicitly specified."}}}
+      "cwd": {"type": "string", "description": "Working directory, defaults to cwd"}}}
   }},
   {"type": "function", "function": {
     "name": "file_read",
