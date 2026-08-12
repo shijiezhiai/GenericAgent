@@ -47,13 +47,13 @@ def _conn():
         c = duckdb.connect(_DB)
         c.execute(
             "CREATE TABLE IF NOT EXISTS permission_audit ("
-            " id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,"
+            " id BIGINT PRIMARY KEY,"
             " ts DOUBLE, session_id VARCHAR, tool VARCHAR, target VARCHAR,"
             " action VARCHAR, decision VARCHAR, mode VARCHAR, frontend VARCHAR, detail VARCHAR)"
         )
         c.execute(
             "CREATE TABLE IF NOT EXISTS permission_rules ("
-            " id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,"
+            " id BIGINT PRIMARY KEY,"
             " mode VARCHAR, tool VARCHAR, target_glob VARCHAR, decision VARCHAR,"
             " created_at DOUBLE, note VARCHAR)"
         )
@@ -79,14 +79,21 @@ def record_audit(tool, target="", action="call", decision="allow",
         try:
             c = _conn()
             if c is not None:
-                c.execute(
-                    "INSERT INTO permission_audit"
-                    "(ts,session_id,tool,target,action,decision,mode,frontend,detail)"
-                    " VALUES (?,?,?,?,?,?,?,?,?)",
-                    [ts, sid, str(tool), str(target)[:1024], str(action),
-                     str(decision), str(mode), str(frontend), str(detail)[:2048]])
-                c.close()
-                return
+                try:
+                    nid = c.execute(
+                        "SELECT COALESCE(MAX(id),0)+1 FROM permission_audit"
+                    ).fetchone()[0]
+                    c.execute(
+                        "INSERT INTO permission_audit"
+                        "(id,ts,session_id,tool,target,action,decision,mode,frontend,detail)"
+                        " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        [nid, ts, sid, str(tool), str(target)[:1024], str(action),
+                         str(decision), str(mode), str(frontend), str(detail)[:2048]])
+                    c.close()
+                    return
+                except Exception:
+                    try: c.close()
+                    except Exception: pass
         except Exception:
             pass
         # fallback: JSONL so audit survives even without duckdb
@@ -172,11 +179,13 @@ def add_rule(mode, tool, decision, target_glob="", note=""):
     c = _conn()
     if c is not None:
         try:
+            rid = c.execute(
+                "SELECT COALESCE(MAX(id),0)+1 FROM permission_rules"
+            ).fetchone()[0]
             c.execute(
-                "INSERT INTO permission_rules(mode,tool,target_glob,decision,created_at,note) "
-                "VALUES (?,?,?,?,?,?)",
-                [str(mode), str(tool), str(target_glob), str(decision), time.time(), str(note)])
-            rid = c.execute("SELECT max(id) FROM permission_rules").fetchone()[0]
+                "INSERT INTO permission_rules(id,mode,tool,target_glob,decision,created_at,note) "
+                "VALUES (?,?,?,?,?,?,?)",
+                [rid, str(mode), str(tool), str(target_glob), str(decision), time.time(), str(note)])
             c.close()
             invalidate_rules_cache()
             return rid
