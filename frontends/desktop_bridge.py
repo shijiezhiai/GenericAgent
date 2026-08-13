@@ -1540,6 +1540,11 @@ class AgentManager:
             agentmain = importlib.import_module("agentmain")
             GA = getattr(agentmain, "GenericAgent")
             agent = GA()
+            # P2.5: desktop frontend renders PERMISSION_REQUEST cards, so enable ask
+            # capability and tag the frontend. Without this, an `ask` decision falls
+            # back to a silent deny (the "frontend_uncapable" branch in agent_loop).
+            agent.frontend = "desktop"
+            agent.ask_capable = True
             agent.inc_out = True
             agent.verbose = True
             # 桌面端 workspace 绑定在 sess.workspace(名字)，需把真实 path 同步到 agent，
@@ -2021,6 +2026,26 @@ class AgentManager:
         emit_session_state(sess, "running")
         return {"ok": True, "sessionId": sid, "accepted": True, "userMessageId": user_msg["id"], "seq": seq}
 
+    def answer_permission(self, sid: str, decision: str, tool: str, mode: str) -> dict:
+        """User answered a permission ask card. Record the decision into the agent's session
+        memory, then re-trigger the run so the model re-issues the tool; the broker
+        short-circuits via session memory (allow/deny) instead of asking again."""
+        with self.lock:
+            sess = self.sessions.get(sid)
+            if not sess:
+                raise web.HTTPNotFound(text=json.dumps({"error": f"session not found: {sid}"}, ensure_ascii=False), content_type="application/json")
+            agent = sess.agent
+            if agent is None:
+                raise web.HTTPBadRequest(text=json.dumps({"error": "session has no agent"}, ensure_ascii=False), content_type="application/json")
+            sess.permission_request = None
+        try:
+            from plugins.permissions import record_session
+            record_session(agent, tool, decision, mode)
+        except Exception as e:
+            print(f"[permission] record_session failed: {e}", file=sys.stderr)
+        # Re-trigger with a neutral nudge; broker short-circuits the re-issued tool call.
+        return self.submit_prompt(sid, f"[权限决定] 用户{('允许' if decision == 'allow' else '拒绝')}了工具 `{tool}` 的权限请求，请据此继续。", llm_no=sess.llm_no)
+
     def run_agent_turn(self, sess: Session, prompt: str, images: Optional[list] = None, llm_no: Optional[int] = None):
         try:
             self._ensure_agent(sess)
@@ -2054,6 +2079,17 @@ class AgentManager:
                         self._snapshot_partial(sess)
                         continue
                     if isinstance(item, dict):
+                        if item.get("permission"):
+                            # P2.5: broker asked for interactive confirmation; hand off to frontend.
+                            _perm = item["permission"]
+                            with self.lock:
+                                sess.partial = None
+                                sess.permission_request = _perm
+                                sess.status = "await_permission"
+                                sess.updated_at = time.time()
+                            self._clear_partial_snapshot(sess)
+                            emit_session_state(sess, "await_permission")
+                            return
                         if item.get("next"):
                             text = str(item["next"])
                             pieces.append(text)
@@ -2780,6 +2816,9 @@ def emit_session_state(sess: Session, state_name: str):
         "seq": sess.msg_seq,
         "updatedAt": sess.updated_at,
         "title": sess.title,
+        # P2.5: when a permission ask is pending, carry the request so the frontend
+        # can render an approve/deny card without a second round-trip.
+        "permission_request": getattr(sess, "permission_request", None),
     })
 
 
@@ -3258,6 +3297,27 @@ async def messages_handler(request):
 async def cancel_handler(request):
     sid = request.match_info["sid"]
     return json_ok(manager.cancel(sid))
+
+
+async def permission_handler(request):
+    sid = request.match_info["sid"]
+    try:
+        data = await read_json(request)
+    except Exception:
+        data = {}
+    decision = str(data.get("decision", "deny")).lower()
+    tool = data.get("tool", "")
+    mode = data.get("mode", "")
+    if decision not in ("allow", "deny"):
+        decision = "deny"
+    try:
+        return json_ok(manager.answer_permission(sid, decision, tool, mode))
+    except web.HTTPException:
+        # session-not-found / bad-request from answer_permission: propagate the
+        # real status (404/400) instead of masking it as a 500.
+        raise
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
 
 
 async def viewed_handler(request):
@@ -7617,6 +7677,7 @@ def create_app():
     app.router.add_get("/session/{sid}/messages", messages_handler)
     app.router.add_get("/session/{sid}/plan", plan_handler)
     app.router.add_post("/session/{sid}/cancel", cancel_handler)
+    app.router.add_post("/session/{sid}/permission", permission_handler)
     app.router.add_post("/session/{sid}/viewed", viewed_handler)
     app.router.add_post("/session/{sid}/restore", restore_handler)
     app.router.add_post("/session/{sid}/suggest", suggest_handler)
@@ -7953,6 +8014,93 @@ def create_app():
 
     app.router.add_get("/services/tasks/notify", tasks_notify_get_handler)
     app.router.add_post("/services/tasks/notify", tasks_notify_set_handler)
+
+    # ═══════════════ 钩子管理 API (Hooks) ═══════════════
+    _hooks_dir = APP_DIR.parent / "hooks_config"
+    _hooks_file = _hooks_dir / "hooks.json"
+
+    def _ensure_hooks_dir():
+        _hooks_dir.mkdir(parents=True, exist_ok=True)
+
+    def _load_hooks():
+        _ensure_hooks_dir()
+        if _hooks_file.exists():
+            try: return json.loads(_hooks_file.read_text(encoding='utf-8'))
+            except Exception: pass
+        return []
+
+    def _save_hooks(hooks):
+        _ensure_hooks_dir()
+        _hooks_file.write_text(json.dumps(hooks, ensure_ascii=False, indent=2), encoding='utf-8')
+
+    def _next_hook_id(hooks):
+        if not hooks: return "1"
+        return str(max(int(h.get('id', 0)) for h in hooks) + 1)
+
+    async def hooks_list_handler(request):
+        hooks = _load_hooks()
+        return web.json_response({'ok': True, 'hooks': hooks})
+
+    async def hooks_create_handler(request):
+        try:
+            body = await request.json()
+            hooks = _load_hooks()
+            hook = {
+                'id': _next_hook_id(hooks),
+                'scope': body.get('scope', 'user'),
+                'event': body.get('event', ''),
+                'run_mode': body.get('run_mode', 'process'),
+                'matcher': body.get('matcher', ''),
+                'command': body.get('command', ''),
+                'params': body.get('params', []),
+                'timeout': body.get('timeout', 60),
+                'status_message': body.get('status_message', ''),
+                'custom_json': body.get('custom_json'),
+            }
+            hooks.append(hook)
+            _save_hooks(hooks)
+            return web.json_response({'ok': True, 'id': hook['id']})
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def hooks_update_handler(request):
+        hid = request.match_info.get('tid', '')
+        try:
+            body = await request.json()
+            hooks = _load_hooks()
+            for h in hooks:
+                if str(h.get('id')) == str(hid):
+                    h['scope'] = body.get('scope', h.get('scope', 'user'))
+                    h['event'] = body.get('event', h.get('event', ''))
+                    h['run_mode'] = body.get('run_mode', h.get('run_mode', 'process'))
+                    h['matcher'] = body.get('matcher', h.get('matcher', ''))
+                    h['command'] = body.get('command', h.get('command', ''))
+                    h['params'] = body.get('params', h.get('params', []))
+                    h['timeout'] = body.get('timeout', h.get('timeout', 60))
+                    h['status_message'] = body.get('status_message', h.get('status_message', ''))
+                    h['custom_json'] = body.get('custom_json')
+                    _save_hooks(hooks)
+                    return web.json_response({'ok': True})
+            return web.json_response({'error': 'Hook not found'}, status=404)
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def hooks_delete_handler(request):
+        hid = request.match_info.get('tid', '')
+        try:
+            hooks = _load_hooks()
+            new_hooks = [h for h in hooks if str(h.get('id')) != str(hid)]
+            if len(new_hooks) == len(hooks):
+                return web.json_response({'error': 'Hook not found'}, status=404)
+            _save_hooks(new_hooks)
+            return web.json_response({'ok': True})
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=500)
+
+    app.router.add_get("/services/hooks/list", hooks_list_handler)
+    app.router.add_post("/services/hooks/create", hooks_create_handler)
+    app.router.add_post("/services/hooks/update/{tid}", hooks_update_handler)
+    app.router.add_delete("/services/hooks/delete/{tid}", hooks_delete_handler)
 
     # Serve static frontend (desktop/static/)
     static_dir = APP_DIR / "desktop" / "static"

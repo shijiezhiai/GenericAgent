@@ -22,6 +22,10 @@ try:
     from plugins.hooks import discover_and_load; discover_and_load()
 except Exception: pass
 from ga import GenericAgentHandler, smart_format, get_global_memory, format_error, consume_file
+try:
+    from plugins.permissions import PERMISSION_INTENT
+except Exception:
+    PERMISSION_INTENT = "permission_request"
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 BANNED_TOOLS = (['ask_user', 'start_long_term_update'] if '--no-user-tools' in sys.argv else [])
@@ -252,23 +256,39 @@ class GenericAgent:
                     self.llmclient.backend.read_timeout = max(self.llmclient.backend.read_timeout, 1200)
                 gen = agent_runner_loop(self.llmclient, sys_prompt, raw_query, handler, TOOLS_SCHEMA + self.mcp_tools, 
                                         max_turns=180, verbose=self.verbose, yield_info=True)
-                for chunk in gen:
-                    if consume_file(self.task_dir, '_stop'): self.abort() 
-                    if self.stop_sig: break
-                    if isinstance(chunk, dict) and 'turn' in chunk: 
-                        curr_turn = chunk['turn']; turn_resps.append(''); continue
-                    full_resp += chunk;  turn_resps[-1] += chunk
-                    new_bytes = len(full_resp) - last_pos
-                    now = time.time()
-                    # push if: accumulated 30+ chars, or 300ms+ since last push with any new content
-                    if new_bytes > 30 or 'LLM Running' in chunk or (new_bytes > 0 and now - _last_push_ts > 0.3):
-                        display_queue.put({'next': full_resp[last_pos:] if self.inc_out else full_resp, 
-                                           'source': source, 'turn': curr_turn, 'outputs': turn_resps[-2:]})
-                        last_pos = len(full_resp)
-                        _last_push_ts = now
+                exit_reason = None
+                try:
+                    while True:
+                        chunk = next(gen)
+                        if consume_file(self.task_dir, '_stop'): self.abort() 
+                        if self.stop_sig:
+                            with contextlib.suppress(Exception): gen.close()
+                            break
+                        if isinstance(chunk, dict) and 'turn' in chunk: 
+                            curr_turn = chunk['turn']; turn_resps.append(''); continue
+                        full_resp += chunk;  turn_resps[-1] += chunk
+                        new_bytes = len(full_resp) - last_pos
+                        now = time.time()
+                        # push if: accumulated 30+ chars, or 300ms+ since last push with any new content
+                        if new_bytes > 30 or 'LLM Running' in chunk or (new_bytes > 0 and now - _last_push_ts > 0.3):
+                            display_queue.put({'next': full_resp[last_pos:] if self.inc_out else full_resp, 
+                                               'source': source, 'turn': curr_turn, 'outputs': turn_resps[-2:]})
+                            last_pos = len(full_resp)
+                            _last_push_ts = now
+                except StopIteration as _si:
+                    exit_reason = _si.value
                 if self.inc_out and last_pos < len(full_resp):
                     display_queue.put({'next': full_resp[last_pos:], 'source': source,
                                     'turn': curr_turn, 'outputs': turn_resps[-2:]})
+                # P2.5: a permission `ask` returned an INTERRUPT (should_exit). Hand it off to the
+                # frontend as a `permission` event instead of swallowing it as a normal done. The
+                # frontend renders an approve/deny card; the user's choice is written into session
+                # memory by the bridge and the run is re-triggered so the model re-issues the tool.
+                if exit_reason and exit_reason.get('result') == 'EXITED' \
+                        and (exit_reason.get('data') or {}).get('intent') == PERMISSION_INTENT:
+                    display_queue.put({'permission': (exit_reason.get('data') or {}).get('data', {})})
+                    self.history = handler.history_info
+                    return
                 display_queue.put({'done': full_resp, 'source': source, 'turn': curr_turn, 'outputs': turn_resps.copy()})
                 self.history = handler.history_info
             except Exception as e:

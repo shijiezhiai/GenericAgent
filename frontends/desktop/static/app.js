@@ -242,6 +242,11 @@ let bridgeUiOffline = false;
         if (!sid) throw new Error('session/cancel missing sessionId');
         return http(`/session/${encodeURIComponent(sid)}/cancel`, { method: 'POST', body: params || {} });
       }
+      case 'session/permission': {
+        const sid = params.sessionId || params.id || params.bridgeSessionId;
+        if (!sid) throw new Error('session/permission missing sessionId');
+        return http(`/session/${encodeURIComponent(sid)}/permission`, { method: 'POST', body: params || {} });
+      }
       case 'app/path/open': return http('/path/open', { method: 'POST', body: params || {} });
       case 'services/start': {
         const id = params.id;
@@ -12091,6 +12096,7 @@ window.ga.onBridgeNotification((msg) => {
           fetch(`${BRIDGE_ORIGIN}/session/${encodeURIComponent(sess.bridgeSessionId || sess.id)}/viewed`, { method: 'POST' }).catch(() => {});
           sess.status = 'idle';
         }
+        if (msg.state === 'await_permission' && msg.permission_request) showPermissionCard(sess, msg.permission_request);
         renderSessionList();
         break;
       }
@@ -12103,6 +12109,52 @@ window.ga.onBridgeNotification((msg) => {
     }
   }
 });
+
+// P2.5: render an approve/deny card when a permission `ask` is pending. The user's
+// choice is POSTed back via session/permission; the bridge records it into session
+// memory and re-triggers the run so the model re-issues the tool.
+function showPermissionCard(sess, perm) {
+  if (!document.getElementById('perm-style')) {
+    const st = document.createElement('style');
+    st.id = 'perm-style';
+    st.textContent = '.perm-card{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--bg-elevated,#1e1e1e);color:var(--text,#eee);border:1px solid var(--border,#333);border-radius:12px;padding:16px 20px;box-shadow:0 8px 32px rgba(0,0,0,.45);z-index:9999;max-width:480px;width:calc(100vw - 48px);font-size:14px}.perm-title{font-weight:700;margin-bottom:8px}.perm-q{margin-bottom:6px;white-space:pre-wrap}.perm-target{font-size:12px;opacity:.7;margin-bottom:10px;word-break:break-all;max-height:120px;overflow:auto}.perm-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:4px}.perm-allow,.perm-deny{padding:6px 18px;border-radius:8px;border:1px solid var(--border,#333);cursor:pointer;font:inherit}.perm-allow{background:var(--accent,#2d7d46);color:#fff;border-color:transparent}.perm-deny{background:transparent;color:var(--text,#eee)}';
+    document.head.appendChild(st);
+  }
+  const old = document.getElementById('perm-card');
+  if (old) old.remove();
+  const card = document.createElement('div');
+  card.id = 'perm-card';
+  card.className = 'perm-card';
+  const tool = perm.tool || '未知工具';
+  const question = perm.question || `是否允许执行工具 \`${tool}\`？`;
+  const target = perm.target ? `<div class="perm-target">目标: ${escapeHtml(String(perm.target))}</div>` : '';
+  card.innerHTML =
+    `<div class="perm-title">⚠️ 权限确认</div>` +
+    `<div class="perm-q">${escapeHtml(question)}</div>` +
+    target +
+    `<div class="perm-actions">` +
+    `<button class="perm-deny" data-dec="deny">拒绝</button>` +
+    `<button class="perm-allow" data-dec="allow">允许</button>` +
+    `</div>`;
+  document.body.appendChild(card);
+  card.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const decision = btn.getAttribute('data-dec');
+      card.remove();
+      try {
+        await window.ga.rpc('session/permission', {
+          sessionId: sess.bridgeSessionId || sess.id,
+          decision,
+          tool: perm.tool || '',
+          mode: perm.mode || '',
+        });
+      } catch (e) {
+        console.error('permission answer failed', e);
+      }
+    });
+  });
+}
+
 /* 状态对账兜底：会话状态完全依赖 WS 事件驱动,一旦 running 通知丢失/乱序,
    会话会永久卡在 done/idle 的灰色“完成”态而 bridge 实际仍在跑(间歇 bug 根因)。
    每隔几秒用权威的 /session poll 的 status 校正一次“看起来完成”的近期会话;
