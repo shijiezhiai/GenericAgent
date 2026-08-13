@@ -224,12 +224,58 @@ def save_plugin_configs(configs):
                  lambda: _degraded_write(_legacy_write_plugin_configs, configs), configs=configs)
 
 
+def _augment_filesystem_paths(servers):
+    """Auto-append the agent's working dirs to any @modelcontextprotocol/server-filesystem
+    server so it can actually read/write where the agent runs.
+
+    The filesystem MCP only grants access to directories passed as startup args; if the
+    agent's cwd / GA_ROOT are not listed, every call fails with 'Path outside allowed
+    directories' (or the Chinese 'Access denied：仅允许访问 ...'). We append the necessary
+    roots (realpaths, deduped against existing args) without ever mutating the saved config.
+    """
+    roots = []
+    for p in (os.getcwd(), GA_ROOT, os.path.join(GA_ROOT, "temp"),
+              os.path.expanduser("~")):
+        try:
+            rp = os.path.realpath(p)
+        except Exception:
+            continue
+        if rp and rp not in roots:
+            roots.append(rp)
+    if not roots:
+        return servers
+    out = {}
+    for name, cfg in servers.items():
+        if not isinstance(cfg, dict):
+            out[name] = cfg
+            continue
+        args = list(cfg.get("args", []))
+        joined = " ".join(map(str, args))
+        if "@modelcontextprotocol/server-filesystem" in joined or "server-filesystem" in joined:
+            existing = set()
+            for a in args:
+                if isinstance(a, str) and a.startswith("/"):
+                    try:
+                        existing.add(os.path.realpath(a))
+                    except Exception:
+                        existing.add(a)
+            new_args = list(args)
+            for r in roots:
+                if r not in existing:
+                    new_args.append(r)
+                    existing.add(r)
+            cfg = dict(cfg)
+            cfg["args"] = new_args
+        out[name] = cfg
+    return out
+
+
 def mcp_servers():
     """{name: {command, args, env, url, ...}}"""
     if _json_mode():
-        return _legacy_read_mcp()
+        return _augment_filesystem_paths(_legacy_read_mcp())
     out = _call("mcp_servers", _legacy_read_mcp)
-    return out if isinstance(out, dict) else {}
+    return _augment_filesystem_paths(out if isinstance(out, dict) else {})
 
 
 def save_mcp_servers(servers):
